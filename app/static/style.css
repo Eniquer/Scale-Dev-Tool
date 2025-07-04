@@ -1,0 +1,129 @@
+/* Custom dark theme styles for Scale Development Tool */
+
+/* Dark theme body and html */
+html[data-bs-theme="dark"] body {
+    background-color: #212529 !important;
+    color: #fff !important;
+}
+
+/* Sidebar styling for dark theme */
+.bg-dark {
+    background-color: #1a1d20 !important;
+}
+
+.border-secondary {
+    border-color: #495057 !important;
+}
+
+/* Navigation links for dark theme */
+.list-unstyled a {
+    color: #17a2b8 !important;
+    padding: 8px 12px;
+    display: block;
+    border-radius: 0.375rem;
+    transition: all 0.15s ease-in-out;
+}
+
+.list-unstyled a:hover {
+    background-color: #343a40;
+    color: #20c997 !important;
+    text-decoration: none;
+}
+
+/* Active/Selected state for navigation in dark theme */
+.list-unstyled a.active,
+.list-unstyled a.selected {
+    cursor: default;
+    background-color: #20c997;
+    color: #1a1d20 !important;
+}
+
+/* Card styling for dark theme */
+.card.bg-secondary {
+    background-color: #343a40 !important;
+    border-color: #495057 !important;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.3);
+}
+
+/* Form controls for dark theme */
+.form-control.bg-dark {
+    background-color: #2c3034 !important;
+    border-color: #495057 !important;
+    color: #fff !important;
+}
+
+.form-control.bg-dark:focus {
+    background-color: #2c3034 !important;
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    color: #fff !important;
+}
+
+.form-control.bg-dark::file-selector-button {
+    background-color: #495057;
+    border-color: #495057;
+    color: #fff;
+}
+
+/* Alert styling for dark theme */
+.alert-success {
+    background-color: #0f2419 !important;
+    border-color: #2d5a3d !important;
+    color: #5cb85c !important;
+}
+
+/* Text colors for dark theme */
+.text-light {
+    color: #f8f9fa !important;
+}
+
+/* Button enhancements */
+.btn-primary {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+    border-color: #0a58ca;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #212529;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #495057;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #6c757d;
+}
+
+.no-style {
+    all: unset;
+    display: inline-block;
+}
+
+#navbar li{
+    cursor: pointer;
+    text-align: center;
+
+}
+
+#navbar h1 {
+    cursor: pointer;
+}
+
+main{
+    
+}
