@@ -56,8 +56,8 @@ if (document.getElementById('area1') && document.getElementById('area2')) {
 // then split the outer container horizontally into #left / #sidebar
 Split(['#navbar','#content'], {
     direction: 'horizontal',
-    sizes: [30, 70],      // 70% left, 30% sidebar
-    minSize: [150, 200],  // px minimum for each
+    sizes: [20, 80],      // 70% left, 30% sidebar
+    minSize: [100, 200],  // px minimum for each
     gutterSize: 6,
     cursor: 'col-resize'
 });
