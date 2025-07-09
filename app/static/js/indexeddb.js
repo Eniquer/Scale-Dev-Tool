@@ -34,9 +34,30 @@ if (!window.CSVStorage) {
             });
         }
 
-        async storeCSV(csvContent, key = 'uploadedCSV') {
+        async storeCSV(csvContent, key = 'uploadedCSV', showWarning = true) {
             if (!this.db) {
                 await this.init();
+            }
+            
+            // Check if data already exists
+            if (showWarning) {
+                try {
+                    const existingData = await this.getCSV(key);
+                    if (existingData) {
+                        const userConfirmed = confirm(
+                            '⚠️ Warning: This will overwrite existing CSV data in storage.\n\n' +
+                            'Do you want to continue and replace the current data?'
+                        );
+                        
+                        if (!userConfirmed) {
+                            console.log('User cancelled CSV storage - existing data preserved');
+                            return Promise.reject('User cancelled overwrite');
+                        }
+                    }
+                } catch (error) {
+                    // No existing data found, continue normally
+                    console.log('No existing data found, proceeding with storage');
+                }
             }
             
             // Ensure csvContent is a string
@@ -54,7 +75,7 @@ if (!window.CSVStorage) {
                 
                 request.onsuccess = () => {
                     console.log('CSV saved to IndexedDB');
-                    resolve();
+                    resolve(JSON.parse(csvContent));
                 };
                 
                 request.onerror = () => {
@@ -75,17 +96,13 @@ if (!window.CSVStorage) {
                 const request = store.get(key);
                 
                 request.onsuccess = () => {
-                    if (request.result) {
-                        console.log('CSV retrieved from IndexedDB:', typeof request.result, request.result.length, 'characters');
-                        
-                        // Ensure result is a string
+                    if (request.result) {                        
                         let csvData = request.result;
                         if (typeof csvData !== 'string') {
-                            console.warn('Retrieved CSV is not a string, converting...', typeof csvData);
                             csvData = String(csvData);
                         }
                         
-                        resolve(csvData);
+                        resolve(JSON.parse(csvData));
                     } else {
                         reject('No CSV found in storage');
                     }
@@ -93,6 +110,48 @@ if (!window.CSVStorage) {
                 
                 request.onerror = () => {
                     console.error('Error retrieving CSV from IndexedDB');
+                    reject(request.error);
+                };
+            });
+        }
+
+        async hasCSV(key = 'uploadedCSV') {
+            if (!this.db) {
+                await this.init();
+            }
+            
+            return new Promise((resolve) => {
+                const tx = this.db.transaction(this.storeName, 'readonly');
+                const store = tx.objectStore(this.storeName);
+                const request = store.get(key);
+                
+                request.onsuccess = () => {
+                    resolve(!!request.result); // Convert to boolean
+                };
+                
+                request.onerror = () => {
+                    resolve(false);
+                };
+            });
+        }
+
+        async deleteCSV(key = 'uploadedCSV') {
+            if (!this.db) {
+                await this.init();
+            }
+            
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction(this.storeName, 'readwrite');
+                const store = tx.objectStore(this.storeName);
+                const request = store.delete(key);
+                
+                request.onsuccess = () => {
+                    console.log(`CSV data with key '${key}' deleted from IndexedDB`);
+                    resolve();
+                };
+                
+                request.onerror = () => {
+                    console.error('Error deleting CSV from IndexedDB');
                     reject(request.error);
                 };
             });

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Split.js: Two Panes + Sidebar</title>
+  <style>
+    /* reset & full-height */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    /* outer flex: left (areas) | sidebar */
+    #outer {
+      display: flex;
+      height: 100%;
+    }
+    /* left container for area1/area2 */
+    #left {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    /* scrollable panes */
+    #area1, #area2, #sidebar {
+      overflow: auto;
+      box-sizing: border-box;
+      padding: 10px;
+    }
+    #area1 { background: #e8f0fe; }
+    #area2 { background: #fde8e8; }
+    /* sidebar styling */
+    #sidebar {
+      background: #f4f4f4;
+      width: 200px;    /* initial width; Split.js will override */
+    }
+  </style>
+</head>
+<body>
+
+  <div id="outer">
+    <!-- left side: two stacked, scrollable areas -->
+    <div id="left">
+      <div id="area1">
+        <h2>Area 1</h2>
+        <p>…your scrollable content…</p>
+        <p>…more…</p>
+      </div>
+      <div id="area2">
+        <h2>Area 2</h2>
+        <p>…your scrollable data…</p>
+        <p>…more…</p>
+      </div>
+    </div>
+
+    <!-- right side: static sidebar -->
+    <div id="sidebar">
+      <h2>Sidebar (3)</h2>
+      <p>Navigation, controls, etc.</p>
+    </div>
+  </div>
+
+  <!-- include Split.js from CDN -->
+  <script src="https://unpkg.com/split.js/dist/split.min.js"></script>
+  <script>
+
+
+    // // first, split the left container vertically into #area1 / #area2
+    // Split(['#area1', '#area2'], {
+    //   direction: 'vertical',
+    //   sizes: [50, 50],      // start 50% / 50%
+    //   minSize: 100,         // px minimum
+    //   gutterSize: 6,
+    //   cursor: 'row-resize'
+    // });
+
+    // then split the outer container horizontally into #left / #sidebar
+    Split(['#left', '#sidebar'], {
+      direction: 'horizontal',
+      sizes: [70, 30],      // 70% left, 30% sidebar
+      minSize: [200, 150],  // px minimum for each
+      gutterSize: 6,
+      cursor: 'col-resize'
+    });
+  </script>
+
+</body>
+</html>

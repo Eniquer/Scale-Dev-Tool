@@ -1,173 +1,64 @@
-// Main application logic for CSV upload and handling
-if (!window.CSVApp) {
-    class CSVApp {
-        constructor() {
-            this.pendingCSV = null;
-            this.init();
-        }
-
-        async init() {
-            // Wait for dependencies to be available
-            while (!window.csvStorage || !window.csvTable) {
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
+window.csvStorage.hasCSV().then((hasCSV) => {
+    if (hasCSV) {
+        window.csvStorage.getCSV().then((csvData) => {
+            window.csvData = csvData; // Store the data in a global variable
+            displayTable(csvData, "#json-table"); // Call the function to display the table
+            populateColumnCheckboxes();
+            console.log("CSV data retrieved from IndexedDB:", csvData);
             
-            // Wait for storage to be ready
-            await window.csvStorage.init();
-            
-            // Try to load existing CSV data if available
-            try {
-                const csvText = await window.csvStorage.getCSV();
-                console.log('Found existing CSV data:', csvText.length, 'characters');
-                window.csvTable.displayTable(csvText);
-            } catch (err) {
-                console.log('No existing CSV data found');
-            }
+        }).catch((error) => {
+            console.error("Error retrieving CSV data:", error);
+            document.getElementById("tableContent").innerHTML = `<div class="alert alert-danger">Error storing CSV data: ${error.message}</div>`;
 
-            this.setupEventListeners();
-        }
+        });
+    } else {
+        console.log("No CSV data found in IndexedDB.");
+        document.getElementById("tableContent").innerHTML = `<div class="alert alert-info">No CSV data found. Upload to get startet</div>`;
 
-        setupEventListeners() {
-            // Capture CSV text on button click
-            const uploadButton = document.getElementById('csvInputButton');
-            console.log('Upload button found:', !!uploadButton);
-            
-            if (uploadButton) {
-                uploadButton.addEventListener('click', async (e) => {
-                    console.log('Upload button clicked');
-                    const fileInput = document.getElementById('csvInput');
-                    console.log('File input found:', !!fileInput);
-                    console.log('Files selected:', fileInput?.files?.length || 0);
-                    
-                    const file = fileInput?.files[0];
-                    if (file) {
-                        console.log('File details:', file.name, file.size, 'bytes');
-                        try {
-                            this.pendingCSV = await file.text();
-                            console.log('CSV text captured successfully, length:', this.pendingCSV.length);
-                            console.log('First 100 chars:', this.pendingCSV.substring(0, 100));
-                        } catch (error) {
-                            console.error('Error reading file:', error);
-                        }
-                    } else {
-                        console.warn('No file selected');
-                    }
-                });
-            } else {
-                console.error('Upload button not found');
-            }
-
-            // Alternative: Capture CSV on form submit (more reliable with HTMX)
-            const form = document.querySelector('form[hx-post="/analyze"]');
-            console.log('Form found:', !!form);
-            
-            if (form) {
-                form.addEventListener('submit', async (e) => {
-                    console.log('Form submit event triggered');
-                    const fileInput = document.getElementById('csvInput');
-                    const file = fileInput?.files[0];
-                    
-                    if (file && !this.pendingCSV) {
-                        console.log('Capturing CSV on form submit');
-                        try {
-                            this.pendingCSV = await file.text();
-                            console.log('CSV captured on submit, length:', this.pendingCSV.length);
-                        } catch (error) {
-                            console.error('Error reading file on submit:', error);
-                        }
-                    }
-                });
-            }
-
-            // Also listen for htmx:beforeRequest to ensure CSV is captured
-            document.addEventListener('htmx:beforeRequest', async (evt) => {
-                if (evt.detail.pathInfo?.requestPath?.includes('/analyze')) {
-                    console.log('HTMX beforeRequest for /analyze');
-                    const fileInput = document.getElementById('csvInput');
-                    const file = fileInput?.files[0];
-                    
-                    if (file && !this.pendingCSV) {
-                        console.log('Last chance: capturing CSV before HTMX request');
-                        try {
-                            this.pendingCSV = await file.text();
-                            console.log('CSV captured before request, length:', this.pendingCSV.length);
-                        } catch (error) {
-                            console.error('Error reading file before request:', error);
-                        }
-                    }
-                    
-                    console.log('Pending CSV status before request:', !!this.pendingCSV);
-                }
-            });
-
-            // Listen for successful analyze requests
-            document.addEventListener('htmx:afterRequest', async (evt) => {
-                console.log('HTMX afterRequest event triggered');
-                const requestPath = evt.detail.pathInfo?.finalRequestPath || evt.detail.pathInfo?.requestPath || '';
-                console.log('Request path:', requestPath);
-                console.log('Status:', evt.detail.xhr.status);
-                console.log('Has pending CSV:', !!this.pendingCSV);
-                
-                if (requestPath.includes('/analyze') && 
-                    evt.detail.xhr.status >= 200 && evt.detail.xhr.status < 300 &&
-                    this.pendingCSV) {
-                    
-                    console.log('Processing successful analyze request');
-                    try {
-                        // Ensure dependencies are available
-                        if (!window.csvStorage || !window.csvTable) {
-                            console.error('Dependencies not available - csvStorage:', !!window.csvStorage, 'csvTable:', !!window.csvTable);
-                            return;
-                        }
-                        
-                        console.log('Storing CSV in IndexedDB...');
-                        await window.csvStorage.storeCSV(this.pendingCSV);
-                        console.log('CSV stored successfully');
-                        
-                        this.pendingCSV = null; // Clear pending data
-                        
-                        // Display the newly uploaded CSV
-                        console.log('Retrieving and displaying CSV...');
-                        const csvText = await window.csvStorage.getCSV();
-                        console.log('Retrieved CSV, calling displayTable...');
-                        window.csvTable.displayTable(csvText);
-                        console.log('displayTable call completed');
-                    } catch (error) {
-                        console.error('Error in CSV processing:', error);
-                    }
-                } else {
-                    console.log('Not processing - conditions not met');
-                }
-            });
-        }
-
-        async checkStoredCSV() {
-            try {
-                const csvText = await window.csvStorage.getCSV();
-                const lines = csvText.split('\n');
-                const rows = lines.length - 1; // minus header
-                console.log(`CSV loaded: ${rows} rows, ${lines[0].split(',').length} columns`);
-                
-                // Update UI to show "Data loaded" status
-                
-                const messageDiv = document.querySelector('.alert');
-                if (messageDiv) {
-                    console.log('CSV data ready:', rows, 'rows');
-                    messageDiv.innerHTML = `CSV data ready: ${rows} rows`;
-                    messageDiv.className = 'alert alert-success mt-3';
-                }
-            } catch (err) {
-                console.log('No CSV data available yet');
-            }
-        }
     }
+});
 
-    window.CSVApp = CSVApp;
+function displayInfo(type = 'info', message = '') {
+    // Show success message
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.style.position = 'fixed';
+    alertDiv.style.bottom = '20px';
+    alertDiv.style.right = '20px';
+    alertDiv.style.zIndex = '1050'; // Ensure it appears above other content
+    alertDiv.innerHTML = `
+    <strong>Success!</strong> 
+    ${document.createTextNode(message).textContent}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(alertDiv);
     
-    // Initialize app when DOM is loaded
-    document.addEventListener('DOMContentLoaded', () => {
-        if (!window.csvApp) {
-            window.csvApp = new CSVApp();
+    // Auto-remove alert after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
         }
+    }, 5000);
+}
+
+
+// first, split the left container vertically into #area1 / #area2
+if (document.getElementById('area1') && document.getElementById('area2')) {
+    Split(['#area1', '#area2'], {
+        direction: 'vertical',
+        sizes: [50, 50],      // start 50% / 50%
+        minSize: 100,         // px minimum
+        gutterSize: 6,
+        cursor: 'row-resize'
     });
 }
+
+// then split the outer container horizontally into #left / #sidebar
+Split(['#navbar','#content'], {
+    direction: 'horizontal',
+    sizes: [30, 70],      // 70% left, 30% sidebar
+    minSize: [150, 200],  // px minimum for each
+    gutterSize: 6,
+    cursor: 'col-resize'
+});
+

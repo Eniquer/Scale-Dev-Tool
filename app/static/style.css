@@ -80,17 +80,6 @@ html[data-bs-theme="dark"] body {
     color: #f8f9fa !important;
 }
 
-/* Button enhancements */
-.btn-primary {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-}
-
-.btn-primary:hover {
-    background-color: #0b5ed7;
-    border-color: #0a58ca;
-}
-
 /* Scrollbar styling for dark theme */
 ::-webkit-scrollbar {
     width: 8px;
@@ -124,6 +113,112 @@ html[data-bs-theme="dark"] body {
     cursor: pointer;
 }
 
+
+/*******************************      Split Screen     **********************************+ */
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
+    font-family: sans-serif;
+}
+#outer-container {
+    display: flex;
+    height: 100%;
+}
 main{
-    
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+/* scrollable panes */
+#area1, #area2, #navbar {
+    overflow: auto;
+    box-sizing: border-box;
+    padding: 10px;
+}
+#navbar {
+    width: 25%;
+}
+
+/* --- GUTTER STYLING --- */
+    /* Base gutter appearance */
+    .gutter {
+      background-color: #ccc;
+      transition: background-color 0.2s;
+    }
+    /* Darken the gutter on hover */
+    .gutter:hover {
+      background-color: #999;
+    }
+    /* Only show resize cursor when hovered */
+    .gutter.gutter-horizontal { /* between left & sidebar */
+      /* cursor set on hover via .gutter:hover */
+    }
+    .gutter.gutter-horizontal:hover {
+      cursor: col-resize;
+    }
+    .gutter.gutter-vertical {   /* between area1 & area2 */
+    }
+    .gutter.gutter-vertical:hover {
+      cursor: row-resize;
+    }
+
+
+
+/******************************** Custom Bootstrap Primary Color Override */
+:root {
+    --bs-primary: #20c997;          /* Teal color to match your theme */
+    --bs-primary-rgb: 32, 201, 151; /* RGB values for the same color */
+    --bs-primary-text-emphasis: #0c5132;
+    --bs-primary-bg-subtle: #d1f2eb;
+    --bs-primary-border-subtle: #a3e3cc;
+}
+
+/* Primary button customization */
+.btn-primary {
+    --bs-btn-color: #fff !important;
+    --bs-btn-bg: #20c997 !important;
+    --bs-btn-border-color: #20c997 !important;
+    --bs-btn-hover-color: #fff !important;
+    --bs-btn-hover-bg: #1ea085 !important;
+    --bs-btn-hover-border-color: #1c9476 !important;
+    --bs-btn-focus-shadow-rgb: 32, 201, 151;
+    --bs-btn-active-color: #fff !important;
+    --bs-btn-active-bg: #1c9476 !important;
+    --bs-btn-active-border-color: #199066 !important;
+    --bs-btn-disabled-color: #fff !important;
+    --bs-btn-disabled-bg: #20c997 !important;
+    --bs-btn-disabled-border-color: #20c997 !important;
+    background-color: #20c997 !important;
+    border-color: #20c997 !important;
+}
+
+.btn-primary:hover {
+    background-color: #1ea085 !important;
+    border-color: #1c9476 !important;
+}
+
+/* Primary alerts */
+.alert-primary {
+    --bs-alert-color: #0c5132;
+    --bs-alert-bg: #d1f2eb;
+    --bs-alert-border-color: #a3e3cc;
+}
+
+/* Primary badges */
+.badge.bg-primary {
+    background-color: #20c997 !important;
+}
+
+/* Primary text */
+.text-primary {
+    color: #20c997 !important;
+}
+
+/* Primary links */
+a.text-primary:hover,
+a.text-primary:focus {
+    color: #1ea085 !important;
 }
