@@ -2,6 +2,13 @@ from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+try:
+    from API import functions
+except ImportError:
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from API import functions
 import pandas as pd
 
 
@@ -10,11 +17,6 @@ import pandas as pd
 
 def is_htmx(request: Request) -> bool:
     return request.headers.get("hx-request") == "true"
-
-
-
-
-
 
 
 
@@ -74,3 +76,16 @@ async def analyze(request: Request, file: UploadFile = File(...)):
             "message": f"Error processing CSV: {str(e)}",
             "success": False
         })
+
+@app.post("/getAPIKey")
+async def get_api_key(request: Request):
+    print(f"Received API key: {functions.get_openai_api_key()}")
+    result = functions.get_chatgpt_response(
+        "What is the current date?",[])
+    print(f"ChatGPT response: {result}")
+    return result
+    return templates.TemplateResponse("partials/step_3.html", {
+        "request": request,
+        "api_key": result,
+        "success": True
+    })
