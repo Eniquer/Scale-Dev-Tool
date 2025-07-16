@@ -1,23 +1,3 @@
-window.csvStorage.hasCSV().then((hasCSV) => {
-    if (hasCSV) {
-        window.csvStorage.getCSV().then((csvData) => {
-            window.csvData = csvData; // Store the data in a global variable
-            displayTable(csvData, "#json-table"); // Call the function to display the table
-            populateColumnCheckboxes();
-            console.log("CSV data retrieved from IndexedDB:", csvData);
-            
-        }).catch((error) => {
-            console.error("Error retrieving CSV data:", error);
-            document.getElementById("tableContent").innerHTML = `<div class="alert alert-danger">Error storing CSV data: ${error.message}</div>`;
-
-        });
-    } else {
-        console.log("No CSV data found in IndexedDB.");
-        document.getElementById("tableContent").innerHTML = `<div class="alert alert-info">No CSV data found. Upload to get startet</div>`;
-
-    }
-});
-
 function displayInfo(type = 'info', message = '') {
     // Show success message
     const alertDiv = document.createElement('div');
@@ -32,7 +12,7 @@ function displayInfo(type = 'info', message = '') {
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
     document.body.appendChild(alertDiv);
-    
+
     // Auto-remove alert after 5 seconds
     setTimeout(() => {
         if (alertDiv.parentNode) {
@@ -42,23 +22,144 @@ function displayInfo(type = 'info', message = '') {
 }
 
 
-// first, split the left container vertically into #area1 / #area2
-if (document.getElementById('area1') && document.getElementById('area2')) {
-    Split(['#area1', '#area2'], {
-        direction: 'vertical',
-        sizes: [50, 50],      // start 50% / 50%
-        minSize: 100,         // px minimum
-        gutterSize: 6,
-        cursor: 'row-resize'
-    });
-}
-
 // then split the outer container horizontally into #left / #sidebar
-Split(['#navbar','#content'], {
+Split(['#navbar', '#content'], {
     direction: 'horizontal',
     sizes: [20, 80],      // 70% left, 30% sidebar
-    minSize: [100, 200],  // px minimum for each
-    gutterSize: 6,
-    cursor: 'col-resize'
+    minSize: [200, 400],  // px minimum for each
+    gutterSize: 4,
+    cursor: 'col-resize',
+    onDragStart: () => {
+        if (document.getElementById("json-table")) {
+            document.getElementById("json-table").style.width = document.getElementById("json-table").getClientRects()[0].width + "px"
+        }
+    },
+    onDragEnd: () => {
+        if (document.getElementById("json-table")) {
+            document.getElementById("json-table").style.width = "100%"; // Reset width to 100% after resizing
+        }
+    }
 });
+function makeHxPostRequest(url, data) {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
 
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === XMLHttpRequest.DONE) {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                console.log(`Response from ${url}:`, xhr.responseText);
+            } else {
+                console.log(`Error from ${url}:`, xhr.status, xhr.statusText);
+            }
+        }
+    };
+
+    xhr.send(JSON.stringify(data));
+}
+
+// Simple encryption/decryption utilities (basic obfuscation)
+function simpleEncrypt(text, key = 'thesis-tool-secret') {
+    let result = '';
+    for (let i = 0; i < text.length; i++) {
+        result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    }
+    return btoa(result); // Base64 encode
+}
+
+function simpleDecrypt(encryptedText, key = 'thesis-tool-secret') {
+    const decoded = atob(encryptedText); // Base64 decode
+    let result = '';
+    for (let i = 0; i < decoded.length; i++) {
+        result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    }
+    return result;
+}
+
+async function getAPIKey() {
+    try {
+        const encryptedKey = await window.csvStorage.getData('chatgpt_api_key_enc');
+        if (encryptedKey) {
+            const apiKey = simpleDecrypt(encryptedKey);
+            console.log('Retrieved API key from storage: ****' + apiKey.slice(-4));
+            return apiKey;
+        }
+        console.warn('No API key found in storage');
+        return null;
+    } catch (error) {
+        console.error('Error retrieving API key:', error);
+        return null;
+    }
+}
+
+async function storeAPIKey(apiKey) {
+    try {
+        // Basic validation
+        if (!apiKey || typeof apiKey !== 'string') {
+            throw new Error('Invalid API key format');
+        }
+        
+        if (!apiKey.startsWith('sk-') || apiKey.length < 20) {
+            throw new Error('API key should start with "sk-" and be at least 20 characters long');
+        }
+        
+        const encryptedKey = simpleEncrypt(apiKey);
+        await window.csvStorage.storeData('chatgpt_api_key_enc', encryptedKey, false);
+        console.log('API key stored securely: ****' + apiKey.slice(-4));
+        return true;
+    } catch (error) {
+        console.error('Error storing API key:', error);
+        throw error;
+    }
+}
+
+async function deleteAPIKey() {
+    try {
+        await window.csvStorage.deleteData('chatgpt_api_key_enc');
+        console.log('API key deleted from storage');
+        return true;
+    } catch (error) {
+        console.error('Error deleting API key:', error);
+        throw error;
+    }
+}
+
+async function hasAPIKey() {
+    try {
+        return await window.csvStorage.hasData('chatgpt_api_key_enc');
+    } catch (error) {
+        console.error('Error checking API key:', error);
+        return false;
+    }
+}
+
+async function initAPIKey() {
+    try {
+        const hasKey = await hasAPIKey();
+        if (hasKey) {
+            const apiKey = await getAPIKey();
+            if (apiKey) {
+                console.log('API key initialized successfully');
+                return apiKey;
+            } else {
+                console.warn('No valid API key found, prompting user');
+            }
+        } else {
+            console.log('No API key stored, prompting user');
+        }
+        
+        // Prompt user for API key
+        const userApiKey = prompt('Please enter your OpenAI API key:');
+        if (userApiKey) {
+            await storeAPIKey(userApiKey);
+            console.log('API key stored successfully');
+            return userApiKey;
+        } else {
+            console.warn('No API key provided by user');
+            return null;
+        }
+    } catch (error) {
+        console.error('Error initializing API key:', error);
+        return null;
+    }
+}

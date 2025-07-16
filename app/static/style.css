@@ -18,6 +18,7 @@ html[data-bs-theme="dark"] body {
 /* Navigation links for dark theme */
 .list-unstyled a {
     color: #17a2b8 !important;
+    background-color: #27292c;
     padding: 8px 12px;
     display: block;
     border-radius: 0.375rem;
@@ -146,24 +147,58 @@ main{
 /* --- GUTTER STYLING --- */
     /* Base gutter appearance */
     .gutter {
-      background-color: #ccc;
-      transition: background-color 0.2s;
+      background-color: #495057;
+      transition: all 0.2s ease;
+      position: relative;
     }
     /* Darken the gutter on hover */
     .gutter:hover {
-      background-color: #999;
+      background-color: #6c757d !important;
     }
-    /* Only show resize cursor when hovered */
-    .gutter.gutter-horizontal { /* between left & sidebar */
-      /* cursor set on hover via .gutter:hover */
-    }
+    /* between left & sidebar */
     .gutter.gutter-horizontal:hover {
+        z-index: 1000; /* Ensure it appears above other content */
       cursor: col-resize;
+      transform: scaleX(2.5);
+    transform-origin: 50% 50%; /* Scale from the center */
+}
+/* between area1 & area2 */
+.gutter.gutter-vertical:hover {
+    cursor: row-resize;
+    transform: scaleY(2.5);
+    transform-origin: 50% 50%; /* Scale from the center */
+
     }
-    .gutter.gutter-vertical {   /* between area1 & area2 */
+    /* Add a visual indicator on hover */
+    .gutter::before {
+      content: '';
+      position: absolute;
+      background-color: #20c997;
+      transition: all 0.2s ease;
+      opacity: 0;
     }
-    .gutter.gutter-vertical:hover {
-      cursor: row-resize;
+
+    .gutter:hover::before {
+
+      opacity: 0.8;
+    }
+
+    .gutter-horizontal:hover::before {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 2px;
+      height: 30px;
+      border-radius: 50px;
+    }
+    
+    .gutter-vertical:hover::before {
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 30px;
+        height: 2px;
+        border-radius: 50px;
     }
 
 

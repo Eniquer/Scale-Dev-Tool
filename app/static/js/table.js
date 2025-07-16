@@ -28,7 +28,7 @@ function displayTable(jsonData, tableId) {
 
     new Tabulator(tableId, {
         data: indexedData,  // Use the data with added indices
-        height: "800px",    // Set max height of the table
+        height: "100%",    // Set max height of the table
         layout: "fitDataStretch",  // stretch columns to fill width
         columns: allColumns,
         movableColumns: true,      // drag headers to reorder

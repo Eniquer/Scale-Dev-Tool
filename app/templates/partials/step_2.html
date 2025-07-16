@@ -100,7 +100,51 @@
 {% endif %}
 
 <script>
-    //Todo load newest reverted data not the original data 
+console.log("Script loaded");
+
+if (document.getElementById('area1') && document.getElementById('area2')) {
+    Split(['#area1', '#area2'], {
+        direction: 'vertical',
+        sizes: [50, 50],      // start 50% / 50%
+        minSize: 100,         // px minimum
+        gutterSize: 4,
+        cursor: 'row-resize',
+        onDragStart: () => {
+        if (document.getElementById("json-table")) {
+            document.getElementById("json-table").style.height = document.getElementById("json-table").getClientRects()[0].height + "px"
+        }
+    },
+    onDragEnd: () => {
+        if (document.getElementById("json-table")) {
+            document.getElementById("json-table").style.height = "100%"; // Reset width to 100% after resizing
+        }
+    }
+    });
+}
+// Initialize the step when the partial loads
+function initializeStep2() {
+    window.csvStorage.hasCSV().then((hasCSV) => {
+        if (hasCSV) {
+            window.csvStorage.getCSV().then((csvData) => {
+                window.csvData = csvData; // Store the data in a global variable
+                displayTable(csvData, "#json-table"); // Call the function to display the table
+                populateColumnCheckboxes();
+                console.log("CSV data retrieved from IndexedDB:", csvData);
+            }).catch((error) => {
+                console.error("Error retrieving CSV data:", error);
+                document.getElementById("tableContent").innerHTML = `<div class="alert alert-danger">Error retrieving CSV data: ${error.message}</div>`;
+            });
+        } else {
+            console.log("No CSV data found in IndexedDB.");
+            document.getElementById("tableContent").innerHTML = `<div class="alert alert-info">No CSV data found. Upload to get started.</div>`;
+        }
+    });
+}
+
+setTimeout(() => {initializeStep2();}, 50);
+
+// Call initialization immediately when the script loads (for partial loading)
+//Todo load newest reverted data not the original data 
 
     columnsReverted = [];
     newData = null;
@@ -110,7 +154,7 @@
         const checkboxContainer = document.getElementById('columnCheckboxes');
         if (!checkboxContainer || !window.csvData || window.csvData.length === 0) return;
         console.log(window.csvData);
-
+        
         const columns = Object.keys(window.csvData[0] || {});
         checkboxContainer.innerHTML = '';
 
