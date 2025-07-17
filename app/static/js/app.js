@@ -22,16 +22,22 @@ function displayInfo(type = 'info', message = '') {
 }
 
 
+// ***********************************       SplitJS          ***********************************************
+
 // then split the outer container horizontally into #left / #sidebar
-Split(['#navbar', '#content'], {
+// Initialize Split.js and keep instance for programmatic control
+window.splitInstance = Split(['#navbar', '#content'], {
     direction: 'horizontal',
-    sizes: [20, 80],      // 70% left, 30% sidebar
-    minSize: [200, 400],  // px minimum for each
+    sizes: [20, 80],
+    minSize: [0, 400],  // px minimum for each
     gutterSize: 4,
     cursor: 'col-resize',
     onDragStart: () => {
         if (document.getElementById("json-table")) {
             document.getElementById("json-table").style.width = document.getElementById("json-table").getClientRects()[0].width + "px"
+        }
+        if (document.getElementById("navbar").getBoundingClientRect().width < 1) {
+            window.splitInstance.setSizes([20, 80]);
         }
     },
     onDragEnd: () => {
@@ -40,6 +46,9 @@ Split(['#navbar', '#content'], {
         }
     }
 });
+
+// **********************************************************************************
+
 function makeHxPostRequest(url, data) {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url, true);
