@@ -139,13 +139,15 @@ html[data-bs-theme="dark"] body {
 html, body {
     margin: 0;
     padding: 0;
-    height: 100vh;
-    overflow: hidden;
+    height: 100%; /* Use full available height to allow flex layout to account for navbar */
+    /* Removed overflow:hidden to allow internal flex items to size correctly */
+    /* overflow: hidden; */
     font-family: sans-serif;
 }
 #outer-container {
     display: flex;
-    height: 100%;
+    flex: 1 1 auto; /* fill remaining space below navbar */
+    min-height: 0;    /* allow flex children to scroll properly */
     width: 100%;
 }
 main{
