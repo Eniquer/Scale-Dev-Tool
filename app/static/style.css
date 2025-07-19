@@ -4,21 +4,16 @@
 /* Define reusable color variables */
 :root {
     --color-dark-body: #212529;
+    --color-card-body: #2c2f31;
     --color-white: #ffffff;
-    --color-sidebar-bg: #1a1d20;
+    --color-text-light: #f8f9fa;
+    --color-nav-bg: #27292c;
     --color-border-secondary: #495057;
     --color-link: #17a2b8;
-    --color-nav-bg: #27292c;
     --color-nav-hover-bg: #343a40;
     --color-gutter-hover: #6c757d;
-    --color-form-control-bg: #2c3034;
-    --color-alert-success-bg: #0f2419;
-    --color-alert-success-border: #2d5a3d;
-    --color-alert-success-text: #5cb85c;
-    --color-text-light: #f8f9fa;
-    --color-form-focus-border: #86b7fe;
-    --color-form-focus-shadow: rgba(13, 110, 253, 0.25);
 }
+
 
 /* Custom dark theme styles for Scale Development Tool */
 
@@ -27,16 +22,6 @@ html[data-bs-theme="dark"] body {
     background-color: var(--color-dark-body) !important;
     color: var(--color-white) !important;
 }
-
-/* Sidebar styling for dark theme */
-.bg-dark {
-    background-color: var(--color-sidebar-bg) !important;
-}
-
-.border-secondary {
-    border-color: var(--color-border-secondary) !important;
-}
-
 /* Navigation links for dark theme */
 .list-unstyled a {
     color: var(--color-link) !important;
@@ -58,68 +43,16 @@ html[data-bs-theme="dark"] body {
 .list-unstyled a.selected {
     cursor: default;
     background-color: var(--bs-primary);
-    color: var(--color-sidebar-bg) !important;
+    color: var(--color-dark-body) !important;
 }
-
-/* Card styling for dark theme */
-.card.bg-secondary {
-    background-color: var(--color-nav-hover-bg) !important;
-    border-color: var(--color-border-secondary) !important;
-}
-
 .card:hover {
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.3);
 }
-
-/* Form controls for dark theme */
-.form-control.bg-dark {
-    background-color: var(--color-form-control-bg) !important;
-    border-color: var(--color-border-secondary) !important;
-    color: #fff !important;
+.card:not(.card .card) {
+    background-color: var(--color-card-body);
 }
 
-.form-control.bg-dark:focus {
-    background-color: var(--color-form-control-bg) !important;
-    border-color: var(--color-form-focus-border);
-    box-shadow: 0 0 0 0.25rem var(--color-form-focus-shadow);
-    color: #fff !important;
-}
 
-.form-control.bg-dark::file-selector-button {
-    background-color: var(--color-border-secondary);
-    border-color: var(--color-border-secondary);
-    color: #fff;
-}
-
-/* Alert styling for dark theme */
-.alert-success {
-    background-color: var(--color-alert-success-bg) !important;
-    border-color: var(--color-alert-success-border) !important;
-    color: var(--color-alert-success-text) !important;
-}
-
-/* Text colors for dark theme */
-.text-light {
-    color: var(--color-text-light) !important;
-}
-
-/* Scrollbar styling for dark theme */
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--color-dark-body);
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--color-border-secondary);
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--color-gutter-hover);
-}
 
 .no-style {
     all: unset;
@@ -135,7 +68,6 @@ html[data-bs-theme="dark"] body {
 #navbar h1 {
     cursor: pointer;
 }
-
 
 /*******************************      Split Screen     **********************************+ */
 
@@ -251,59 +183,3 @@ main{
     }
 
 
-
-/******************************** Custom Bootstrap Primary Color Override */
-:root {
-    --bs-primary: #20c997;          /* Teal color to match your theme */
-    --bs-primary-rgb: 32, 201, 151; /* RGB values for the same color */
-    --bs-primary-text-emphasis: #0c5132;
-    --bs-primary-bg-subtle: #d1f2eb;
-    --bs-primary-border-subtle: #a3e3cc;
-}
-
-/* Primary button customization */
-.btn-primary {
-    --bs-btn-color: #fff !important;
-    --bs-btn-bg: #20c997 !important;
-    --bs-btn-border-color: #20c997 !important;
-    --bs-btn-hover-color: #fff !important;
-    --bs-btn-hover-bg: #1ea085 !important;
-    --bs-btn-hover-border-color: #1c9476 !important;
-    --bs-btn-focus-shadow-rgb: 32, 201, 151;
-    --bs-btn-active-color: #fff !important;
-    --bs-btn-active-bg: #1c9476 !important;
-    --bs-btn-active-border-color: #199066 !important;
-    --bs-btn-disabled-color: #fff !important;
-    --bs-btn-disabled-bg: #20c997 !important;
-    --bs-btn-disabled-border-color: #20c997 !important;
-    background-color: var(--bs-primary) !important;
-    border-color: var(--bs-primary) !important;
-}
-
-.btn-primary:hover {
-    background-color: var(--bs-btn-hover-bg) !important;
-    border-color: var(--bs-btn-hover-border-color) !important;
-}
-
-/* Primary alerts */
-.alert-primary {
-    --bs-alert-color: #0c5132;
-    --bs-alert-bg: #d1f2eb;
-    --bs-alert-border-color: #a3e3cc;
-}
-
-/* Primary badges */
-.badge.bg-primary {
-    background-color: var(--bs-primary) !important;
-}
-
-/* Primary text */
-.text-primary {
-    color: var(--bs-primary) !important;
-}
-
-/* Primary links */
-a.text-primary:hover,
-a.text-primary:focus {
-    color: var(--bs-btn-hover-bg) !important;
-}

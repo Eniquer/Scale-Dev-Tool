@@ -1,12 +1,12 @@
 <div id="area1">
-    <h2 class="h3 mb-4 text-light">Step 2: Input Data</h2>
-    <div class="card bg-secondary border-secondary">
+    <h2 class="h3 mb-4 ">Step 2: Input Data</h2>
+    <div class="card ">
         <div class="card-body">
-            <p class="card-text text-light">Please upload your CSV file to start the item generation process.</p>
+            <p class="card-text ">Please upload your CSV file to start the item generation process.</p>
             <form hx-post="/analyze" hx-encoding="multipart/form-data" hx-target="#content">
                 <div class="mb-3">
                     <input id="csvInput" type="file" name="file" accept=".csv"
-                        class="form-control bg-dark border-secondary text-light" required>
+                        class="form-control   " required>
                 </div>
                 <button type="submit" id="csvInputButton" class="btn btn-primary mb-3">Upload & Analyze</button>
             </form>
@@ -15,18 +15,18 @@
                 <!-- Column Selection for Reversal -->
                 <div class="row mb-4">
                     <div class="col-md-12">
-                        <h5 class="text-light mb-3">Select Columns to Reverse</h5>
-                        <div class="card bg-dark border-secondary">
+                        <h5 class=" mb-3">Select Columns to Reverse</h5>
+                        <div class="card">
                             <div class="card-body">
                                 <div class="row mb-3">
                                     <div class="col-md-3">
-                                        <label for="likertMin" class="form-label text-light">Minimum Value</label>
-                                        <input type="number" class="form-control bg-dark border-secondary text-light"
+                                        <label for="likertMin" class="form-label ">Minimum Value</label>
+                                        <input type="number" class="form-control"
                                             id="likertMin" value="1" min="0" max="10">
                                     </div>
                                     <div class="col-md-3">
-                                        <label for="likertMax" class="form-label text-light">Maximum Value</label>
-                                        <input type="number" class="form-control bg-dark border-secondary text-light"
+                                        <label for="likertMax" class="form-label ">Maximum Value</label>
+                                        <input type="number" class="form-control   "
                                             id="likertMax" value="5" min="1" max="10">
                                     </div>
                                 </div>
@@ -50,9 +50,9 @@
                     </div>
                 </div>
 
-                <div class="card bg-dark border-secondary mb-3">
+                <div class="card   mb-3">
                     <div class="card-body">
-                        <p class="card-text text-light">Columns that are or were reverted: <span
+                        <p class="card-text ">Columns that are or were reverted: <span
                                 id="reversedDataColumns"></span></p>
                         <div class="row">
                             <div class="col-12 text-end">
@@ -152,9 +152,9 @@ setTimeout(() => {initializeStep2();}, 50);
             colDiv.className = 'col-md-3 col-sm-6 mb-2';
             colDiv.innerHTML = `
                             <div class="form-check" style="overflow-x: auto;">
-                                <input class="form-check-input bg-dark border-secondary" type="checkbox" 
+                                <input class="form-check-input  " type="checkbox" 
                                        value="${column}" id="col_${index}" data-column="${column}">
-                                <label class="form-check-label text-light" for="col_${index}">
+                                <label class="form-check-label " for="col_${index}">
                                     ${column}
                                 </label>
                             </div>
