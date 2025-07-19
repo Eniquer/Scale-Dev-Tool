@@ -16,21 +16,49 @@
   rel="stylesheet"
 />
 <!-- Tabulator core -->
-<script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+    <script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
 
             
 <!-- Include our custom JS files in proper order -->
 <script src="{{ url_for('static', path='js/indexeddb.js') }}" defer></script>
 <script src="{{ url_for('static', path='js/table.js') }}" defer></script>
-<script src="{{ url_for('static', path='js/app.js') }}" defer></script> 
+<script type="module" src="{{ url_for('static', path='js/app.js') }}" defer></script>
 
 </head>
-<body class="d-flex vh-100 bg-dark text-light">
-    <div id="outer-container">
-        <div class="bg-dark border-end border-secondary p-4 d-flex flex-column" id="navbar">
-            <h1 class="h4 fw-bold mb-4 text-light"> <a class="no-style" hx-get="/step/0" hx-target="#content" hx-swap="innerHTML"> Scale Development </a></h1>
-            <ul class="list-unstyled d-flex flex-column justify-content-center flex-grow-1">
-                <li class="mb-2"><a hx-get="/step/1" hx-target="#content" hx-swap="innerHTML" class="text-decoration-none text-info nav-link{% if current_step == 1 %} active{% endif %}" data-step="1">Step 1: Item Generation</a></li>
+<body class="d-flex flex-column h-100 bg-dark text-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary">
+        <div class="container-fluid">
+            <!-- Logo/Brand -->
+            <a class="navbar-brand fw-bold text-primary" href="#" hx-get="/step/0" hx-target="#content" hx-swap="innerHTML">
+                ScaleDev
+            </a>
+            
+            <!-- Navbar toggler for mobile -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <!-- Navbar items -->
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link text-light" href="#">Documentation</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-light" href="#">Export</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-light" href="#">Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    <div id="outer-container" class="position-relative flex-grow-1 d-flex">
+        <div class="bg-dark border-end border-secondary p-0 d-flex flex-column" id="navbar">
+            <!-- Header with collapse button -->            
+            <ul class="list-unstyled d-flex flex-column m-3 justify-content-center flex-grow-1">
+                <li class="mb-2"><a hx-get="/step/1" hx-target="#content" hx-swap="innerHTML" class="text-decoration-none text-info nav-link{% if current_step == 1 %} active{% endif %}" data-step="1">Conceptualization</a></li>
                 <li class="mb-2"><a hx-get="/step/2" hx-target="#content" hx-swap="innerHTML" class="text-decoration-none text-info nav-link{% if current_step == 2 %} active{% endif %}" data-step="2">Step 2: Data input</a></li>
                 <li class="mb-2"><a hx-get="/step/3" hx-target="#content" hx-swap="innerHTML" class="text-decoration-none text-info nav-link{% if current_step == 3 %} active{% endif %}" data-step="3">Step 3: EFA</a></li>
                 <li class="mb-2"><a hx-get="/step/4" hx-target="#content" hx-swap="innerHTML" class="text-decoration-none text-info nav-link{% if current_step == 4 %} active{% endif %}" data-step="4">Step 4: Validation</a></li>

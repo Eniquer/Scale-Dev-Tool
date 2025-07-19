@@ -75,14 +75,15 @@
 </div>
                         
 <div id="area2">
+    <i id="expand-area2" class="area2-caret bi bi-chevron-up"></i>
     <div id="json-table"></div>
 </div>
 
 {% if csv_data %}
 
 
-<script>
 
+<script>
 
     // Use var instead of let to allow redeclaration, or overwrite existing variable
     window.csvData = {{ csv_data | tojson }};
@@ -99,28 +100,15 @@
 </script>
 {% endif %}
 
-<script>
-console.log("Script loaded");
+<script src="{{ url_for('static', path='js/splitHor.js') }}" defer></script>
 
-if (document.getElementById('area1') && document.getElementById('area2')) {
-    Split(['#area1', '#area2'], {
-        direction: 'vertical',
-        sizes: [50, 50],      // start 50% / 50%
-        minSize: 100,         // px minimum
-        gutterSize: 4,
-        cursor: 'row-resize',
-        onDragStart: () => {
-        if (document.getElementById("json-table")) {
-            document.getElementById("json-table").style.height = document.getElementById("json-table").getClientRects()[0].height + "px"
-        }
-    },
-    onDragEnd: () => {
-        if (document.getElementById("json-table")) {
-            document.getElementById("json-table").style.height = "100%"; // Reset width to 100% after resizing
-        }
-    }
-    });
-}
+<script>
+
+setTimeout(() => {
+    window.initSplit();
+    console.log("Split initialized");
+}, 30);
+
 // Initialize the step when the partial loads
 function initializeStep2() {
     window.csvStorage.hasCSV().then((hasCSV) => {
@@ -140,6 +128,7 @@ function initializeStep2() {
         }
     });
 }
+
 
 setTimeout(() => {initializeStep2();}, 50);
 

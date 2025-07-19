@@ -26,7 +26,7 @@ function displayInfo(type = 'info', message = '') {
 
 // then split the outer container horizontally into #left / #sidebar
 // Initialize Split.js and keep instance for programmatic control
-window.splitInstance = Split(['#navbar', '#content'], {
+const splitInstance = Split(['#navbar', '#content'], {
     direction: 'horizontal',
     sizes: [20, 80],
     minSize: [0, 400],  // px minimum for each
@@ -37,7 +37,7 @@ window.splitInstance = Split(['#navbar', '#content'], {
             document.getElementById("json-table").style.width = document.getElementById("json-table").getClientRects()[0].width + "px"
         }
         if (document.getElementById("navbar").getBoundingClientRect().width < 1) {
-            window.splitInstance.setSizes([20, 80]);
+            splitInstance.setSizes([20, 80]);
         }
     },
     onDragEnd: () => {

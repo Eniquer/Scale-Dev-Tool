@@ -1,3 +1,6 @@
+/* Load Bootstrap Icons for pseudo-element icons */
+@import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css");
+
 /* Define reusable color variables */
 :root {
     --color-dark-body: #212529;
@@ -157,10 +160,35 @@ main{
 }
 /* scrollable panes */
 #area1, #area2, #navbar {
-    overflow: auto;
     box-sizing: border-box;
+}
+#area1{
+    overflow: auto;
     padding: 10px;
 }
+#area2 { /* //todo maybe only for the data table */
+    position: relative; /* Needed for absolute positioning of the caret */
+}
+
+#area2 .area2-caret {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -100%);
+    font-size: 0.8rem;
+    color: var(--color-text-light);
+    background-color: var(--color-nav-bg);
+    padding: 2px 10px;
+    border: 2px solid var(--color-border-secondary);
+    border-radius: 5px 5px 0 0;
+    cursor: pointer;
+    z-index: 10;
+    display: none; /* Hide by default */
+}
+#area2.expand .area2-caret {
+    display: inline-block;
+}
+
 #navbar {
     width: 25%;
 }
