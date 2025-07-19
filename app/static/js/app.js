@@ -77,7 +77,7 @@ function makeHxPostRequest(url, data) {
 
 
 
-async function sendChat(input) {
+async function sendChat(input, history = []) {
     const cipher = window.currentAPIKey_enc;
     if (!cipher) {
         alert('API key is not set. Please enter your OpenAI API key first.');
@@ -92,11 +92,11 @@ async function sendChat(input) {
     const resp = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: promptText, keyCipher: cipher })
+    body: JSON.stringify({ prompt: promptText, keyCipher: cipher, history: history })
     });
     if (resp.ok) {
-        const { reply } = await resp.json();
-        return reply; // Return the reply for further processing
+        const { reply, history: updatedHistory } = await resp.json();
+        return [reply, updatedHistory];
     } else {
         // Detailed error logging: parse JSON if possible
         let errorDetail;
@@ -112,9 +112,8 @@ async function sendChat(input) {
             const newKey = prompt('Your API key appears invalid or unauthorized. Please re-enter your key.');
             // Re-init API key and retry storing cipher
             window.currentAPIKey_enc = await storeAPIKey(newKey,false);
-            return await sendChat(input); // Retry with new key
+            return await sendChat(input, history); // Retry with new key
         }
     }
 }
-
-
+window.sendChat = sendChat;

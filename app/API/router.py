@@ -82,5 +82,5 @@ async def chat_endpoint(chat_req: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-    return {"reply": reply}
+    return {"reply": reply[0], "history": reply[1]}
 

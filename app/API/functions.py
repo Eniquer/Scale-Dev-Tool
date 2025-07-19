@@ -49,5 +49,5 @@ def get_chatgpt_response(user_input, messages, temperature=0.7, model="gpt-4o", 
     assistant_reply = response.choices[0].message.content
     # Append assistant's reply to history
     messages.append({"role": "assistant", "content": assistant_reply})
-    return assistant_reply
+    return assistant_reply, messages
 
