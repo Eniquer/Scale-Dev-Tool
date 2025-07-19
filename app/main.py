@@ -23,9 +23,11 @@ def is_htmx(request: Request) -> bool:
 
 
 # main code
+from API.router import router as api_router
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+app.include_router(api_router, prefix="/api")
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -76,16 +78,3 @@ async def analyze(request: Request, file: UploadFile = File(...)):
             "message": f"Error processing CSV: {str(e)}",
             "success": False
         })
-
-@app.post("/getAPIKey")
-async def get_api_key(request: Request):
-    print(f"Received API key: {functions.get_openai_api_key()}")
-    result = functions.get_chatgpt_response(
-        "What is the current date?",[])
-    print(f"ChatGPT response: {result}")
-    return result
-    return templates.TemplateResponse("partials/step_3.html", {
-        "request": request,
-        "api_key": result,
-        "success": True
-    })

@@ -1,3 +1,6 @@
+import { initAPIKey,deleteAPIKey,storeAPIKey } from './handleAPIKey.js';
+window.delKey = deleteAPIKey
+
 function displayInfo(type = 'info', message = '') {
     // Show success message
     const alertDiv = document.createElement('div');
@@ -67,108 +70,51 @@ function makeHxPostRequest(url, data) {
     xhr.send(JSON.stringify(data));
 }
 
-// Simple encryption/decryption utilities (basic obfuscation)
-function simpleEncrypt(text, key = 'thesis-tool-secret') {
-    let result = '';
-    for (let i = 0; i < text.length; i++) {
-        result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-    }
-    return btoa(result); // Base64 encode
-}
 
-function simpleDecrypt(encryptedText, key = 'thesis-tool-secret') {
-    const decoded = atob(encryptedText); // Base64 decode
-    let result = '';
-    for (let i = 0; i < decoded.length; i++) {
-        result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-    }
-    return result;
-}
+// TODO maybe: wenn neu page geladen wird alle elemente aus dem Storage laden die schon existoeren mit id und json aus der DB?
 
-async function getAPIKey() {
-    try {
-        const encryptedKey = await window.csvStorage.getData('chatgpt_api_key_enc');
-        if (encryptedKey) {
-            const apiKey = simpleDecrypt(encryptedKey);
-            console.log('Retrieved API key from storage: ****' + apiKey.slice(-4));
-            return apiKey;
+window.currentAPIKey_enc = await initAPIKey();
+
+async function sendChat(input) {
+    const cipher = window.currentAPIKey_enc;
+    if (!cipher) {
+        alert('API key is not set. Please enter your OpenAI API key first.');
+        window.currentAPIKey_enc = await initAPIKey();
+        return;
+    }
+    const promptText = input;
+    if (!cipher || !promptText) {
+    alert('Both key cipher and prompt are required');
+    return;
+    }
+    const resp = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt: promptText, keyCipher: cipher })
+    });
+    if (resp.ok) {
+        const { reply } = await resp.json();
+        return reply; // Return the reply for further processing
+    } else {
+        // Detailed error logging: parse JSON if possible
+        let errorDetail;
+        try {
+            const errJson = await resp.json();
+            errorDetail = errJson.detail || errJson.error || JSON.stringify(errJson);
+        } catch {
+            errorDetail = await resp.text();
         }
-        console.warn('No API key found in storage');
-        return null;
-    } catch (error) {
-        console.error('Error retrieving API key:', error);
-        return null;
-    }
-}
-
-async function storeAPIKey(apiKey) {
-    try {
-        // Basic validation
-        if (!apiKey || typeof apiKey !== 'string') {
-            throw new Error('Invalid API key format');
+        console.error(`Error from chat endpoint: ${resp.status} ${resp.statusText}`, errorDetail);
+        // Handle invalid API key: prompt user to re-enter
+        if ((resp.status === 401) && /invalid/i.test(errorDetail)) {
+            const newKey = prompt('Your API key appears invalid or unauthorized. Please re-enter your key.');
+            // Re-init API key and retry storing cipher
+            window.currentAPIKey_enc = await storeAPIKey(newKey,false);
+            sendChat(input); // Retry with new key
         }
-        
-        if (!apiKey.startsWith('sk-') || apiKey.length < 20) {
-            throw new Error('API key should start with "sk-" and be at least 20 characters long');
-        }
-        
-        const encryptedKey = simpleEncrypt(apiKey);
-        await window.csvStorage.storeData('chatgpt_api_key_enc', encryptedKey, false);
-        console.log('API key stored securely: ****' + apiKey.slice(-4));
-        return true;
-    } catch (error) {
-        console.error('Error storing API key:', error);
-        throw error;
     }
 }
+window.sendChat = sendChat;
 
-async function deleteAPIKey() {
-    try {
-        await window.csvStorage.deleteData('chatgpt_api_key_enc');
-        console.log('API key deleted from storage');
-        return true;
-    } catch (error) {
-        console.error('Error deleting API key:', error);
-        throw error;
-    }
-}
 
-async function hasAPIKey() {
-    try {
-        return await window.csvStorage.hasData('chatgpt_api_key_enc');
-    } catch (error) {
-        console.error('Error checking API key:', error);
-        return false;
-    }
-}
-
-async function initAPIKey() {
-    try {
-        const hasKey = await hasAPIKey();
-        if (hasKey) {
-            const apiKey = await getAPIKey();
-            if (apiKey) {
-                console.log('API key initialized successfully');
-                return apiKey;
-            } else {
-                console.warn('No valid API key found, prompting user');
-            }
-        } else {
-            console.log('No API key stored, prompting user');
-        }
-        
-        // Prompt user for API key
-        const userApiKey = prompt('Please enter your OpenAI API key:');
-        if (userApiKey) {
-            await storeAPIKey(userApiKey);
-            console.log('API key stored successfully');
-            return userApiKey;
-        } else {
-            console.warn('No API key provided by user');
-            return null;
-        }
-    } catch (error) {
-        console.error('Error initializing API key:', error);
-        return null;
-    }
-}
+window.test = storeAPIKey
