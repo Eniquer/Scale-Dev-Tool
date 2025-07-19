@@ -89,7 +89,7 @@
     window.csvData = {{ csv_data | tojson }};
 
     // Store as JSON string in IndexedDB
-    window.csvStorage.storeCSV(JSON.stringify(window.csvData)).then((storedCSV) => {
+    window.dataStorage.storeCSV(JSON.stringify(window.csvData)).then((storedCSV) => {
         displayTable(window.csvData, "#json-table"); // Call the function to display the table
     }).catch((error) => {
         console.error("Error storing CSV data:", error);
@@ -111,9 +111,9 @@ setTimeout(() => {
 
 // Initialize the step when the partial loads
 function initializeStep2() {
-    window.csvStorage.hasCSV().then((hasCSV) => {
+    window.dataStorage.hasCSV().then((hasCSV) => {
         if (hasCSV) {
-            window.csvStorage.getCSV().then((csvData) => {
+            window.dataStorage.getCSV().then((csvData) => {
                 window.csvData = csvData; // Store the data in a global variable
                 displayTable(csvData, "#json-table"); // Call the function to display the table
                 populateColumnCheckboxes();
@@ -261,7 +261,7 @@ setTimeout(() => {initializeStep2();}, 50);
         window.csvDataReverted = newData || window.csvData; // Use newData if available, otherwise original data
         displayInfo("success", `New data stored with ${columnsReverted.length} reversed column(s): ${columnsReverted.join(', ')}`);
         // Store updated data
-        window.csvStorage.storeCSV(JSON.stringify(window.csvDataReverted), 'csvDataReverted', false);
+        window.dataStorage.storeCSV(JSON.stringify(window.csvDataReverted), 'csvDataReverted', false);
 
     }
 

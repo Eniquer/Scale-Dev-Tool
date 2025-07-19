@@ -1,8 +1,8 @@
-// IndexedDB functionality for CSV storage
-if (!window.CSVStorage) {
-    class CSVStorage {
+// IndexedDB functionality for generic data storage
+if (!window.DataStorage) {
+    class DataStorage {
         constructor() {
-            this.dbName = 'csv-store';
+            this.dbName = 'data-store';
             this.version = 1;
             this.storeName = 'files';
             this.db = null;
@@ -212,10 +212,9 @@ if (!window.CSVStorage) {
         }
     }
 
-    window.CSVStorage = CSVStorage;
     
     // Global instance
-    if (!window.csvStorage) {
-        window.csvStorage = new CSVStorage();
+    if (!window.dataStorage) {
+        window.dataStorage = new DataStorage();
     }
 }

@@ -13,20 +13,20 @@ async function storeAPIKey(apiKeyPlain, showWarning = true) {
     });
     if (!resp.ok) throw new Error('Failed to encrypt key');
     const { cipher } = await resp.json();
-    return await window.csvStorage.storeData('chatgpt_api_key_enc', cipher, showWarning);
+    return await window.dataStorage.storeData('chatgpt_api_key_enc', cipher, showWarning);
 }
 
 async function getAPIKey() {
     // return stored cipher only
-    return await window.csvStorage.getData('chatgpt_api_key_enc');
+    return await window.dataStorage.getData('chatgpt_api_key_enc');
 }
 
 async function deleteAPIKey() {
-    await window.csvStorage.deleteData('chatgpt_api_key_enc');
+    await window.dataStorage.deleteData('chatgpt_api_key_enc');
 }
 
 async function hasAPIKey() {
-    return await window.csvStorage.hasData('chatgpt_api_key_enc');
+    return await window.dataStorage.hasData('chatgpt_api_key_enc');
 }
 
 async function initAPIKey() {
