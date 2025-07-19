@@ -58,7 +58,7 @@ async def encrypt_key(req: EncryptKey):
 async def chat_endpoint(chat_req: ChatRequest):
     # decrypt user's API key cipher
     api_key = simple_decrypt(chat_req.keyCipher)
-    print(f"Using API key: {api_key}")  # Log last 3 chars for debugging  //TODO remove in production
+    print(f"Using API key: {api_key[-3:]}")  # Log last 3 chars for debugging  //TODO remove in production
     # call ChatGPT via functions
     try:
         reply = get_chatgpt_response(
@@ -69,22 +69,18 @@ async def chat_endpoint(chat_req: ChatRequest):
             api_key=api_key
         )
     except AuthenticationError:
-        # Invalid or unauthorized API key
         raise HTTPException(status_code=401, detail="invalid_api_key")
-    except PermissionError:
-        # API key lacks required permissions
+    except PermissionDeniedError:
         raise HTTPException(status_code=403, detail="permission_denied")
     except RateLimitError:
-        # Rate limit exceeded
         raise HTTPException(status_code=429, detail="rate_limit_exceeded")
-    except InvalidRequestError as e:
-        # Bad request (e.g., missing parameters)
+    except BadRequestError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except OpenAIError as e:
-        # Other OpenAI API errors
+    except APIError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        # Unexpected errors
         raise HTTPException(status_code=500, detail=str(e))
+
+
     return {"reply": reply}
 
