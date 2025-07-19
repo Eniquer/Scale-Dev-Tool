@@ -1,25 +1,70 @@
 <div id="area1">
-
-
-    
     <div class="container-fluid">
-        <h2 class="h3 mb-4 text-light">Step 1: Item Generation</h2>
-        <div class="card bg-secondary border-secondary">
+        <h2 class="h3 mb-4">Step 1: Develop a Conceptual Definition of the Construct</h2>
+        
+        <!-- Construct Name Input Panel -->
+        <div class="card mb-4" id="step1panel1">
             <div class="card-body">
-                <p class="card-text text-light">Generate the Items</p>
+                <h4 class="card-title mb-3">Construct Name</h4>
+                <input type="text" 
+                class="form-control" 
+                id="constructName" 
+                name="constructName"
+                placeholder="e.g., Self-Efficacy, Job Satisfaction, Emotional Intelligence"
+                maxlength="100">
+                <div class="form-text text-muted mb-4">Enter the name of the psychological construct you want to measure.</div>
+                <h4 class="card-title mb-3">Rough Initial Definition</h4>
+                <div class="mb-3">
+                    <textarea class="form-control" 
+                              id="initialDefinition" 
+                              name="initialDefinition"
+                              rows="6"
+                              placeholder="Describe what this construct represents, its key characteristics, and what it measures. For example: 'Self-efficacy refers to an individual's belief in their capacity to execute behaviors necessary to produce specific performance attainments.'"></textarea>
+                    <div class="form-text text-muted">Provide a working definition that captures the essence of your construct. This can be refined later.</div>
+                </div>
+                <div class="row">
+                    <div class="col-auto ms-auto">
+                        <button class="btn btn-outline-primary" id="saveContinueButton" onclick="saveConstructData()">Save and continue</button>
+                    </div>
+                </div>       
+            </div>
+        </div>
+
+        <!-- Compare Definitions Panel -->
+        <div class="card mb-4" id="step1panel2">
+            <div class="card-body">
+                <h4 class="card-title mb-3">Choose Definitions</h4>
+                <!-- Container for displaying academic definitions as cards -->
+                 <div class="row my-3">
+                     <div class="col-auto ms-auto">
+                         <button class="btn btn-outline-secondary" id="generateMoreButton" onclick="getDefinitionsMore()" aria-label="Generate More" title="Generate More">
+                             <i class="bi bi-plus-lg"></i>
+                         </button>
+                     </div>
+                     <div class="col-auto">
+                         <button class="btn btn-outline-secondary" id="tryAgainButton" onclick="getDefinitionsAgain()" aria-label="Try Again" title="Try Again">
+                             <i class="bi bi-arrow-clockwise"></i>
+                         </button>
+                     </div>
+                 </div>
+                <div id="definitionsContainer" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3"></div>
+                <div class="row my-3">
+                    <!-- button to choose selected definition -->
+                    <div class="col-auto ms-auto">
+                        <button class="btn btn-primary" id="chooseDefinitionButton" onclick="chooseDefinition()" disabled aria-label="Select Definition" title="Select Definition">
+                            <i class="bi bi-check-lg"></i>
+                        </button>
+                    </div>
+                    <!-- Button to merge Selected -->
+                    <div class="col-auto">
+                        <button class="btn btn-info" id="mergeDefinitionsButton" onclick="mergeDefinitions()" disabled aria-label="Merge Definitions" title="Merge Definitions">
+                            <i class="bi bi-union"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-
-<div id="area2">
-    <div class="container-fluid">
-        <h2 class="h3 mb-4 text-light">Step 2: Item Generation</h2>
-        <div class="card bg-secondary border-secondary">
-            <div class="card-body">
-                <p class="card-text text-light">Generadwadoawndoiawnd Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt explicabo aliquam possimus animi quasi officia quis perferendis asperiores ad fuga ex, beatae quo fugiat dolor earum reiciendis distinctio sed eligendi.ms</p>
-            </div>
-        </div>
-    </div>
-</div>
+<script src="{{ url_for('static', path='js/step1.js') }}" defer></script>
