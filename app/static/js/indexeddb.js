@@ -79,7 +79,7 @@ if (!window.DataStorage) {
         }
 
         // Generic functions for storing and retrieving any data
-        async storeData(key, data, showWarning = true) {
+        async storeData(key, data, showWarning = true, customMessage = null) {
             if (!this.db) {
                 await this.init();
             }
@@ -89,11 +89,16 @@ if (!window.DataStorage) {
                 try {
                     const existingData = await this.getData(key);
                     if (existingData !== null) {
-                        const userConfirmed = confirm(
-                            `⚠️ Warning: This will overwrite existing data for key '${key}'.\n\n` +
-                            'Do you want to continue and replace the current data?'
-                        );
-                        
+                        let userConfirmed = null
+                        if (customMessage) {
+                            userConfirmed = confirm(customMessage);
+                        } else {
+                            userConfirmed = confirm(
+                                `⚠️ Warning: This will overwrite existing data for key '${key}'.\n\n` +
+                                'Do you want to continue and replace the current data?'
+                            );
+                        }
+                    
                         if (!userConfirmed) {
                             console.log(`User cancelled data storage for key '${key}' - existing data preserved`);
                             return Promise.reject('User cancelled overwrite');
