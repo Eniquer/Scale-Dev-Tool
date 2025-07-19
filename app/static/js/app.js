@@ -1,5 +1,6 @@
 import { initAPIKey,deleteAPIKey,storeAPIKey } from './handleAPIKey.js';
-window.delKey = deleteAPIKey
+window.currentAPIKey_enc = await initAPIKey();
+
 
 function displayInfo(type = 'info', message = '') {
     // Show success message
@@ -10,7 +11,7 @@ function displayInfo(type = 'info', message = '') {
     alertDiv.style.right = '20px';
     alertDiv.style.zIndex = '1050'; // Ensure it appears above other content
     alertDiv.innerHTML = `
-    <strong>Success!</strong> 
+    <strong>${type.charAt(0).toUpperCase() + type.slice(1)}</strong> 
     ${document.createTextNode(message).textContent}
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
@@ -23,6 +24,7 @@ function displayInfo(type = 'info', message = '') {
         }
     }, 5000);
 }
+window.displayInfo = displayInfo;
 
 
 // ***********************************       SplitJS          ***********************************************
@@ -73,7 +75,7 @@ function makeHxPostRequest(url, data) {
 
 // TODO maybe: wenn neu page geladen wird alle elemente aus dem Storage laden die schon existoeren mit id und json aus der DB?
 
-window.currentAPIKey_enc = await initAPIKey();
+
 
 async function sendChat(input) {
     const cipher = window.currentAPIKey_enc;
@@ -110,11 +112,9 @@ async function sendChat(input) {
             const newKey = prompt('Your API key appears invalid or unauthorized. Please re-enter your key.');
             // Re-init API key and retry storing cipher
             window.currentAPIKey_enc = await storeAPIKey(newKey,false);
-            sendChat(input); // Retry with new key
+            return await sendChat(input); // Retry with new key
         }
     }
 }
-window.sendChat = sendChat;
 
 
-window.test = storeAPIKey

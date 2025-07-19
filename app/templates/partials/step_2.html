@@ -259,7 +259,7 @@ setTimeout(() => {initializeStep2();}, 50);
 
     function storeChanges() {
         window.csvDataReverted = newData || window.csvData; // Use newData if available, otherwise original data
-        displayInfo("success", `New data stored with ${columnsReverted.length} reversed column(s): ${columnsReverted.join(', ')}`);
+        window.displayInfo("success", `New data stored with ${columnsReverted.length} reversed column(s): ${columnsReverted.join(', ')}`);
         // Store updated data
         window.dataStorage.storeCSV(JSON.stringify(window.csvDataReverted), 'csvDataReverted', false);
 
