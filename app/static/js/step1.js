@@ -27,8 +27,10 @@ function syncData() {
     if (document.getElementById('constructName') && document.getElementById('initialDefinition')) {
         // If definitions were previously fetched, re-render them
         window.dataStorage.getData('data_step_1').then(saved => {
-            panel1 = saved?.panel1
-            panel2 = saved?.panel2
+            const panel1 = saved?.panel1
+            const panel2 = saved?.panel2
+            const panel3 = saved?.panel3;
+
             if (panel1) {
                 document.getElementById('constructName').value = panel1.constructName || '';
                 document.getElementById('initialDefinition').value = panel1.initialDefinition || '';
@@ -62,8 +64,21 @@ function syncData() {
             // handle panel 3
             if (panel2 && panel2.savedDefinition) {
                 domPanel3.classList.remove('d-none'); // Ensure panel 3 is visible
+                
             } else {
                 domPanel3.classList.add('d-none'); // Hide panel 3 if no saved definition
+            }
+
+            // handle property and entity
+            showAISuggestion();
+            if (panel3 && panel3.property && panel3.entity) {
+                updateRadio(panel3.property, panel3.entity, panel3.propertyExplanation, panel3.entityExplanation);
+            } else {
+                // hide panel 3 and clear fields
+                document.getElementsByName('property').forEach(r => r.checked = false);
+                document.getElementById('propertyExplanation').value = '';
+                document.getElementsByName('entity').forEach(r => r.checked = false);
+                document.getElementById('entityExplanation').value = '';
             }
         });
     }
@@ -83,9 +98,9 @@ async function saveConstructData() {
     }
 
     const constructData = {
-        constructName: constructName,
-        initialDefinition: initialDefinition,
-        timestamp: new Date().toISOString()
+        "constructName": constructName,
+        "initialDefinition": initialDefinition,
+        "timestamp": new Date().toISOString()
     };
     let step1Data = {}
     step1Data.panel1 = constructData; 
@@ -283,8 +298,8 @@ async function chooseDefinition() {
 
     // Store all selected definitions
     selectedDefinitions = Array.from(cards).map(card => ({
-        reference: card.querySelector('.card-title')?.textContent,
-        definition: card.querySelector('.card-text')?.textContent.trim()
+        "reference": card.querySelector('.card-title')?.textContent,
+        "definition": card.querySelector('.card-text')?.textContent.trim()
     }));
     step1Data.panel2.selectedDefinitions = selectedDefinitions;
     console.log(selectedDefinitions);
@@ -319,7 +334,7 @@ async function saveDefinition() {
      
     if (step1Data.panel2.savedDefinition && (step1Data.panel2.savedDefinition !== resultingDefinition) && step1Data.panel2.resultingDefinition && (step1Data.panel2.resultingDefinition !== resultingDefinition)) {
         userConfirmed = confirm(
-                                `⚠️ Warning: This will overwrite the previously stored definition.\n\n` +
+                                `⚠️ Warning: This will overwrite the previously stored definition and any further edits.\n\n` +
                                 'Do you want to continue and replace the current one?'
                             );
                     
@@ -334,9 +349,16 @@ async function saveDefinition() {
         return
     }
     step1Data.panel2.savedDefinition = resultingDefinition;
+
+    if (step1Data.panel3) {
+        delete step1Data.panel3; // Remove panel 3 data if it exists
+    }
+
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
     console.log('Definition saved');
-    domPanel3.classList.remove('d-none'); // Ensure panel 3 is visible
+    // Sync data to ensure the latest definition is used
+    syncData();
+
     // Display success message
     window.displayInfo('success', "Definition saved successfully.");
 }
@@ -382,8 +404,8 @@ async function renderDefinitions() {
     const definitions = [];
     if (step1Data.panel1 && step1Data.panel1.initialDefinition) {
         definitions.push({
-            reference: 'Your Definition',
-            definition: step1Data.panel1.initialDefinition
+            "reference": 'Your Definition',
+            "definition": step1Data.panel1.initialDefinition
         });
     }
     // Append any generated definitions
@@ -437,3 +459,160 @@ async function renderDefinitions() {
 
 
 // ***********************************    Panel 3 Functions    ***********************************************
+
+function getSelectedValue(name) {
+    const radios = document.getElementsByName(name);
+    for (const radio of radios) {
+        if (radio.checked) return radio.value;
+    }
+    return null;
+}
+
+async function submitDomain() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    const property = getSelectedValue("property");
+    const entity = getSelectedValue("entity");
+    const propertyNote = document.getElementById("propertyExplanation").value.trim();
+    const entityNote = document.getElementById("entityExplanation").value.trim();
+
+    if (!property || !entity) {
+        window.displayInfo('warning', 'Please select both a property and an entity before saving.');
+        return;
+        
+    }
+
+    if (!step1Data.panel3) {
+        step1Data.panel3 = {};        
+    }
+    
+    // Store in IndexedDB
+    step1Data.panel3.property = property;
+    step1Data.panel3.entity = entity;
+    step1Data.panel3.propertyExplanation = propertyNote || null;
+    step1Data.panel3.entityExplanation = entityNote || null;
+    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+    console.log('Panel 3 data saved');
+    // Display success message
+    window.displayInfo('success', 'Construct domain and referent saved successfully.');
+}
+
+async function getAISuggestion() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    var prompt = `You are assisting with construct development following the guidelines of MacKenzie et al. (2011), who emphasize that a proper conceptual definition must specify:
+
+        1. The conceptual domain or type of property the construct represents — that is, the general kind of phenomenon it refers to. Choose one of the following:
+        - "Thought" (e.g., belief, value, intention)
+        - "Feeling" (e.g., emotion, attitude)
+        - "Perception" (e.g., perceived ease of use, fairness perception)
+        - "Action" (e.g., behavior, activity)
+        - "Outcome" (e.g., performance, ROI)
+        - "Intrinsic Characteristic" (e.g., intelligence, speed, conscientiousness)
+
+        2. The referent entity to which the construct applies — that is, who or what the construct describes. Choose one of the following:
+        - "Individual"
+        - "Team / Group"
+        - "Organization"
+        - "Technology / Artifact"
+        - "Situation / Task"
+        - "Other" (if none of the above apply)
+
+        Given the construct definition below, return:
+        - The most appropriate **property** and **entity**
+        - A short **justification** for your choices
+
+        Construct definition:
+        ${step1Data.panel1.constructName}: "${step1Data.panel2.savedDefinition || step1Data.panel2.resultingDefinition || step1Data.panel1.initialDefinition}".
+
+        Return your answer in strict JSON format:
+        {
+        "property": "PROPERTY TYPE HERE",
+        "entity": "REFERENT ENTITY HERE",
+        "justification": "Brief explanation why this property and entity are most appropriate."
+        }`;
+
+    try {
+        showLoading();
+        
+        response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
+        console.log(response[0]);
+        
+        responseText = JSON.parse(response[0]); // Get the reply text from the response
+    } catch (err) {
+        console.error('Error fetching definitions:', err);
+        window.displayInfo('error', 'Failed to retrieve definitions. Please try again.');
+        return;
+    } finally {
+        hideLoading();
+    }
+    window.testing = responseText;
+
+    if (responseText.property && responseText.entity && responseText.justification) {
+        // Validate the response structure
+        if (typeof responseText.property !== 'string' || typeof responseText.entity !== 'string' || typeof responseText.justification !== 'string') {
+            throw new Error('Invalid AI response format');
+        }
+        let aiResults = {
+            "aiProperty": responseText.property.trim(),
+            "aiEntity": responseText.entity.trim(),
+            "aiJustification": responseText.justification.trim()
+        };
+        console.log(aiResults);
+        
+        // Save AI suggestion into panel3 object
+        if (!step1Data.panel3) {
+            step1Data.panel3 = {};
+        }
+        step1Data.panel3.aiProperty = aiResults.aiProperty;
+        step1Data.panel3.aiEntity = aiResults.aiEntity;
+        step1Data.panel3.aiJustification = aiResults.aiJustification;
+        await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+        showAISuggestion();
+    }
+}
+
+async function showAISuggestion() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    const panel3 = step1Data.panel3;
+    console.log(panel3);
+
+    if (!panel3 || !panel3.aiProperty || !panel3.aiEntity || !panel3.aiJustification) {
+        console.warn('No AI suggestion available. Please generate one first.');
+        document.getElementById("aiSuggestion").classList.add("d-none");
+        document.getElementById("aiSuggestionText").innerHTML = "";
+        return;
+    }
+    document.getElementById("aiSuggestion").classList.remove("d-none");
+    document.getElementById("aiSuggestionText").innerHTML = `<h4>AI Suggestion</h4>
+    <strong>Property:</strong> ${panel3.aiProperty}<br>
+    <strong>Entity:</strong> ${panel3.aiEntity}<br>
+    <strong>Justification:</strong> ${panel3.aiJustification}`;
+}
+
+async function takeAISuggestion() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    const property = step1Data.panel3.aiProperty;
+    const entity = step1Data.panel3.aiEntity;
+    updateRadio(property, entity);
+    submitDomain();
+}
+
+function updateRadio(property, entity, propertyExplanation = null, entityExplanation = null) {
+    // show panel 3
+    domPanel3.classList.remove('d-none');
+    // set property radio
+    const propertyRadios = document.getElementsByName('property');
+    propertyRadios.forEach(radio => {
+        radio.checked = (radio.value === property);
+    });
+    // set property explanation
+    const propertyNote = document.getElementById('propertyExplanation');
+    if (propertyNote) propertyNote.value = propertyExplanation || '';
+    // set entity radio
+    const entityRadios = document.getElementsByName('entity');
+    entityRadios.forEach(radio => {
+        radio.checked = (radio.value === entity);
+    });
+    // set entity explanation
+    const entityNote = document.getElementById('entityExplanation');
+    if (entityNote) entityNote.value = entityExplanation || '';
+}
