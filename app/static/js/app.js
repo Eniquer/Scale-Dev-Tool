@@ -5,24 +5,28 @@ window.currentAPIKey_enc = await initAPIKey();
 function displayInfo(type = 'info', message = '') {
     // Show success message
     const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-    alertDiv.style.position = 'fixed';
-    alertDiv.style.bottom = '20px';
-    alertDiv.style.right = '20px';
-    alertDiv.style.zIndex = '1050'; // Ensure it appears above other content
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show my-3`;
+    alertDiv.style.opacity = '0'; // Slightly transparent for better visibility
     alertDiv.innerHTML = `
     <strong>${type.charAt(0).toUpperCase() + type.slice(1)}</strong> 
     ${document.createTextNode(message).textContent}
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    document.body.appendChild(alertDiv);
-
-    // Auto-remove alert after 5 seconds
+    const container = document.getElementById("displayInfoContainer");
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    setTimeout(() => {
+        alertDiv.style.opacity = '0.9'; // Slightly transparent for better visibility
+    }, 10);
+    // Auto-remove alert after 4 seconds
     setTimeout(() => {
         if (alertDiv.parentNode) {
-            alertDiv.remove();
+            alertDiv.style.opacity = '0'; // Fade out before removing
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 500); // Wait 500ms before starting fade out
         }
-    }, 5000);
+    }, 4000);
 }
 window.displayInfo = displayInfo;
 
@@ -74,7 +78,7 @@ function makeHxPostRequest(url, data) {
 
 
 // TODO maybe: wenn neu page geladen wird alle elemente aus dem Storage laden die schon existoeren mit id und json aus der DB?
-
+// todo Speicher für Verschiedene Construct definitions einbauen
 
 
 async function sendChat(input, history = []) {
