@@ -5,10 +5,18 @@ window.currentAPIKey_enc = await initAPIKey();
 function displayInfo(type = 'info', message = '') {
     // Show success message
     const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show my-3`;
+    let messageStart = type
+    if (type == "error") {
+        type = "danger"; // Use 'danger' for error messages
+    }
+
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show my-3 ms-auto`;
     alertDiv.style.opacity = '0'; // Slightly transparent for better visibility
+    alertDiv.style.width = "fit-content"; // Adjust width to fit content
+    alertDiv.style.maxWidth = "100%"; // Prevent overflow on small screens
     alertDiv.innerHTML = `
-    <strong>${type.charAt(0).toUpperCase() + type.slice(1)}</strong> 
+
+    <strong>${messageStart.charAt(0).toUpperCase() + messageStart.slice(1)}</strong> 
     ${document.createTextNode(message).textContent}
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
@@ -29,6 +37,19 @@ function displayInfo(type = 'info', message = '') {
     }, 4000);
 }
 window.displayInfo = displayInfo;
+
+function showLoading() {
+    document.getElementById('loadingOverlay').classList.remove('visually-hidden');
+    document.getElementById('loadingOverlay').style.opacity = '1';
+}
+function hideLoading() {
+    document.getElementById('loadingOverlay').style.opacity = '0';
+    setTimeout(() => {
+        document.getElementById('loadingOverlay').classList.add('visually-hidden');
+    }, 500); // Wait for fade out before hiding
+}
+window.showLoading = showLoading;
+window.hideLoading = hideLoading;
 
 
 // ***********************************       SplitJS          ***********************************************

@@ -65,7 +65,15 @@
                 <!-- More steps -->
             </ul>
         </div>
-        <main class="bg-dark" id="content">
+        <main class="bg-dark position-relative" id="content">
+            <div id="loadingOverlay"
+                class="visually-hidden position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 
+                        d-flex align-items-center justify-content-center"
+                style="z-index:1050">
+            <div class="spinner-border text-light" role="status">
+                <span class="visually-hidden">Loading…</span>
+            </div>
+            </div>
             {% include "partials/step_1.html" %}
         </main>
     </div>

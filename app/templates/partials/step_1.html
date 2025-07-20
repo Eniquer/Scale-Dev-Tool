@@ -2,7 +2,7 @@
     <div class="container-fluid">
         <h2 class="h3 mb-4">Step 1: Develop a Conceptual Definition of the Construct</h2>
         
-        <!-- Construct Name Input Panel -->
+        <!-- Panel 1: Construct Name Input -->
         <div class="card mb-4" id="step1panel1">
             <div class="card-body">
                 <h4 class="card-title mb-3">Construct Name</h4>
@@ -30,38 +30,57 @@
             </div>
         </div>
 
-        <!-- Compare Definitions Panel -->
-        <div class="card mb-4" id="step1panel2">
+        <!-- Panel 2: Compare Definitions -->
+        <div class="card mb-4 d-none" id="step1panel2">
             <div class="card-body">
                 <h4 class="card-title mb-3">Choose Definitions</h4>
                 <!-- Container for displaying academic definitions as cards -->
                  <div class="row my-3">
-                     <div class="col-auto ms-auto">
-                         <button class="btn btn-outline-secondary" id="generateMoreButton" onclick="getDefinitionsMore()" aria-label="Generate More" title="Generate More">
+                     <div class="col-auto ms-auto p-0">
+                         <button class="btn btn-outline-secondary" id="generateMoreButton" onclick="getDefinitionsMore()" aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip" data-bs-placement="top">
                              <i class="bi bi-plus-lg"></i>
                          </button>
                      </div>
-                     <div class="col-auto">
-                         <button class="btn btn-outline-secondary" id="tryAgainButton" onclick="getDefinitionsAgain()" aria-label="Try Again" title="Try Again">
+                     <div class="col-auto ps-2">
+                         <button class="btn btn-outline-secondary" id="tryAgainButton" onclick="getDefinitionsAgain()" aria-label="Generate New Definitions" title="Generate New Definitions" data-bs-toggle="tooltip" data-bs-placement="top">
                              <i class="bi bi-arrow-clockwise"></i>
                          </button>
                      </div>
                  </div>
                 <div id="definitionsContainer" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3"></div>
                 <div class="row my-3">
-                    <!-- button to choose selected definition -->
                     <div class="col-auto ms-auto">
-                        <button class="btn btn-primary" id="chooseDefinitionButton" onclick="chooseDefinition()" disabled aria-label="Select Definition" title="Select Definition">
+                        <!-- button to choose selected definition -->
+                        <button class="btn btn-primary d-none" id="chooseDefinitionButton" onclick="chooseDefinition()" aria-label="Select Definition" title="Select Definition" data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-check-lg"></i>
                         </button>
-                    </div>
-                    <!-- Button to merge Selected -->
-                    <div class="col-auto">
-                        <button class="btn btn-info" id="mergeDefinitionsButton" onclick="mergeDefinitions()" disabled aria-label="Merge Definitions" title="Merge Definitions">
+                        <!-- Button to merge Selected -->
+                        <button class="btn btn-info d-none" id="mergeDefinitionsButton" onclick="chooseDefinition()" aria-label="Merge Definitions" title="Merge Definitions" data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-union"></i>
                         </button>
                     </div>
                 </div>
+                <div id="resultingDefinitionContainer" class="d-none">
+                    <h4 class="card-title mb-3">Edit Your Definition</h4>
+                    <textarea class="form-control my-3" 
+                    id="resultingDefinitionTextarea" 
+                    name="resultingDefinition"
+                    rows="6"></textarea>
+                    <div class="row mb-3">
+                        <!-- button to choose selected definition -->
+                        <div class="col-auto ms-auto">
+                            <button class="btn btn-info" id="saveDefinitionButton" onclick="saveDefinition()" aria-label="Save Definition" title="Save Definition" data-bs-toggle="tooltip" data-bs-placement="top">
+                                <i class="bi bi-floppy2"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Panel 3: Construct Dimensionality -->
+        <div class="card mb-4 d-none" id="step1panel3">
+            <div class="card-body">
+                <h4 class="card-title mb-3">Construct Dimensionality</h4>
             </div>
         </div>
     </div>

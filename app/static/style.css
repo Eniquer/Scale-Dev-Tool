@@ -1,5 +1,5 @@
 /* Load Bootstrap Icons for pseudo-element icons */
-@import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css");
+@import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css");
 
 /* Define reusable color variables */
 :root {
@@ -52,7 +52,13 @@ html[data-bs-theme="dark"] body {
     background-color: var(--color-card-body);
 }
 
+#definitionsContainer .card.selected{
+    background-color: #36393b;
+}
 
+.bi-union, .bi-floppy2 {
+    color: var(--color-card-body);
+}
 
 .no-style {
     all: unset;
@@ -67,6 +73,24 @@ html[data-bs-theme="dark"] body {
 
 #navbar h1 {
     cursor: pointer;
+}
+
+#displayInfoContainer{
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1050;
+}
+
+#displayInfoContainer .alert {
+    transition: all 0.5s ease;
+    opacity: 0;
+
+}
+
+#loadingOverlay {
+    transition: all 0.5s ease;
+    opacity: 0;
 }
 
 /*******************************      Split Screen     **********************************+ */
