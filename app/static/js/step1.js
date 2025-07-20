@@ -22,8 +22,6 @@ document.addEventListener('DOMContentLoaded', syncData);
 
 
 function syncData() {
-    console.log("syncing data");
-    
     if (document.getElementById('constructName') && document.getElementById('initialDefinition')) {
         // If definitions were previously fetched, re-render them
         window.dataStorage.getData('data_step_1').then(saved => {
@@ -330,9 +328,11 @@ async function saveDefinition() {
     // Check for conflicting definitions
     // console.log(step1Data.panel2.savedDefinition && (step1Data.panel2.savedDefinition !== resultingDefinition));
     // console.log(step1Data.panel2.resultingDefinition && (step1Data.panel2.resultingDefinition !== resultingDefinition));
-    
+
+    let currentDefinition = step1Data.panel2.savedDefinition || step1Data.panel2.resultingDefinition;
+
      
-    if (step1Data.panel2.savedDefinition && (step1Data.panel2.savedDefinition !== resultingDefinition) && step1Data.panel2.resultingDefinition && (step1Data.panel2.resultingDefinition !== resultingDefinition)) {
+    if (currentDefinition !== resultingDefinition) {
         userConfirmed = confirm(
                                 `⚠️ Warning: This will overwrite the previously stored definition and any further edits.\n\n` +
                                 'Do you want to continue and replace the current one?'
@@ -348,7 +348,11 @@ async function saveDefinition() {
         window.displayInfo('info', "No changes found on Definition.");
         return
     }
-    step1Data.panel2.savedDefinition = resultingDefinition;
+
+    if (step1Data.panel2) {
+        step1Data.panel2.savedDefinition = resultingDefinition;
+        step1Data.panel2.savedSelectedDefinitions = step1Data.panel2.selectedDefinitions;
+    }
 
     if (step1Data.panel3) {
         delete step1Data.panel3; // Remove panel 3 data if it exists
@@ -356,7 +360,8 @@ async function saveDefinition() {
 
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
     console.log('Definition saved');
-    // Sync data to ensure the latest definition is used
+    
+
     syncData();
 
     // Display success message
@@ -439,8 +444,10 @@ async function renderDefinitions() {
             updateActionButtons();
         });
         // if Card is already selected, add the selected class
-        if (step1Data.panel2.selectedDefinitions && step1Data.panel2.selectedDefinitions.length > 0) {
-            const isSelected = step1Data.panel2.selectedDefinitions.some(def => def.reference === item.reference && def.definition === item.definition);
+
+        let selectedDefinitions = step1Data.panel2.savedSelectedDefinitions || step1Data.panel2.selectedDefinitions || [];
+        if (selectedDefinitions.length > 0) {
+            const isSelected = selectedDefinitions.some(def => def.reference === item.reference && def.definition === item.definition);
             if (isSelected) {
                 cardEl.classList.add('selected');
                 cardEl.classList.add('border-primary');
