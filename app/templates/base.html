@@ -82,8 +82,8 @@
     <script>
         // Initialize Bootstrap tooltips for icon buttons
         function initTooltips() {
-            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-            tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
+            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+            const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
         }
         // Run tooltip initialization after page load
         document.addEventListener('DOMContentLoaded', initTooltips);

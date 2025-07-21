@@ -184,8 +184,42 @@
             <div class="card-body">
                 <h3 class="mb-4">Specify the Conceptual Theme</h3>
                 <!-- Panel 4: Conceptual Theme Inputs -->
+                <!-- AI Suggestion for Theme -->
+                <button class="btn btn-outline-info my-3" id="aiThemeSuggestionButton" onclick="getThemeAISuggestion()" aria-label="Get AI Theme Suggestion" title="Get AI Theme Suggestion">
+                    <i class="bi bi-lightbulb"></i>
+                </button>
+                <div class="row mb-4 d-none" id="aiThemeSuggestion">
+                    <div class="container-fluid">
+                        <div class="card text-bg-light">
+                            <div class="card-body">
+                                <div class="row">
+                                    <p id="aiThemeSuggestionText"></p>
+                                </div>
+                                <div class="row">
+                                    <div class="col-auto ms-auto">
+                                        <button class="btn btn-outline-secondary" onclick="takeThemeAISuggestion()">Take</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="mb-4">
-                    <h5 class="form-label fw-bold">Attributes</h5>
+                    <h5 class="form-label fw-bold">
+                        Attributes
+<i class="bi bi-info-circle text-muted ms-2 " data-bs-toggle="tooltip" data-bs-placement="top" data-bs-html="true" data-bs-custom-class="custom-tooltip" data-bs-theme="dark"
+   title="<h5>Classification</h5><p><ul class='list-unstyled mb-2'>
+<li><strong>Common</strong>: shared by many similar or related constructs.</li>
+<li><strong>Unique</strong>: distinctively associated with this construct.</li>
+<li><strong>Both</strong>: partly shared and partly distinct.</li>
+<li><strong>Neither</strong>: not clearly diagnostic.</li>
+</ul></p><h5>Indication</h5><ul class='list-unstyled'>
+<li><strong>Necessary</strong>: the construct <strong>cannot exist without</strong> this attribute.</li>
+<li><strong>Sufficient</strong>: this attribute <strong>alone guarantees</strong> the construct.</li>
+<li><strong>Both</strong>: both necessary and sufficient.</li>
+<li><strong>Neither</strong>: helpful but not essential or definitive.</li>
+</ul>"></i>
+                    </h5>
                     <div id="attributesContainer">
                         <div class="input-group mb-2 attribute-row">
                             <input type="text" class="form-control attribute-name" placeholder="Attribute name">

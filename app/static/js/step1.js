@@ -4,7 +4,11 @@ window.getDefinitions = getDefinitions;
 window.getDefinitionsAgain = getDefinitionsAgain;
 window.getDefinitionsMore = getDefinitionsMore;
 window.chooseDefinition = chooseDefinition;
+// Expose functions globally
 window.saveTheme = saveTheme;
+window.getThemeAISuggestion = getThemeAISuggestion;
+window.showThemeAISuggestion = showThemeAISuggestion;
+window.takeThemeAISuggestion = takeThemeAISuggestion;
 // window.analyseDefinition = analyseDefinition;
 
 const domPanel1 = document.getElementById('step1panel1');
@@ -84,11 +88,12 @@ function syncData() {
             }
 
             // handle panel 4
-            if (panel3) {
+            if (!panel2 || !panel2.savedDefinition) {
+                domPanel4.classList.add('d-none');
+                resetPanel4();
+            } else {
                 domPanel4.classList.remove('d-none');
                 loadPanel4();
-            } else {
-                domPanel4.classList.add('d-none');
             }
         });
     }
@@ -312,7 +317,6 @@ async function chooseDefinition() {
         "definition": card.querySelector('.card-text')?.textContent.trim()
     }));
     step1Data.panel2.selectedDefinitions = selectedDefinitions;
-    console.log(selectedDefinitions);
 
 
     // Store the resulting definition in IndexedDB
@@ -369,8 +373,9 @@ async function saveDefinition() {
     if (step1Data.panel3) {
         delete step1Data.panel3; // Remove panel 3 data if it exists
     }
-
+    
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+    await resetPanel4(); // Reset panel 4 data
     console.log('Definition saved');
     
 
@@ -557,7 +562,7 @@ async function getAISuggestion() {
         showLoading();
         
         response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
-        console.log(response[0]);
+
         
         responseText = JSON.parse(response[0]); // Get the reply text from the response
     } catch (err) {
@@ -579,7 +584,6 @@ async function getAISuggestion() {
             "aiEntity": responseText.entity.trim(),
             "aiJustification": responseText.justification.trim()
         };
-        console.log(aiResults);
         
         // Save AI suggestion into panel3 object
         if (!step1Data.panel3) {
@@ -596,7 +600,6 @@ async function getAISuggestion() {
 async function showAISuggestion() {
     const step1Data = await window.dataStorage.getData('data_step_1');
     const panel3 = step1Data.panel3;
-    console.log(panel3);
 
     if (!panel3 || !panel3.aiProperty || !panel3.aiEntity || !panel3.aiJustification) {
         console.warn('No AI suggestion available. Please generate one first.');
@@ -645,7 +648,8 @@ function updateRadio(property, entity, propertyExplanation = null, entityExplana
 // Panel 4 globals are declared at the top of this file
 
 // Create a new attribute row
-function createAttributeRow(name = '', classification = 'Common') {
+// Create a new attribute row, with optional necessity/sufficiency indication
+function createAttributeRow(name = '', classification = 'Common', indication = 'Neither') {
     const row = document.createElement('div');
     row.className = 'input-group mb-2 attribute-row';
     row.innerHTML = `
@@ -656,20 +660,27 @@ function createAttributeRow(name = '', classification = 'Common') {
             <option value="Both">Both</option>
             <option value="Neither">Neither</option>
         </select>
+        <select class="form-select attribute-indication">
+            <option value="Necessary">Necessary</option>
+            <option value="Sufficient">Sufficient</option>
+            <option value="Both">Both</option>
+            <option value="Neither">Neither</option>
+        </select>
         <button class="btn btn-outline-danger remove-attribute" type="button">&times;</button>
     `;
-    // Set classification
+
+    // Set classification and indication
     row.querySelector('.attribute-classification').value = classification;
+    row.querySelector('.attribute-indication').value = indication;
     // Remove handler
-    row.querySelector('.remove-attribute').addEventListener('click', () => {
-        row.remove();
-    });
+    row.querySelector('.remove-attribute').addEventListener('click', () => row.remove());
     return row;
 }
 
 // Add a blank initial row or from data
-function addAttributeRow(name, classification) {
-    const row = createAttributeRow(name, classification);
+function addAttributeRow(name, classification, indication) {
+    // todo if its the first add header ROW containing:  i want over the attribute row a heaeder that consists of attribute name/classification and indication
+    const row = createAttributeRow(name, classification, indication);
     attributesContainer.appendChild(row);
 }
 
@@ -685,7 +696,7 @@ async function loadPanel4() {
     // Clear existing rows
     attributesContainer.innerHTML = '';
     if (panel4?.attributes?.length) {
-        panel4.attributes.forEach(attr => addAttributeRow(attr.name, attr.classification));
+        panel4.attributes.forEach(attr => addAttributeRow(attr.name, attr.classification, attr.indication));
     } else {
         addAttributeRow();
     }
@@ -702,6 +713,142 @@ async function loadPanel4() {
     document.querySelectorAll('input[name="stabilityTime"]').forEach(r => r.checked = (r.value === panel4?.stabilityTime));
     document.querySelectorAll('input[name="stabilitySituation"]').forEach(r => r.checked = (r.value === panel4?.stabilitySituation));
     document.querySelectorAll('input[name="stabilityCases"]').forEach(r => r.checked = (r.value === panel4?.stabilityCases));
+
+    showThemeAISuggestion()
+}
+
+// ***********************************    Panel 4 AI Suggestion ***********************************************
+// todo maybe add optional Comments on the panel
+
+async function getThemeAISuggestion() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    // todo evtl noch extra kategory by attributen. altes design checken und mackenzie paper
+    const panel4 = step1Data.panel4 || {};
+    const prompt = `
+    
+    You are assisting with construct conceptualization following MacKenzie et al. (2011). Your goal is to help the user define the **conceptual theme** of their construct. This includes classifying its defining attributes, evaluating breadth, dimensionality, and stability.
+    
+    Construct name: ${step1Data.panel1.constructName}  
+    Definition: "${step1Data.panel2.savedDefinition || step1Data.panel2.resultingDefinition || step1Data.panel1.initialDefinition}"
+    
+Use the following rules to classify attributes:
+
+- **Classification (Common | Unique | Both | Neither)**:
+  - *Common*: The attribute is shared by many similar or related constructs.
+  - *Unique*: The attribute is distinctively associated with this construct.
+  - *Both*: The attribute is partly shared and partly distinct.
+  - *Neither*: The attribute is not clearly diagnostic for classification.
+
+- **Indication (Necessary | Sufficient | Both | Neither)**:
+  - *Necessary*: The construct **cannot exist without** this attribute.
+  - *Sufficient*: This attribute **alone guarantees** the presence of the construct.
+  - *Both*: The attribute is individually both necessary and sufficient.
+  - *Neither*: The attribute is helpful but not essential or definitive.
+
+
+Given the construct definition, return:
+- A list of 1–7 likely defining **attributes** (name + classification as: Common|Unique|Both|Neither + indication as: Necessary|Sufficient|Both|Neither)
+- An estimate of the construct's **breadth and inclusiveness** in 1 or 2 sentences
+- A classification of its **dimensionality** (Unidimensional|Multidimensional)
+- An evaluation of its **stability**:
+  - Over time: "Stable (trait-like)" | "Variable (state-like)" | "Depends / Not sure"
+  - Across situations: "Generalizable" | "Situation-specific" | "Depends / Not sure"
+  - Across cases: "Broadly applicable" | "Applies only to specific subgroups" | "Depends / Not sure"
+- A brief **justification** for your choices, explaining how they align with the construct's definition and theoretical context.
+
+
+  Use existing definitions and theoretical context to inform your decisions.
+  
+  Return your answer in **strict JSON format**:
+{
+  "attributes": [
+    { "name": "AttributeName1", "classification": "CLASSIFICATION HERE", "indication": "INDICATION HERE" },
+    { "name": "AttributeName2", "classification": "CLASSIFICATION HERE", "indication": "INDICATION HERE" },
+    ...
+  ],
+  "breadthInclusiveness": "TEXT HERE",
+  "dimensionality": "DIMENSIONALITY HERE",
+  "stabilityTime": "TIME STABILITY HERE",
+  "stabilitySituation": "SITUATION STABILITY HERE",
+  "stabilityCases": "CASES STABILITY HERE",
+  "justification": "Brief explanation of your choices."
+}
+
+
+       
+        }`;
+    try {
+        showLoading();
+        const response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
+        
+        const responseJson = JSON.parse(response[0]);
+        
+        // Save AI suggestion into aiPanel4
+        const { attributes, breadthInclusiveness, dimensionality, stabilityTime, stabilitySituation, stabilityCases, justification } = responseJson;
+        if (!attributes || !breadthInclusiveness || !dimensionality || !stabilityTime || !stabilitySituation || !stabilityCases || !justification) {
+            throw new Error('Incomplete AI response');
+        }
+        if (!step1Data.aiPanel4) step1Data.aiPanel4 = {};
+        step1Data.aiPanel4.attributes = responseJson.attributes;
+        step1Data.aiPanel4.breadthInclusiveness = responseJson.breadthInclusiveness;
+        step1Data.aiPanel4.dimensionality = responseJson.dimensionality;
+        step1Data.aiPanel4.stabilityTime = responseJson.stabilityTime;
+        step1Data.aiPanel4.stabilitySituation = responseJson.stabilitySituation;
+        step1Data.aiPanel4.stabilityCases = responseJson.stabilityCases;
+        step1Data.aiPanel4.justification = responseJson.justification;
+
+        await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+
+
+        showThemeAISuggestion();
+    } catch (err) {
+        console.error('Theme AI suggestion error:', err);
+        window.displayInfo('danger', 'Failed to retrieve theme AI suggestion.');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function showThemeAISuggestion() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    if (!step1Data || !step1Data.aiPanel4) {
+        console.warn('No AI theme suggestion available. Please generate one first.');
+        document.getElementById('aiThemeSuggestion').classList.add('d-none');
+        document.getElementById('aiThemeSuggestionText').innerHTML = '';
+        return;
+    }
+    document.getElementById('aiThemeSuggestionText').innerHTML =  `<h4>AI Suggestion</h4>
+    <strong>Attributes:</strong> ${step1Data.aiPanel4.attributes.map(attr => `${attr.name} (${attr.classification}|${attr.indication})`).join(', ')}<br>
+    <strong>Breadth & Inclusiveness:</strong> ${step1Data.aiPanel4.breadthInclusiveness}<br>
+    <strong>Dimensionality:</strong> ${step1Data.aiPanel4.dimensionality}<br>
+    <strong>Stability (Time):</strong> ${step1Data.aiPanel4.stabilityTime}<br>
+    <strong>Stability (Situation):</strong> ${step1Data.aiPanel4.stabilitySituation}<br>
+    <strong>Stability (Cases):</strong> ${step1Data.aiPanel4.stabilityCases}<br><br>
+    <strong>Justification:</strong> ${step1Data.aiPanel4.justification}`;
+    document.getElementById('aiThemeSuggestion').classList.remove('d-none');
+}
+
+async function takeThemeAISuggestion() {
+    const step1Data = await window.dataStorage.getData('data_step_1');   
+    
+    if (!step1Data || !step1Data.aiPanel4) {
+        console.warn(step1Data.aiPanel4);
+        
+        window.displayInfo('warning', 'No AI theme suggestion available. Please generate one first.');
+        return;
+    }
+
+    let copy = {...step1Data.aiPanel4} || null;
+    if (copy) {
+        delete copy.justification;
+    }
+    step1Data.panel4 = copy;
+    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+
+    // Load attributes
+    loadPanel4().then(() => {
+        saveTheme();
+    });
 }
 
 // Save Panel 4 data
@@ -709,9 +856,11 @@ async function saveTheme() {
     const step1Data = await window.dataStorage.getData('data_step_1');
     if (!step1Data.panel4) step1Data.panel4 = {};
     // Attributes
+    // Collect attributes including indication
     const attrs = Array.from(attributesContainer.querySelectorAll('.attribute-row')).map(row => ({
         name: row.querySelector('.attribute-name').value.trim(),
-        classification: row.querySelector('.attribute-classification').value
+        classification: row.querySelector('.attribute-classification').value,
+        indication: row.querySelector('.attribute-indication').value
     })).filter(a => a.name);
     step1Data.panel4.attributes = attrs;
     // Breadth & Inclusiveness
@@ -726,9 +875,52 @@ async function saveTheme() {
     step1Data.panel4.stabilitySituation = document.querySelector('input[name="stabilitySituation"]:checked')?.value || null;
     step1Data.panel4.stabilityCases = document.querySelector('input[name="stabilityCases"]:checked')?.value || null;
 
+    // Ensure all required data is present before saving
+    if (!step1Data.panel4.attributes.length) {
+        window.displayInfo('warning', 'Please add at least one attribute before saving.');
+        return;
+    }
+    if (!step1Data.panel4.breadthInclusiveness) {
+        window.displayInfo('warning', 'Please provide breadth and inclusiveness information before saving.');
+        return;
+    }
+    if (!step1Data.panel4.dimensionality) {
+        window.displayInfo('warning', 'Please select dimensionality before saving.');
+        return;
+    }
+    if (!step1Data.panel4.stabilityTime || !step1Data.panel4.stabilitySituation || !step1Data.panel4.stabilityCases) {
+        window.displayInfo('warning', 'Please complete all stability fields before saving.');
+        return;
+    }
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
     window.displayInfo('success', 'Conceptual theme saved successfully.');
 }
+
+async function resetPanel4() {
+    // Clear all attributes
+    attributesContainer.innerHTML = '';
+    // Reset other fields
+    document.getElementById('breadthInclusivenessInput').value = '';
+    document.querySelectorAll('input[name="dimensionality"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[name="stabilityTime"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[name="stabilitySituation"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[name="stabilityCases"]').forEach(r => r.checked = false);
+    // Hide AI suggestion
+    document.getElementById('aiThemeSuggestion').classList.add('d-none');
+
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    if (step1Data.panel4) {
+        delete step1Data.panel4; // Remove panel 4 data
+    }
+    if (step1Data.aiPanel4) {
+        delete step1Data.aiPanel4; // Remove AI theme suggestion data
+    }
+    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+    console.log('Panel 4 data reset');
+}
+
+
+
 
 
 
