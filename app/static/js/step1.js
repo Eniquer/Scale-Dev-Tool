@@ -1,17 +1,20 @@
-
 // Make functions available globally
 window.saveConstructData = saveConstructData;
 window.getDefinitions = getDefinitions;
 window.getDefinitionsAgain = getDefinitionsAgain;
 window.getDefinitionsMore = getDefinitionsMore;
 window.chooseDefinition = chooseDefinition;
+window.saveTheme = saveTheme;
 // window.analyseDefinition = analyseDefinition;
 
 const domPanel1 = document.getElementById('step1panel1');
 const domPanel2 = document.getElementById('step1panel2');
 const domPanel3 = document.getElementById('step1panel3');
+const domPanel4 = document.getElementById('step1panel4');
 const resultingDefinitionContainer = document.getElementById('resultingDefinitionContainer');
 const resultingDefinitionTextarea = document.getElementById('resultingDefinitionTextarea');
+const addAttributeButton = document.getElementById('addAttributeButton');
+const attributesContainer = document.getElementById('attributesContainer');
 
 
 
@@ -28,6 +31,7 @@ function syncData() {
             const panel1 = saved?.panel1
             const panel2 = saved?.panel2
             const panel3 = saved?.panel3;
+            const panel4 = saved?.panel4;
 
             if (panel1) {
                 document.getElementById('constructName').value = panel1.constructName || '';
@@ -77,6 +81,14 @@ function syncData() {
                 document.getElementById('propertyExplanation').value = '';
                 document.getElementsByName('entity').forEach(r => r.checked = false);
                 document.getElementById('entityExplanation').value = '';
+            }
+
+            // handle panel 4
+            if (panel3) {
+                domPanel4.classList.remove('d-none');
+                loadPanel4();
+            } else {
+                domPanel4.classList.add('d-none');
             }
         });
     }
@@ -501,6 +513,10 @@ async function submitDomain() {
     console.log('Panel 3 data saved');
     // Display success message
     window.displayInfo('success', 'Construct domain and referent saved successfully.');
+
+    // activate panel 4
+    domPanel4.classList.remove('d-none');
+    loadPanel4();
 }
 
 async function getAISuggestion() {
@@ -623,3 +639,96 @@ function updateRadio(property, entity, propertyExplanation = null, entityExplana
     const entityNote = document.getElementById('entityExplanation');
     if (entityNote) entityNote.value = entityExplanation || '';
 }
+
+// ***********************************    Panel 4    ***********************************************
+
+// Panel 4 globals are declared at the top of this file
+
+// Create a new attribute row
+function createAttributeRow(name = '', classification = 'Common') {
+    const row = document.createElement('div');
+    row.className = 'input-group mb-2 attribute-row';
+    row.innerHTML = `
+        <input type="text" class="form-control attribute-name" placeholder="Attribute name" value="${name}">
+        <select class="form-select attribute-classification">
+            <option value="Common">Common</option>
+            <option value="Unique">Unique</option>
+            <option value="Both">Both</option>
+            <option value="Neither">Neither</option>
+        </select>
+        <button class="btn btn-outline-danger remove-attribute" type="button">&times;</button>
+    `;
+    // Set classification
+    row.querySelector('.attribute-classification').value = classification;
+    // Remove handler
+    row.querySelector('.remove-attribute').addEventListener('click', () => {
+        row.remove();
+    });
+    return row;
+}
+
+// Add a blank initial row or from data
+function addAttributeRow(name, classification) {
+    const row = createAttributeRow(name, classification);
+    attributesContainer.appendChild(row);
+}
+
+// Handler for Add Attribute button
+if (addAttributeButton) {
+    addAttributeButton.addEventListener('click', () => addAttributeRow());
+}
+
+// Load Panel 4 data into form
+async function loadPanel4() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    const panel4 = step1Data?.panel4;
+    // Clear existing rows
+    attributesContainer.innerHTML = '';
+    if (panel4?.attributes?.length) {
+        panel4.attributes.forEach(attr => addAttributeRow(attr.name, attr.classification));
+    } else {
+        addAttributeRow();
+    }
+    // Breadth & Inclusiveness
+    const biEl = document.getElementById('breadthInclusivenessInput');
+    if (biEl) biEl.value = panel4?.breadthInclusiveness || '';
+    // Dimensionality
+    if (panel4?.dimensionality) {
+        document.getElementsByName('dimensionality').forEach(r => r.checked = (r.value === panel4.dimensionality));
+    } else {
+        document.getElementsByName('dimensionality').forEach(r => r.checked = false);
+    }
+    // Stability via radio toggles
+    document.querySelectorAll('input[name="stabilityTime"]').forEach(r => r.checked = (r.value === panel4?.stabilityTime));
+    document.querySelectorAll('input[name="stabilitySituation"]').forEach(r => r.checked = (r.value === panel4?.stabilitySituation));
+    document.querySelectorAll('input[name="stabilityCases"]').forEach(r => r.checked = (r.value === panel4?.stabilityCases));
+}
+
+// Save Panel 4 data
+async function saveTheme() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    if (!step1Data.panel4) step1Data.panel4 = {};
+    // Attributes
+    const attrs = Array.from(attributesContainer.querySelectorAll('.attribute-row')).map(row => ({
+        name: row.querySelector('.attribute-name').value.trim(),
+        classification: row.querySelector('.attribute-classification').value
+    })).filter(a => a.name);
+    step1Data.panel4.attributes = attrs;
+    // Breadth & Inclusiveness
+    step1Data.panel4.breadthInclusiveness = document.getElementById('breadthInclusivenessInput')?.value.trim() || null;
+    // Dimensionality
+    step1Data.panel4.dimensionality = (() => {
+        const sel = document.querySelector('input[name="dimensionality"]:checked');
+        return sel ? sel.value : null;
+    })();
+    // Stability via radios
+    step1Data.panel4.stabilityTime = document.querySelector('input[name="stabilityTime"]:checked')?.value || null;
+    step1Data.panel4.stabilitySituation = document.querySelector('input[name="stabilitySituation"]:checked')?.value || null;
+    step1Data.panel4.stabilityCases = document.querySelector('input[name="stabilityCases"]:checked')?.value || null;
+
+    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+    window.displayInfo('success', 'Conceptual theme saved successfully.');
+}
+
+
+

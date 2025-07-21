@@ -1,34 +1,31 @@
 <div id="area1">
     <div class="container-fluid">
         <h2 class="h3 mb-4">Step 1: Develop a Conceptual Definition of the Construct</h2>
-        
+
         <!-- Panel 1: Construct Name Input -->
         <div class="card mb-4" id="step1panel1">
             <div class="card-body">
                 <h4 class="card-title mb-3">Construct Name</h4>
-                <input type="text" 
-                class="form-control" 
-                id="constructName" 
-                name="constructName"
-                placeholder="e.g., Self-Efficacy, Job Satisfaction, Emotional Intelligence"
-                maxlength="100">
-                <div class="form-text text-muted mb-4">Enter the name of the psychological construct you want to measure.</div>
+                <input type="text" class="form-control" id="constructName" name="constructName"
+                    placeholder="e.g., Self-Efficacy, Job Satisfaction, Emotional Intelligence" maxlength="100">
+                <div class="form-text text-muted mb-4">Enter the name of the psychological construct you want to
+                    measure.</div>
                 <h4 class="card-title mb-3">Rough Initial Definition</h4>
                 <div class="mb-3">
-                    <textarea class="form-control" 
-                              id="initialDefinition" 
-                              name="initialDefinition"
-                              rows="6"
-                              placeholder="Describe what this construct represents, its key characteristics, and what it measures. For example: 'Self-efficacy refers to an individual's belief in their capacity to execute behaviors necessary to produce specific performance attainments.'"></textarea>
-                    <div class="form-text text-muted">Provide a working definition that captures the essence of your construct. This can be refined later.</div>
+                    <textarea class="form-control" id="initialDefinition" name="initialDefinition" rows="6"
+                        placeholder="Describe what this construct represents, its key characteristics, and what it measures. For example: 'Self-efficacy refers to an individual's belief in their capacity to execute behaviors necessary to produce specific performance attainments.'"></textarea>
+                    <div class="form-text text-muted">Provide a working definition that captures the essence of your
+                        construct. This can be refined later.</div>
                 </div>
                 <div class="row">
                     <div class="col-auto ms-auto">
-                        <button class="btn btn-primary" id="saveContinueButton" onclick="saveConstructData()" aria-label="Save and continue" title="Save and continue" data-bs-toggle="tooltip" data-bs-placement="top">
+                        <button class="btn btn-primary" id="saveContinueButton" onclick="saveConstructData()"
+                            aria-label="Save and continue" title="Save and continue" data-bs-toggle="tooltip"
+                            data-bs-placement="top">
                             <i class="bi bi-check-lg"></i>
                         </button>
                     </div>
-                </div>       
+                </div>
             </div>
         </div>
 
@@ -37,41 +34,49 @@
             <div class="card-body">
                 <h4 class="card-title mb-3">Choose Definitions</h4>
                 <!-- Container for displaying academic definitions as cards -->
-                 <div class="row my-3">
-                     <div class="col-auto ms-auto p-0">
-                         <button class="btn btn-outline-info" id="generateMoreButton" onclick="getDefinitionsMore()" aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip" data-bs-placement="top">
-                             <i class="bi bi-plus-lg"></i>
-                         </button>
-                     </div>
-                     <div class="col-auto ps-2">
-                         <button class="btn btn-outline-info" id="tryAgainButton" onclick="getDefinitionsAgain()" aria-label="Generate New Definitions" title="Generate New Definitions" data-bs-toggle="tooltip" data-bs-placement="top">
-                             <i class="bi bi-arrow-clockwise"></i>
-                         </button>
-                     </div>
-                 </div>
+                <div class="row my-3">
+                    <div class="col-auto ms-auto p-0">
+                        <button class="btn btn-outline-info" id="generateMoreButton" onclick="getDefinitionsMore()"
+                            aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip"
+                            data-bs-placement="top">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+                    <div class="col-auto ps-2">
+                        <button class="btn btn-outline-info" id="tryAgainButton" onclick="getDefinitionsAgain()"
+                            aria-label="Generate New Definitions" title="Generate New Definitions"
+                            data-bs-toggle="tooltip" data-bs-placement="top">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                </div>
                 <div id="definitionsContainer" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3"></div>
                 <div class="row my-3">
                     <div class="col-auto ms-auto">
                         <!-- button to choose selected definition -->
-                        <button class="btn btn-primary d-none" id="chooseDefinitionButton" onclick="chooseDefinition()" aria-label="Select Definition" title="Select Definition" data-bs-toggle="tooltip" data-bs-placement="top">
+                        <button class="btn btn-primary d-none" id="chooseDefinitionButton" onclick="chooseDefinition()"
+                            aria-label="Select Definition" title="Select Definition" data-bs-toggle="tooltip"
+                            data-bs-placement="top">
                             <i class="bi bi-check-lg"></i>
                         </button>
                         <!-- Button to merge Selected -->
-                        <button class="btn btn-info d-none" id="mergeDefinitionsButton" onclick="chooseDefinition()" aria-label="Merge Definitions" title="Merge Definitions" data-bs-toggle="tooltip" data-bs-placement="top">
+                        <button class="btn btn-info d-none" id="mergeDefinitionsButton" onclick="chooseDefinition()"
+                            aria-label="Merge Definitions" title="Merge Definitions" data-bs-toggle="tooltip"
+                            data-bs-placement="top">
                             <i class="bi bi-union"></i>
                         </button>
                     </div>
                 </div>
                 <div id="resultingDefinitionContainer" class="d-none">
                     <h4 class="card-title mb-3">Edit Your Definition</h4>
-                    <textarea class="form-control my-3" 
-                    id="resultingDefinitionTextarea" 
-                    name="resultingDefinition"
-                    rows="6"></textarea>
+                    <textarea class="form-control my-3" id="resultingDefinitionTextarea" name="resultingDefinition"
+                        rows="6"></textarea>
                     <div class="row mb-3">
                         <!-- button to choose selected definition -->
                         <div class="col-auto ms-auto">
-                            <button class="btn btn-primary" id="saveDefinitionButton" onclick="saveDefinition()" aria-label="Save Definition" title="Save Definition" data-bs-toggle="tooltip" data-bs-placement="top">
+                            <button class="btn btn-primary" id="saveDefinitionButton" onclick="saveDefinition()"
+                                aria-label="Save Definition" title="Save Definition" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
                                 <i class="bi bi-floppy2"></i>
                             </button>
                         </div>
@@ -82,8 +87,10 @@
         <!-- Panel 3: Conceptual Domain -->
         <div class="card mb-4 d-none" id="step1panel3">
             <div class="card-body">
-                <h2 class="mb-4">Specify Construct's Conceptual Domain</h2>
-                <button class="btn btn-outline-info my-3" id="aiSuggestionButton" onclick="getAISuggestion()" aria-label="Get AI Suggestion" title="Get AI Suggestion" data-bs-toggle="tooltip" data-bs-placement="top">
+                <h2 class="mb-4">Specify the Conceptual Domain</h2>
+                <button class="btn btn-outline-info my-3" id="aiSuggestionButton" onclick="getAISuggestion()"
+                    aria-label="Get AI Suggestion" title="Get AI Suggestion" data-bs-toggle="tooltip"
+                    data-bs-placement="top">
                     <i class="bi bi-lightbulb"></i>
                 </button>
                 <div class="row mb-4 d-none" id="aiSuggestion">
@@ -95,7 +102,8 @@
                                 </div>
                                 <div class="row">
                                     <div class="col-auto ms-auto">
-                                        <button class="btn btn-outline-secondary" onclick="takeAISuggestion()">Take</button>
+                                        <button class="btn btn-outline-secondary"
+                                            onclick="takeAISuggestion()">Take</button>
                                     </div>
                                 </div>
                             </div>
@@ -104,44 +112,167 @@
                 </div>
                 <!-- Conceptual Domain -->
                 <div class="mb-4">
-                <label class="form-label fw-bold">1. What general type of property does your construct represent?</label>
-                <div id="propertyOptions">
-                    <div class="form-check"><input class="form-check-input" type="radio" name="property" value="Thought" id="propertyThought"><label class="form-check-label" for="propertyThought">Thought (e.g., belief, intention)</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="property" value="Feeling" id="propertyFeeling"><label class="form-check-label" for="propertyFeeling">Feeling (e.g., emotion, attitude)</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="property" value="Perception" id="propertyPerception"><label class="form-check-label" for="propertyPerception">Perception (e.g., perceived usefulness)</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="property" value="Action" id="propertyAction"><label class="form-check-label" for="propertyAction">Action (e.g., behavior, activity)</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="property" value="Outcome" id="propertyOutcome"><label class="form-check-label" for="propertyOutcome">Outcome (e.g., performance, ROI)</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="property" value="Intrinsic Characteristic" id="propertyIntrinsic"><label class="form-check-label" for="propertyIntrinsic">Intrinsic Characteristic (e.g., intelligence)</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="property" value="Other" id="propertyOther"><label class="form-check-label" for="propertyOther">Other</label></div>
-                </div>
-                <textarea class="form-control mt-2" id="propertyExplanation" rows="2" placeholder="If unsure or selected 'Other', explain here (optional)"></textarea>
+                    <label class="form-label fw-bold">1. What general type of property does your construct
+                        represent?</label>
+                    <div id="propertyOptions">
+                        <div class="form-check"><input class="form-check-input" type="radio" name="property"
+                                value="Thought" id="propertyThought"><label class="form-check-label"
+                                for="propertyThought">Thought (e.g., belief, intention)</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="property"
+                                value="Feeling" id="propertyFeeling"><label class="form-check-label"
+                                for="propertyFeeling">Feeling (e.g., emotion, attitude)</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="property"
+                                value="Perception" id="propertyPerception"><label class="form-check-label"
+                                for="propertyPerception">Perception (e.g., perceived usefulness)</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="property"
+                                value="Action" id="propertyAction"><label class="form-check-label"
+                                for="propertyAction">Action (e.g., behavior, activity)</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="property"
+                                value="Outcome" id="propertyOutcome"><label class="form-check-label"
+                                for="propertyOutcome">Outcome (e.g., performance, ROI)</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="property"
+                                value="Intrinsic Characteristic" id="propertyIntrinsic"><label class="form-check-label"
+                                for="propertyIntrinsic">Intrinsic Characteristic (e.g., intelligence)</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="property"
+                                value="Other" id="propertyOther"><label class="form-check-label"
+                                for="propertyOther">Other</label></div>
+                    </div>
+                    <textarea class="form-control mt-2" id="propertyExplanation" rows="2"
+                        placeholder="If unsure or selected 'Other', explain here (optional)"></textarea>
                 </div>
 
                 <!-- Referent Entity -->
                 <div class="mb-4">
-                <label class="form-label fw-bold">2. To what kind of entity does your construct apply?</label>
-                <div id="entityOptions">
-                    <div class="form-check"><input class="form-check-input" type="radio" name="entity" value="Individual" id="entityIndividual"><label class="form-check-label" for="entityIndividual">Individual</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="entity" value="Group" id="entityGroup"><label class="form-check-label" for="entityGroup">Group / Team</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="entity" value="Organization" id="entityOrganization"><label class="form-check-label" for="entityOrganization">Organization</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="entity" value="Technology" id="entityTech"><label class="form-check-label" for="entityTech">Technology / Artifact</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="entity" value="Situation" id="entitySituation"><label class="form-check-label" for="entitySituation">Situation / Task</label></div>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="entity" value="Other" id="entityOther"><label class="form-check-label" for="entityOther">Other</label></div>
-                </div>
-                <textarea class="form-control mt-2" id="entityExplanation" rows="2" placeholder="If unsure or selected 'Other', explain here (optional)"></textarea>
+                    <label class="form-label fw-bold">2. To what kind of entity does your construct apply?</label>
+                    <div id="entityOptions">
+                        <div class="form-check"><input class="form-check-input" type="radio" name="entity"
+                                value="Individual" id="entityIndividual"><label class="form-check-label"
+                                for="entityIndividual">Individual</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="entity" value="Group"
+                                id="entityGroup"><label class="form-check-label" for="entityGroup">Group / Team</label>
+                        </div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="entity"
+                                value="Organization" id="entityOrganization"><label class="form-check-label"
+                                for="entityOrganization">Organization</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="entity"
+                                value="Technology" id="entityTech"><label class="form-check-label"
+                                for="entityTech">Technology / Artifact</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="entity"
+                                value="Situation" id="entitySituation"><label class="form-check-label"
+                                for="entitySituation">Situation / Task</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="entity" value="Other"
+                                id="entityOther"><label class="form-check-label" for="entityOther">Other</label></div>
+                    </div>
+                    <textarea class="form-control mt-2" id="entityExplanation" rows="2"
+                        placeholder="If unsure or selected 'Other', explain here (optional)"></textarea>
                 </div>
 
                 <!-- Submit -->
                 <div class="row my-3">
                     <div class="col-auto ms-auto">
-                        <button class="btn btn-primary" id="submitDomainButton" onclick="submitDomain()" aria-label="Select Conceptual Domain" title="Select Conceptual Domain" data-bs-toggle="tooltip" data-bs-placement="top">
+                        <button class="btn btn-primary" id="submitDomainButton" onclick="submitDomain()"
+                            aria-label="Select Conceptual Domain" title="Select Conceptual Domain"
+                            data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-check-lg"></i>
                         </button>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-</div>
+        <!-- Panel 4 -->
+        <div class="card mb-4 d-none" id="step1panel4">
+            <div class="card-body">
+                <h3 class="mb-4">Specify the Conceptual Theme</h3>
+                <!-- Panel 4: Conceptual Theme Inputs -->
+                <div class="mb-4">
+                    <h5 class="form-label fw-bold">Attributes</h5>
+                    <div id="attributesContainer">
+                        <div class="input-group mb-2 attribute-row">
+                            <input type="text" class="form-control attribute-name" placeholder="Attribute name">
+                            <select class="form-select attribute-classification">
+                                <option value="Common">Common</option>
+                                <option value="Unique">Unique</option>
+                                <option value="Both">Both</option>
+                                <option value="Neither">Neither</option>
+                            </select>
+                            <button class="btn btn-outline-danger remove-attribute" type="button">&times;</button>
+                        </div>
+                    </div>
+                    <button class="btn btn-outline-secondary" type="button" id="addAttributeButton">                            
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </div>
 
-<script src="{{ url_for('static', path='js/step1.js') }}" defer></script>
+                <div class="mb-5">
+                    <h5 class="form-label fw-bold">Breadth and Inclusiveness</h5>
+                    <textarea class="form-control" id="breadthInclusivenessInput" rows="3" placeholder="Describe the breadth and inclusiveness of the construct"></textarea>
+                </div>
+
+                <div class="mb-5">
+                    <h5 class="form-label fw-bold">Dimensionality</h5>
+                    <div id="dimensionalityOptions">
+                        <div class="form-check"><input class="form-check-input" type="radio" name="dimensionality" id="dimUnidimensional" value="Unidimensional"><label class="form-check-label" for="dimUnidimensional">Unidimensional</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="dimensionality" id="dimMultidimensional" value="Multidimensional"><label class="form-check-label" for="dimMultidimensional">Multidimensional</label></div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h5 class="form-label fw-bold">Stability</h5>
+                    <div class="mb-3">
+                        <label class="form-label">Over Time:</label>
+                        <div class="card" style="width: fit-content;">
+                            <div class="card-boy p-2">
+                                <div class="d-grid gap-2 d-md-flex justify-content-start" role="group" aria-label="Stability Over Time">
+                                    <input type="radio" class="btn-check" name="stabilityTime" id="stableTrait" autocomplete="off" value="Stable (trait-like)">
+                                    <label class="btn" for="stableTrait">Stable (trait-like)</label>
+                                    <input type="radio" class="btn-check" name="stabilityTime" id="variableState" autocomplete="off" value="Variable (state-like)">
+                                    <label class="btn" for="variableState">Variable (state-like)</label>
+                                    <input type="radio" class="btn-check" name="stabilityTime" id="timeDepends" autocomplete="off" value="Depends / Not sure">
+                                    <label class="btn" for="timeDepends">Depends / Not sure</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Across Situations:</label>
+                        <div class="card" style="width: fit-content;">
+                            <div class="card-boy p-2">
+                                <div class="d-grid gap-2 d-md-flex justify-content-start" role="group" aria-label="Stability Across Situations">
+                                    <input type="radio" class="btn-check" name="stabilitySituation" id="situationGeneralizable" autocomplete="off" value="Generalizable">
+                                    <label class="btn" for="situationGeneralizable">Generalizable</label>
+                                    <input type="radio" class="btn-check" name="stabilitySituation" id="situationSpecific" autocomplete="off" value="Situation-specific">
+                                    <label class="btn" for="situationSpecific">Situation-specific</label>
+                                    <input type="radio" class="btn-check" name="stabilitySituation" id="situationDepends" autocomplete="off" value="Depends / Not sure">
+                                    <label class="btn" for="situationDepends">Depends / Not sure</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Across Cases:</label>
+                        <div class="card" style="width: fit-content;">
+                            <div class="card-body p-2">
+                                <div class="d-grid gap-2 d-md-flex justify-content-start" role="group" aria-label="Stability Across Cases">
+                                    <input type="radio" class="btn-check" name="stabilityCases" id="casesBroadly" autocomplete="off" value="Broadly applicable">
+                                    <label class="btn" for="casesBroadly">Broadly applicable</label>
+                                    <input type="radio" class="btn-check" name="stabilityCases" id="casesSubgroups" autocomplete="off" value="Applies only to specific subgroups">
+                                    <label class="btn" for="casesSubgroups">Applies only to specific subgroups</label>
+                                    <input type="radio" class="btn-check" name="stabilityCases" id="casesDepends" autocomplete="off" value="Depends / Not sure">
+                                    <label class="btn" for="casesDepends">Depends / Not sure</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row my-3">
+                    <div class="col-auto ms-auto">
+                        <button class="btn btn-primary" id="saveThemeButton" onclick="saveTheme()"><i class="bi bi-check-lg"></i></button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', path='js/step1.js') }}" defer></script>
