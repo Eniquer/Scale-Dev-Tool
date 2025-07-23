@@ -631,6 +631,21 @@ async function showAISuggestion() {
 
 async function takeAISuggestion() {
     const step1Data = await window.dataStorage.getData('data_step_1');
+    if (step1Data.panel3 && step1Data.panel3.property && step1Data.panel3.entity) {
+        // If AI suggestion already exists, confirm overwrite
+        const userConfirmed = await customConfirm({
+            title: '⚠️ Overwrite AI Suggestion?',
+            message: `This will overwrite the existing AI suggestion.<br/>
+                        Do you want to continue and replace the current one?`,
+            confirmText: 'Yes, overwrite',
+            cancelText: 'No, keep it'
+        });
+        if (!userConfirmed) {
+            console.log('User cancelled data storage — existing data preserved');
+            return;
+        }
+        
+    }
     const property = step1Data.panel3.aiProperty;
     const entity = step1Data.panel3.aiEntity;
     updateRadio(property, entity);
@@ -876,6 +891,21 @@ async function takeThemeAISuggestion() {
         
         window.displayInfo('warning', 'No AI theme suggestion available. Please generate one first.');
         return;
+    }
+
+    if (step1Data.panel4){
+        // If panel4 already exists, confirm overwrite
+        const userConfirmed = await customConfirm({
+            title: '⚠️ Overwrite AI Theme Suggestion?',
+            message: `This will overwrite the existing theme data.<br/>
+                        Do you want to continue and replace the current one?`,
+            confirmText: 'Yes, overwrite',
+            cancelText: 'No, keep it'
+        });
+        if (!userConfirmed) {
+            console.log('User cancelled data storage — existing data preserved');
+            return;
+        }
     }
 
     let copy = {...step1Data.aiPanel4} || null;
