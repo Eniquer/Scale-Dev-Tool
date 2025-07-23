@@ -599,6 +599,10 @@ async function getAISuggestion() {
 
 async function showAISuggestion() {
     const step1Data = await window.dataStorage.getData('data_step_1');
+        if (!step1Data) {
+        console.warn('No step 1 data found');
+        return;
+    }
     const panel3 = step1Data.panel3;
 
     if (!panel3 || !panel3.aiProperty || !panel3.aiEntity || !panel3.aiJustification) {
@@ -909,6 +913,10 @@ async function resetPanel4() {
     document.getElementById('aiThemeSuggestion').classList.add('d-none');
 
     const step1Data = await window.dataStorage.getData('data_step_1');
+    if (!step1Data) {
+        console.warn('No step 1 data found');
+        return;
+    }
     if (step1Data.panel4) {
         delete step1Data.panel4; // Remove panel 4 data
     }
