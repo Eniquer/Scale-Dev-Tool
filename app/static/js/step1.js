@@ -653,38 +653,46 @@ function updateRadio(property, entity, propertyExplanation = null, entityExplana
 
 // Create a new attribute row
 // Create a new attribute row, with optional necessity/sufficiency indication
-function createAttributeRow(name = '', classification = 'Common', indication = 'Neither') {
+function createAttributeRow(name = '', classification = '', indication = '', core = false) {
     const row = document.createElement('div');
     row.className = 'input-group mb-2 attribute-row';
     row.innerHTML = `
         <input type="text" class="form-control attribute-name" placeholder="Attribute name" value="${name}">
         <select class="form-select attribute-classification">
+            <option value="" disabled selected>Select classification</option>
             <option value="Common">Common</option>
             <option value="Unique">Unique</option>
             <option value="Both">Both</option>
             <option value="Neither">Neither</option>
         </select>
         <select class="form-select attribute-indication">
+            <option value="" disabled selected>Select indication</option>
             <option value="Necessary">Necessary</option>
             <option value="Sufficient">Sufficient</option>
             <option value="Both">Both</option>
             <option value="Neither">Neither</option>
         </select>
-        <button class="btn btn-outline-danger remove-attribute" type="button">&times;</button>
+        <div class="input-group-text d-flex align-items-center px-3 dark-bg-bs">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input attribute-core me-2" type="checkbox" id="coreSwitch">
+                <label class="form-check-label mb-0" for="coreSwitch">Core</label>
+            </div>
+        </div>
+        <button class="btn btn-outline-danger remove-attribute" type="button" >&times;</button>
     `;
 
-    // Set classification and indication
-    row.querySelector('.attribute-classification').value = classification;
-    row.querySelector('.attribute-indication').value = indication;
+    // Set classification, indication, and core flag
+    if (classification) row.querySelector('.attribute-classification').value = classification;
+    if (indication) row.querySelector('.attribute-indication').value = indication;
+    if (core) row.querySelector('.attribute-core').checked = !!core;
     // Remove handler
     row.querySelector('.remove-attribute').addEventListener('click', () => row.remove());
     return row;
 }
 
 // Add a blank initial row or from data
-function addAttributeRow(name, classification, indication) {
-    // todo if its the first add header ROW containing:  i want over the attribute row a heaeder that consists of attribute name/classification and indication
-    const row = createAttributeRow(name, classification, indication);
+function addAttributeRow(name, classification, indication, core = false) {
+    const row = createAttributeRow(name, classification, indication, core);
     attributesContainer.appendChild(row);
 }
 
@@ -700,7 +708,7 @@ async function loadPanel4() {
     // Clear existing rows
     attributesContainer.innerHTML = '';
     if (panel4?.attributes?.length) {
-        panel4.attributes.forEach(attr => addAttributeRow(attr.name, attr.classification, attr.indication));
+        panel4.attributes.forEach(attr => addAttributeRow(attr.name, attr.classification, attr.indication, attr.core));
     } else {
         addAttributeRow();
     }
@@ -752,6 +760,10 @@ Use the following rules to classify attributes:
 
 Given the construct definition, return:
 - A list of 1–7 likely defining **attributes** (name + classification as: Common|Unique|Both|Neither + indication as: Necessary|Sufficient|Both|Neither)
+- From the list of attributes, identify the smallest subset that is jointly necessary and sufficient to define the construct according to MacKenzie et al. (2011). This means:
+    - If all of these attributes are present, the construct is present.
+    - If any of these attributes are absent, the construct is incomplete.
+    - this is the **core** of the construct, so mark it as core (true/false).
 - An estimate of the construct's **breadth and inclusiveness** in 1 or 2 sentences
 - A classification of its **dimensionality** (Unidimensional|Multidimensional)
 - An evaluation of its **stability**:
@@ -766,8 +778,8 @@ Given the construct definition, return:
   Return your answer in **strict JSON format**:
 {
   "attributes": [
-    { "name": "AttributeName1", "classification": "CLASSIFICATION HERE", "indication": "INDICATION HERE" },
-    { "name": "AttributeName2", "classification": "CLASSIFICATION HERE", "indication": "INDICATION HERE" },
+    { "name": "AttributeName1", "classification": "CLASSIFICATION HERE", "indication": "INDICATION HERE", "core": CORE STATUS HERE },
+    { "name": "AttributeName2", "classification": "CLASSIFICATION HERE", "indication": "INDICATION HERE", "core": CORE STATUS HERE },
     ...
   ],
   "breadthInclusiveness": "TEXT HERE",
@@ -822,7 +834,7 @@ async function showThemeAISuggestion() {
         return;
     }
     document.getElementById('aiThemeSuggestionText').innerHTML =  `<h4>AI Suggestion</h4>
-    <strong>Attributes:</strong> ${step1Data.aiPanel4.attributes.map(attr => `${attr.name} (${attr.classification}|${attr.indication})`).join(', ')}<br>
+    <strong>Attributes:</strong> ${step1Data.aiPanel4.attributes.map(attr => `${attr.name} (${attr.classification}|${attr.indication}|${attr.core})`).join(', ')}<br>
     <strong>Breadth & Inclusiveness:</strong> ${step1Data.aiPanel4.breadthInclusiveness}<br>
     <strong>Dimensionality:</strong> ${step1Data.aiPanel4.dimensionality}<br>
     <strong>Stability (Time):</strong> ${step1Data.aiPanel4.stabilityTime}<br>
@@ -864,7 +876,8 @@ async function saveTheme() {
     const attrs = Array.from(attributesContainer.querySelectorAll('.attribute-row')).map(row => ({
         name: row.querySelector('.attribute-name').value.trim(),
         classification: row.querySelector('.attribute-classification').value,
-        indication: row.querySelector('.attribute-indication').value
+        indication: row.querySelector('.attribute-indication').value,
+        core: row.querySelector('.attribute-core').checked
     })).filter(a => a.name);
     step1Data.panel4.attributes = attrs;
     // Breadth & Inclusiveness
