@@ -51,6 +51,15 @@ function hideLoading() {
 window.showLoading = showLoading;
 window.hideLoading = hideLoading;
 
+// Scroll utility: scroll to a given element
+function scrollToElement(target, container = document.getElementById("area1")) {
+    if (container === window) {
+      target.scrollIntoView({ behavior: 'smooth' });
+      return;
+    } 
+    container.scrollTo({ top: target.offsetTop - 50, behavior: 'smooth' });
+}
+window.scrollToElement = scrollToElement;
 
 // ***********************************       SplitJS          ***********************************************
 

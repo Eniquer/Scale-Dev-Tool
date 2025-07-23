@@ -193,6 +193,9 @@ async function getDefinitions(history = []) {
         return;
     }finally {
         hideLoading();
+        setTimeout(() => {
+            scrollToElement(document.getElementById("step1panel2"));
+        }, 400);
     }
     // Parse JSON response
     let definitions;
@@ -386,6 +389,9 @@ async function saveDefinition() {
 
     // Display success message
     window.displayInfo('success', "Definition saved successfully.");
+    setTimeout(() => {
+        scrollToElement(document.getElementById("step1panel3"));
+    }, 400);
 }
 
 
@@ -521,7 +527,9 @@ async function submitDomain() {
     console.log('Panel 3 data saved');
     // Display success message
     window.displayInfo('success', 'Construct domain and referent saved successfully.');
-
+    setTimeout(() => {
+        scrollToElement(document.getElementById("step1panel4"));
+    }, 400);
     // activate panel 4
     domPanel4.classList.remove('d-none');
     loadPanel4();
