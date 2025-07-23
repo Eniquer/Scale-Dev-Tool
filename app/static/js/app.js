@@ -142,3 +142,99 @@ async function sendChat(input, history = []) {
     }
 }
 window.sendChat = sendChat;
+
+// ***********************************       Export Data         ***********************************************
+// Add exportSelected function for modal-based export
+async function exportSelected() {
+    const exportAll = document.getElementById('exportAll').checked;
+    const output = {};
+
+    if (exportAll) {
+        // fetch all data keys
+        for (let i = 1; i <= 8; i++) {
+            const key = `data_step_${i}`;
+            const data = await window.dataStorage.getData(key);
+            if (data) output[key] = data;
+        }
+    } else {
+        // fetch only checked steps
+        const cbs = document.querySelectorAll('.export-step-checkbox:checked');
+        for (const cb of cbs) {
+            const stepNum = cb.value;
+            const key = `data_step_${stepNum}`;
+            const data = await window.dataStorage.getData(key);
+            if (data) output[key] = data;
+        }
+    }
+
+    if (Object.keys(output).length === 0) {
+        window.displayInfo('warning', 'No data available for selected steps.');
+        return;
+    }
+
+    const jsonString = JSON.stringify(output, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = exportAll ? 'data_all_steps.json' : 'data_selected_steps.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // close modal
+    const modalEl = document.getElementById('exportModal');
+    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+    modalInstance.hide();
+
+    window.displayInfo('success', 'Data exported successfully.');
+}
+window.exportSelected = exportSelected;
+
+// Populate export modal options dynamically
+const exportModal = document.getElementById('exportModal');
+if (exportModal) {
+    exportModal.addEventListener('show.bs.modal', async () => {
+        const container = document.getElementById('exportStepsContainer');
+        container.innerHTML = '';
+        // fetch availability for each step
+        for (let i = 1; i <= 8; i++) {
+            const key = `data_step_${i}`;
+            const has = await window.dataStorage.hasData(key);
+            if (has) {
+                const div = document.createElement('div');
+                div.className = 'form-check';
+                const input = document.createElement('input');
+                input.className = 'form-check-input export-step-checkbox';
+                input.type = 'checkbox';
+                input.value = `${i}`;
+                input.id = `exportStep${i}`;
+                const label = document.createElement('label');
+                label.className = 'form-check-label';
+                label.htmlFor = input.id;
+                label.textContent = `Step ${i}`;
+                div.appendChild(input);
+                div.appendChild(label);
+                container.appendChild(div);
+            }
+        }
+        // reset exportAll and checkboxes
+        const allCheckbox = document.getElementById('exportAll');
+        if (allCheckbox) {
+            allCheckbox.checked = false;
+        }
+        document.querySelectorAll('.export-step-checkbox').forEach(cb => cb.checked = false);
+    });
+}
+// toggle individual when exportAll changes
+const allCheckbox = document.getElementById('exportAll');
+if (allCheckbox) {
+    allCheckbox.addEventListener('change', e => {
+        const disable = e.target.checked;
+        document.querySelectorAll('.export-step-checkbox').forEach(cb => {
+            cb.disabled = disable;
+            if (disable) cb.checked = false;
+        });
+    });
+}
