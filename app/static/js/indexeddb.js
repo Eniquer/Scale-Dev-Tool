@@ -89,20 +89,23 @@ if (!window.DataStorage) {
                 try {
                     const existingData = await this.getData(key);
                     if (existingData !== null) {
-                        let userConfirmed = null
+                        let message = `This will overwrite existing data for key '${key}'.<br/>
+                        Do you want to continue and replace the current data?`
                         if (customMessage) {
-                            userConfirmed = confirm(customMessage);
-                        } else {
-                            userConfirmed = confirm(
-                                `⚠️ Warning: This will overwrite existing data for key '${key}'.\n\n` +
-                                'Do you want to continue and replace the current data?'
-                            );
+                            message = customMessage;
                         }
-                    
+                        const userConfirmed = await customConfirm({
+                            title: '⚠️ Overwrite Definition?',
+                            message: message,
+                            confirmText: 'Yes, overwrite',
+                            cancelText: 'No, keep it'
+                        });
                         if (!userConfirmed) {
                             console.log(`User cancelled data storage for key '${key}' - existing data preserved`);
                             return Promise.reject('User cancelled overwrite');
                         }
+
+                        
                     }
                 } catch (error) {
                     // No existing data found, continue normally

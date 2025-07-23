@@ -238,3 +238,76 @@ if (allCheckbox) {
         });
     });
 }
+
+// custom confirm
+
+/**
+ * Show a Bootstrap “are you sure?” modal with custom title & message.
+ * @param {string} title — Modal header text (can include emojis)
+ * @param {string} message — Modal body HTML (can include <br/>)
+ * @param {string} [confirmText="OK"] — Text for the confirm button
+ * @param {string} [cancelText="Cancel"] — Text for the cancel button
+ * @returns {Promise<boolean>} — Resolves true if confirmed, false otherwise.
+ */
+function customConfirm({
+  title,
+  message,
+  confirmText = 'OK',
+  cancelText = 'Cancel'
+}) {
+  return new Promise(resolve => {
+    // 1) Create a unique container for this modal
+    const container = document.createElement('div');
+    const modalId = `dynamicModal_${Date.now()}`;
+    container.innerHTML = `
+      <div class="modal fade" id="${modalId}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content rounded-3 shadow-lg">
+            <div class="modal-header border-0">
+              <h5 class="modal-title">${title}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"
+                      aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              ${message}
+            </div>
+            <div class="modal-footer border-0">
+              <button id="${modalId}_cancel" type="button" class="btn btn-outline-secondary"
+                      data-bs-dismiss="modal">${cancelText}</button>
+              <button id="${modalId}_confirm" type="button" class="btn btn-danger">
+                ${confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(container);
+
+    // 2) Bootstrap modal instance
+    const modalEl = document.getElementById(modalId);
+    const bsModal = new bootstrap.Modal(modalEl);
+
+    // 3) Handle button clicks
+    modalEl.querySelector(`#${modalId}_confirm`).onclick = () => {
+      resolve(true);
+      bsModal.hide();
+    };
+    modalEl.querySelector(`#${modalId}_cancel`).onclick =
+    modalEl.querySelector('.btn-close').onclick = () => {
+      resolve(false);
+      bsModal.hide();
+    };
+
+    // 4) Cleanup after hide
+    modalEl.addEventListener('hidden.bs.modal', () => {
+      bsModal.dispose();
+      container.remove();
+    });
+
+    // 5) Show it
+    bsModal.show();
+  });
+}
+
+window.customConfirm = customConfirm;

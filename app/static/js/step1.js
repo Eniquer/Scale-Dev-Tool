@@ -244,14 +244,16 @@ async function getDefinitionsMore() {
 async function chooseDefinition() {
     const step1Data = await window.dataStorage.getData('data_step_1');
     if (resultingDefinitionTextarea?.value?.trim()) {
-        userConfirmed = confirm(
-                                `⚠️ Warning: This will overwrite the existing definition.\n\n` +
-                                'Do you want to continue and replace the current one?'
-                            );
-                    
+        const userConfirmed = await customConfirm({
+        title: '⚠️ Overwrite Definition?',
+        message: `This will overwrite the existing definition.<br/>
+                    Do you want to continue and replace the current one?`,
+        confirmText: 'Yes, overwrite',
+        cancelText: 'No, keep it'
+        });
         if (!userConfirmed) {
-            console.log(`User cancelled data storage for definition - existing data preserved`);
-            return
+        console.log('User cancelled data storage — existing data preserved');
+        return;
         }
     }
 
@@ -348,14 +350,16 @@ async function saveDefinition() {
 
      
     if (currentDefinition !== resultingDefinition) {
-        userConfirmed = confirm(
-                                `⚠️ Warning: This will overwrite the previously stored definition and any further edits.\n\n` +
-                                'Do you want to continue and replace the current one?'
-                            );
-                    
+        const userConfirmed = await customConfirm({
+            title: '⚠️ Overwrite Definition?',
+            message: `This will overwrite the previously stored definition and any further edits.<br/>
+                        Do you want to continue and replace the current one?`,
+            confirmText: 'Yes, overwrite',
+            cancelText: 'No, keep it'
+        });
         if (!userConfirmed) {
-            console.log(`User cancelled data storage for definition - existing data preserved`);
-            return
+        console.log('User cancelled data storage — existing data preserved');
+        return;
         }
     }
 
