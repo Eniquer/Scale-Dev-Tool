@@ -148,7 +148,6 @@ async function saveConstructData() {
 }
 
 // ***********************************    Panel 2 Functions    ***********************************************
-// todo loading animation and remove others while loading
 definitionHistory = [];
 async function getDefinitions(history = []) {
     showLoading();
@@ -732,7 +731,7 @@ async function loadPanel4() {
 // ***********************************    Panel 4 AI Suggestion ***********************************************
 // todo maybe add optional Comments on the panel
 
-async function getThemeAISuggestion() {
+async function getThemeAISuggestion(tries = 0) {
     const step1Data = await window.dataStorage.getData('data_step_1');
     // todo evtl noch extra kategory by attributen. altes design checken und mackenzie paper
     const panel4 = step1Data.panel4 || {};
@@ -797,27 +796,39 @@ Given the construct definition, return:
         showLoading();
         const response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
         
-        const responseJson = JSON.parse(response[0]);
-        
-        // Save AI suggestion into aiPanel4
-        const { attributes, breadthInclusiveness, dimensionality, stabilityTime, stabilitySituation, stabilityCases, justification } = responseJson;
-        if (!attributes || !breadthInclusiveness || !dimensionality || !stabilityTime || !stabilitySituation || !stabilityCases || !justification) {
-            throw new Error('Incomplete AI response');
+        try{
+            const responseJson = JSON.parse(response[0]);
+            // Save AI suggestion into aiPanel4
+            const { attributes, breadthInclusiveness, dimensionality, stabilityTime, stabilitySituation, stabilityCases, justification } = responseJson;
+            if (!attributes || !breadthInclusiveness || !dimensionality || !stabilityTime || !stabilitySituation || !stabilityCases || !justification) {
+                throw new Error('Incomplete AI response');
+            }
+            if (!step1Data.aiPanel4) step1Data.aiPanel4 = {};
+            step1Data.aiPanel4.attributes = responseJson.attributes;
+            step1Data.aiPanel4.breadthInclusiveness = responseJson.breadthInclusiveness;
+            step1Data.aiPanel4.dimensionality = responseJson.dimensionality;
+            step1Data.aiPanel4.stabilityTime = responseJson.stabilityTime;
+            step1Data.aiPanel4.stabilitySituation = responseJson.stabilitySituation;
+            step1Data.aiPanel4.stabilityCases = responseJson.stabilityCases;
+            step1Data.aiPanel4.justification = responseJson.justification;
+            
+            await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+            
+            showThemeAISuggestion();
         }
-        if (!step1Data.aiPanel4) step1Data.aiPanel4 = {};
-        step1Data.aiPanel4.attributes = responseJson.attributes;
-        step1Data.aiPanel4.breadthInclusiveness = responseJson.breadthInclusiveness;
-        step1Data.aiPanel4.dimensionality = responseJson.dimensionality;
-        step1Data.aiPanel4.stabilityTime = responseJson.stabilityTime;
-        step1Data.aiPanel4.stabilitySituation = responseJson.stabilitySituation;
-        step1Data.aiPanel4.stabilityCases = responseJson.stabilityCases;
-        step1Data.aiPanel4.justification = responseJson.justification;
+        catch (err) {
+            if (tries < 2) {
 
-        await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
-
-
-        showThemeAISuggestion();
+                console.log(response[0]);
+                console.error('Error processing AI response:', err, 'Response: ',response[0]);
+                window.displayInfo('info', 'AI suggestion format is invalid. Trying again...');
+                return await getThemeAISuggestion(tries + 1);
+            }
+            window.displayInfo('danger', 'AI suggestion failed after multiple attempts. Please change definition or try again later.');
+            return;
+        }
     } catch (err) {
+        
         console.error('Theme AI suggestion error:', err);
         window.displayInfo('danger', 'Failed to retrieve theme AI suggestion.');
     } finally {
