@@ -666,6 +666,7 @@ function updateRadio(property, entity, propertyExplanation = null, entityExplana
 // Create a new attribute row, with optional necessity/sufficiency indication
 function createAttributeRow(name = '', classification = '', indication = '', core = false) {
     const row = document.createElement('div');
+    const coreSwitchId = `coreSwitch_${Math.random().toString(36).slice(2, 11)}`;
     row.className = 'input-group mb-2 attribute-row';
     row.innerHTML = `
         <input type="text" class="form-control attribute-name" placeholder="Attribute name" value="${name}">
@@ -857,7 +858,7 @@ async function showThemeAISuggestion() {
         return;
     }
     document.getElementById('aiThemeSuggestionText').innerHTML =  `<h4>AI Suggestion</h4>
-    <strong>Attributes:</strong> ${step1Data.aiPanel4.attributes.map(attr => `${attr.name} (${attr.classification}|${attr.indication}|${attr.core})`).join(', ')}<br>
+    <strong>Attributes:</strong> ${step1Data.aiPanel4.attributes.map(attr => `${attr.name} (${attr.classification}|${attr.indication}|${attr.core?"Core":"Not Core"})`).join(', ')}<br>
     <strong>Breadth & Inclusiveness:</strong> ${step1Data.aiPanel4.breadthInclusiveness}<br>
     <strong>Dimensionality:</strong> ${step1Data.aiPanel4.dimensionality}<br>
     <strong>Stability (Time):</strong> ${step1Data.aiPanel4.stabilityTime}<br>
