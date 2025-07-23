@@ -685,8 +685,8 @@ function createAttributeRow(name = '', classification = '', indication = '', cor
         </select>
         <div class="input-group-text d-flex align-items-center px-3 dark-bg-bs">
             <div class="form-check form-switch mb-0">
-                <input class="form-check-input attribute-core me-2" type="checkbox" id="coreSwitch">
-                <label class="form-check-label mb-0" for="coreSwitch">Core</label>
+                <input class="form-check-input attribute-core me-2" type="checkbox" id="${coreSwitchId}">
+                <label class="form-check-label mb-0" for="${coreSwitchId}">Core</label>
             </div>
         </div>
         <button class="btn btn-outline-danger remove-attribute" type="button" >&times;</button>
