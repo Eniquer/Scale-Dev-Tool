@@ -1,12 +1,13 @@
 // IndexedDB functionality for generic data storage
-if (!window.DataStorage) {
+if (typeof window !== 'undefined' && !window.DataStorage) {
     class DataStorage {
         constructor() {
             this.dbName = 'data-store';
             this.version = 1;
             this.storeName = 'files';
             this.db = null;
-            this.init();
+            // Initialize DB and ensure default projects
+            this.init()
         }
 
         async init() {
@@ -65,7 +66,7 @@ if (!window.DataStorage) {
         }
 
         async hasCSV(key = 'uploadedCSV') {
-            return this.hasData(key);
+            return await this.hasData(key);
         }
 
         async deleteCSV(key = 'uploadedCSV') {
@@ -218,11 +219,206 @@ if (!window.DataStorage) {
                 };
             });
         }
+        async getAllEntries() {
+            if (!this.db) {
+                await this.init();
+            }
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction(this.storeName, 'readonly');
+                const store = tx.objectStore(this.storeName);
+                const entries = [];
+                const request = store.openCursor();
+
+                request.onsuccess = event => {
+                    const cursor = event.target.result;
+                    if (cursor) {
+                        let value = cursor.value;
+                        if (typeof value === 'string') {
+                            try {
+                                value = JSON.parse(value);
+                            } catch (_) {
+                                // leave as string
+                            }
+                        }
+                        entries.push({ key: cursor.key, value });
+                        cursor.continue();
+                    } else {
+                        resolve(entries);
+                    }
+                };
+
+                request.onerror = () => {
+                    reject(request.error);
+                };
+            });
+        }
     }
 
-    
     // Global instance
-    if (!window.dataStorage) {
+    if (typeof window !== 'undefined' && !window.dataStorage) {
         window.dataStorage = new DataStorage();
     }
+}
+
+
+// Project Management Module
+// Storage format: { active: number, projectData: { [id: number]: { id: number, name: string } } }
+
+class ProjectManager {
+  constructor(storage) {
+    this.storage = storage; // expects async getData(key) and storeData(key, value)
+    this.getProjects().then(() => {
+      console.log('Projects initialized successfully');
+      this.getActiveProjectId();
+    });
+  }
+
+    async getProjects() {
+            try {
+                const projects = await this.storage.getData('projectData');
+                if (!projects || projects.length === 0) {
+                    console.log('No projects found, initializing with default project');
+                    return await this.storage.storeData('projectData', [{ "id": 0, "name": 'First Project' }], false);
+                }
+                return projects; // Return existing projects
+
+            } catch (error) {
+                console.error('Error initializing ProjectManager:', error);
+            }
+    }
+
+    async getActiveProjectId() {
+        try {
+            // Check if activeProject exists, if not initialize it
+            if (!await this.storage.hasData('activeProject')) {
+                    console.log('No active project found, initializing with default project');
+                    const projects = await this.getProjects()
+                    if (projects.length > 0) {
+                        console.log('Project data exists, setting first project as active');
+                        return await this.storage.storeData('activeProject', 0, false);
+                    } else {
+                        return await this.storage.storeData('activeProject', -1, false);
+                    }
+                }
+            const activeProjectId = await this.storage.getData('activeProject');
+            console.log(`Active project ID retrieved: ${activeProjectId}`);
+            // If no active project ID is found, initialize with default project
+            if (activeProjectId === undefined || activeProjectId === -1) {
+                console.log('No active project found, initializing with default project');
+                return await this.storage.storeData('activeProject', 0, false);
+            }
+            return activeProjectId; // Return existing active project ID
+        } catch (error) {
+            console.error('Error initializing active project:', error);
+        }
+
+    }
+
+    async setActiveProjectId(projectId) {
+        try {   
+            const projects = await this.getProjects();
+            
+            if (projects.some(p => p.id === projectId)) {
+                console.log(`Active project set to ${projectId}`);
+                
+                return await this.storage.storeData('activeProject', projectId, true);
+                
+            } else {
+                console.warn(`Project with ID ${projectId} does not exist`);
+                return await this.storage.storeData('activeProject', -1, false);
+            }
+        } catch (error) {
+            console.error('Error setting active project ID:', error);
+            return null; // Return null on error
+        }
+    }
+
+    async getProject(projectId = null) {
+        try {
+            const projects = await this.getProjects();
+            const activeProjectId = await this.getActiveProjectId();
+            // Find the first project matching the active ID
+            const match = projects.find(p => p.id === (projectId ?? activeProjectId));
+            if (!match) {
+                console.warn('Project not found, returning null');
+                return null;
+            }
+            return match;
+        } catch (error) {
+            console.error('Error retrieving current project:', error);
+            return null; // Return null on error
+        }
+    }
+
+    async addProject(projectName, setAsCurrent = true) {
+        try {
+            const projects = await this.getProjects();
+            const newProjectId = Math.max(...projects.map(p => p.id), -1) + 1; // Find the next available ID
+            // Check if project with the same name already exists
+            if (projects.some(p => p.name === projectName)) {
+                console.warn(`Project with name '${projectName}' already exists`);
+                return null; // Return null if project with the same name exists
+            }
+            // Create new project object
+            const newProject = { "id": newProjectId, "name": projectName };
+            projects.push(newProject);
+            await this.storage.storeData('projectData', projects, false);
+            
+            if (setAsCurrent) {
+                await this.setActiveProjectId(newProjectId);
+                console.log(`Project '${projectName}' set as current project`);
+            }
+            return newProject;
+        } catch (error) {
+            console.error('Error adding new project:', error);
+        }
+    }
+
+    async changeProjectName(newName, projectId = null) {
+        try {
+            const projects = await this.getProjects();
+            const project = await this.getProject(projectId);
+            if (project) {
+                project.name = newName;
+                await this.storage.storeData('projectData', projects, false);
+                console.log(`Project ID ${project.id} renamed to '${newName}'`);
+            } else {
+                console.warn(`Project with ID ${activeProjectId} does not exist`);
+            }
+        } catch (error) {
+            console.error('Error changing project name:', error);
+        }
+    }
+
+    async deleteProject(projectId) {
+        try {
+            const projects = await this.getProjects();
+            const projectIndex = projects.findIndex(p => p.id === projectId);
+            if (projectIndex !== -1) {
+                projects.splice(projectIndex, 1); // Remove the project
+                // If the deleted project was the active one, reset to default
+                if (await this.getActiveProjectId() === projectId) {
+                    await this.setActiveProjectId(0); // Reset to first project or -1
+                }
+                await this.storage.storeData('projectData', projects, false);
+                console.log(`Project with ID ${projectId} deleted`);
+            } else {
+                console.warn(`Project with ID ${projectId} does not exist`);
+            }
+        } catch (error) {
+            console.error('Error deleting project:', error);
+        }
+    }
+
+
+}
+
+// Global instance
+if (typeof window !== 'undefined' && !window.projects) {
+    window.projects = new ProjectManager(window.dataStorage);
+}
+
+// Export for testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { ProjectManager };
 }
