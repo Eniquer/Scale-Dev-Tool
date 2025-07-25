@@ -40,8 +40,10 @@ function syncData() {
             if (panel1) {
                 document.getElementById('constructName').value = panel1.constructName || '';
                 document.getElementById('initialDefinition').value = panel1.initialDefinition || '';
+            } else {
+                document.getElementById('constructName').value = '';
+                document.getElementById('initialDefinition').value = '';
             }
-
 
             // handle panel 2
             if(!panel2){
@@ -129,6 +131,7 @@ async function saveConstructData() {
             'Are you sure? This will restart step 1'
         );
 
+        projects.changeProjectName(constructName); // Update project name in ProjectManager
         syncData();
         // Data saved successfully
         window.displayInfo('success', 'Construct data saved successfully!');
@@ -200,10 +203,14 @@ async function getDefinitions(history = []) {
     // Parse JSON response
     let definitions;
     try {
-        definitions = JSON.parse(responseText);
+        definitions = JSON.parse(responseText);      
+        if (definitions.length === 0) {
+            throw new Error('Your query returned no results.');
+            
+        }
     } catch (err) {
         console.error('Could not parse definitions JSON:', err, responseText);
-        window.displayInfo('danger', 'Unexpected response format.');
+        window.displayInfo('danger', err.message);
         return;
     }
     
@@ -220,6 +227,7 @@ async function getDefinitions(history = []) {
         )
     );
     step1Data.panel2.definitions.push(...uniqueDefinitions);
+    
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
     console.log('Definitions saved');
     // Render definitions
@@ -761,7 +769,6 @@ async function loadPanel4() {
 
 async function getThemeAISuggestion(tries = 0) {
     const step1Data = await window.dataStorage.getData('data_step_1');
-    // todo evtl noch extra kategory by attributen. altes design checken und mackenzie paper
     const panel4 = step1Data.panel4 || {};
     const prompt = `
     
@@ -825,7 +832,12 @@ Given the construct definition, return:
         const response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
         
         try{
-            const responseJson = JSON.parse(response[0]);
+            const match = input.match(/```json\s*({[\s\S]*?})\s*```/);
+            if (match) {
+                const responseJson = JSON.parse(match[1]);
+            } else {
+                const responseJson = JSON.parse(response[0]);
+            }
             // Save AI suggestion into aiPanel4
             const { attributes, breadthInclusiveness, dimensionality, stabilityTime, stabilitySituation, stabilityCases, justification } = responseJson;
             if (!attributes || !breadthInclusiveness || !dimensionality || !stabilityTime || !stabilitySituation || !stabilityCases || !justification) {
@@ -994,8 +1006,4 @@ async function resetPanel4() {
     console.log('Panel 4 data reset');
 }
 
-
-
-
-
-
+// todo multidimensionality. schaue obsidion meeting notizen

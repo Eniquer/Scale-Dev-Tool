@@ -84,6 +84,7 @@ if (typeof window !== 'undefined' && !window.DataStorage) {
             if (!this.db) {
                 await this.init();
             }
+            key = await this.getSpecificKey(key);
             
             // Check if data already exists
             if (showWarning) {
@@ -145,6 +146,7 @@ if (typeof window !== 'undefined' && !window.DataStorage) {
             if (!this.db) {
                 await this.init();
             }
+            key = await this.getSpecificKey(key);
             
             return new Promise((resolve, reject) => {
                 const tx = this.db.transaction(this.storeName, 'readonly');
@@ -182,6 +184,7 @@ if (typeof window !== 'undefined' && !window.DataStorage) {
             if (!this.db) {
                 await this.init();
             }
+            key = await this.getSpecificKey(key);
             
             return new Promise((resolve) => {
                 const tx = this.db.transaction(this.storeName, 'readonly');
@@ -189,7 +192,7 @@ if (typeof window !== 'undefined' && !window.DataStorage) {
                 const request = store.get(key);
                 
                 request.onsuccess = () => {
-                    resolve(request.result !== undefined);
+                    resolve(request.result != null);
                 };
                 
                 request.onerror = () => {
@@ -202,7 +205,8 @@ if (typeof window !== 'undefined' && !window.DataStorage) {
             if (!this.db) {
                 await this.init();
             }
-            
+            key = await this.getSpecificKey(key);
+
             return new Promise((resolve, reject) => {
                 const tx = this.db.transaction(this.storeName, 'readwrite');
                 const store = tx.objectStore(this.storeName);
@@ -219,6 +223,19 @@ if (typeof window !== 'undefined' && !window.DataStorage) {
                 };
             });
         }
+
+        async getSpecificKey(key) {
+            if (key.startsWith('data_')) {
+                // fetch the current project ID
+                const projectId = await window.projects.getActiveProjectId();
+                // append it to the key
+                return `proj_${projectId}_${key}`;
+            }
+            return key;
+        }
+
+
+
         async getAllEntries() {
             if (!this.db) {
                 await this.init();
@@ -278,7 +295,10 @@ class ProjectManager {
                 const projects = await this.storage.getData('projectData');
                 if (!projects || projects.length === 0) {
                     console.log('No projects found, initializing with default project');
-                    return await this.storage.storeData('projectData', [{ "id": 0, "name": 'First Project' }], false);
+                    let savedConstructName = await this.storage.getData('data_step_1')
+
+                    let projectName = savedConstructName?.panel1?.constructName || 'First Project';
+                    return await this.storage.storeData('projectData', [{ "id": 0, "name": projectName }], false);
                 }
                 return projects; // Return existing projects
 
@@ -302,6 +322,8 @@ class ProjectManager {
                 }
             const activeProjectId = await this.storage.getData('activeProject');
             console.log(`Active project ID retrieved: ${activeProjectId}`);
+
+
             // If no active project ID is found, initialize with default project
             if (activeProjectId === undefined || activeProjectId === -1) {
                 console.log('No active project found, initializing with default project');
@@ -321,7 +343,7 @@ class ProjectManager {
             if (projects.some(p => p.id === projectId)) {
                 console.log(`Active project set to ${projectId}`);
                 
-                return await this.storage.storeData('activeProject', projectId, true);
+                return await this.storage.storeData('activeProject', projectId, false);
                 
             } else {
                 console.warn(`Project with ID ${projectId} does not exist`);
@@ -339,8 +361,14 @@ class ProjectManager {
             const activeProjectId = await this.getActiveProjectId();
             // Find the first project matching the active ID
             const match = projects.find(p => p.id === (projectId ?? activeProjectId));
-            if (!match) {
+            if (match == null) {
                 console.warn('Project not found, returning null');
+                if (projects.length > 0) {
+                    console.log('No matching project found; returning first project as fallback');
+                    await this.setActiveProjectId(projects[0].id); // Set first project as active
+                    console.log(`Active project reset to first project with ID ${projects[0].id}`);
+                    return projects[0];
+                }
                 return null;
             }
             return match;
@@ -350,7 +378,7 @@ class ProjectManager {
         }
     }
 
-    async addProject(projectName, setAsCurrent = true) {
+    async addProject(projectName = null, setAsCurrent = true) {
         try {
             const projects = await this.getProjects();
             const newProjectId = Math.max(...projects.map(p => p.id), -1) + 1; // Find the next available ID
@@ -360,7 +388,7 @@ class ProjectManager {
                 return null; // Return null if project with the same name exists
             }
             // Create new project object
-            const newProject = { "id": newProjectId, "name": projectName };
+            const newProject = { "id": newProjectId, "name": projectName ?? `Project ${newProjectId}` };
             projects.push(newProject);
             await this.storage.storeData('projectData', projects, false);
             
@@ -377,13 +405,15 @@ class ProjectManager {
     async changeProjectName(newName, projectId = null) {
         try {
             const projects = await this.getProjects();
-            const project = await this.getProject(projectId);
+            const activeProjectId = await this.getActiveProjectId();
+            const project = projects.find(p => p.id === (projectId ?? activeProjectId));
             if (project) {
                 project.name = newName;
                 await this.storage.storeData('projectData', projects, false);
                 console.log(`Project ID ${project.id} renamed to '${newName}'`);
             } else {
-                console.warn(`Project with ID ${activeProjectId} does not exist`);
+                // console.warn(`Project with ID ${projectIdd} does not exist`);
+                console.warn(`Project with ID ${projectId ?? activeProjectId} does not exist`);
             }
         } catch (error) {
             console.error('Error changing project name:', error);
@@ -396,9 +426,21 @@ class ProjectManager {
             const projectIndex = projects.findIndex(p => p.id === projectId);
             if (projectIndex !== -1) {
                 projects.splice(projectIndex, 1); // Remove the project
+                const entries = await this.storage.getAllEntries();
+
+                const keysToDelete = entries
+                    .map(entry => entry.key)
+                    .filter(key => key.startsWith(`proj_${projectId}_`));
+                
+                await Promise.all(keysToDelete.map(key => this.storage.deleteData(key)));
+
                 // If the deleted project was the active one, reset to default
                 if (await this.getActiveProjectId() === projectId) {
-                    await this.setActiveProjectId(0); // Reset to first project or -1
+                    if (projects.length > 0) {
+                        await this.setActiveProjectId(projects[0].id); // Set first project as active
+                    }else{
+                        await this.setActiveProjectId(0); // Reset to first project or -1
+                    }
                 }
                 await this.storage.storeData('projectData', projects, false);
                 console.log(`Project with ID ${projectId} deleted`);

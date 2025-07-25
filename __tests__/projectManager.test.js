@@ -7,23 +7,27 @@ class MockStorage {
         this.data = { ...initial };
     }
     async getData(key) {
-        return this.data[key];
+        // Simulate IndexedDB returning null if no entry
+        if (!this.data.hasOwnProperty(key)) {
+            return null;
+        }
+        // Return deep clone to prevent reference mutation
+        return JSON.parse(JSON.stringify(this.data[key]));
     }
     async storeData(key, value, _overwrite = false) {
-        if (_overwrite) {   
-            console.log(`Current storage state:`, this.data);
-        }
-        this.data[key] = value;
-        if (_overwrite) {
-            console.log(`Stored ${key}:`, value);
-            console.log(`Updated storage state:`, this.data);
-        }
-        
-        
-        return value;
+        // Simulate stringified storage and JSON.parse on retrieval
+        this.data[key] = JSON.parse(JSON.stringify(value));
+        return JSON.parse(JSON.stringify(value));
     }
     async hasData(key) {
-        return this.data.hasOwnProperty(key);
+        return this.data.hasOwnProperty(key) && this.data[key] != null;
+    }
+    async deleteData(key) {
+        if (!this.data.hasOwnProperty(key)) {
+            // IndexedDB delete does nothing but resolves
+            return;
+        }
+        delete this.data[key];
     }
 }
 
@@ -54,6 +58,15 @@ describe('ProjectManager', () => {
         expect(projects).toEqual(initialProjects);
     });
 
+    // Verify default projectData is persisted in storage
+    test('getProjects persists default project to storage', async () => {
+        const { pm, storage } = createManagerWithData();
+        const projects = await pm.getProjects();
+        expect(storage.data).toHaveProperty('projectData');
+        expect(Array.isArray(storage.data.projectData)).toBe(true);
+        expect(storage.data.projectData[0]).toMatchObject({ id: 0, name: 'First Project' });
+    });
+
     test('Returns and initializes active project id', async () => {
         const { pm, storage } = createManagerWithData();
         const activeId = await pm.getActiveProjectId();
@@ -61,6 +74,14 @@ describe('ProjectManager', () => {
         // Should remain stable on second call
         const again = await pm.getActiveProjectId();
         expect(again).toBe(0);
+    });
+
+    // Verify default activeProject is persisted in storage
+    test('getActiveProjectId persists default activeProject key', async () => {
+        const { pm, storage } = createManagerWithData();
+        const activeId = await pm.getActiveProjectId();
+        expect(activeId).toBe(0);
+        expect(storage.data).toHaveProperty('activeProject', 0);
     });
 
     test('Sets and gets active project id', async () => {
@@ -75,6 +96,23 @@ describe('ProjectManager', () => {
         const { pm, storage } = createManagerWithData();
         const result = await pm.setActiveProjectId(999);
         expect(result).toBe(-1);
+    });
+
+    // Edge cases for getActiveProjectId fallback
+    test('getActiveProjectId resets to default when stored id is undefined', async () => {
+        const initialData = { projectData: [{ id: 10, name: 'X' }], activeProject: undefined };
+        const { pm, storage } = createManagerWithData(initialData);
+        const result = await pm.getActiveProjectId();
+        expect(result).toBe(0);
+        expect(storage.data.activeProject).toBe(0);
+    });
+
+    test('getActiveProjectId resets to default when stored id is -1', async () => {
+        const initialData = { projectData: [{ id: 20, name: 'Y' }], activeProject: -1 };
+        const { pm, storage } = createManagerWithData(initialData);
+        const result = await pm.getActiveProjectId();
+        expect(result).toBe(0);
+        expect(storage.data.activeProject).toBe(0);
     });
 
     test('addProject creates new project and sets as active', async () => {
@@ -134,6 +172,8 @@ describe('ProjectManager', () => {
         expect(projects[0].name).not.toBe("Nonexistent");
     });
 
+
+
     test('deleteProject removes project and resets active if needed', async () => {
         const { pm, storage } = createManagerWithData();
         await pm.addProject("Epsilon");
@@ -178,5 +218,5 @@ describe('ProjectManager', () => {
         await expect(pm.changeProjectName("fail")).resolves.toBeUndefined();
         await expect(pm.deleteProject(0)).resolves.toBeUndefined();
     });
-
+    
 });

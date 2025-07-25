@@ -107,10 +107,6 @@ function makeHxPostRequest(url, data) {
 }
 
 
-// TODO maybe: wenn neu page geladen wird alle elemente aus dem Storage laden die schon existoeren mit id und json aus der DB?
-// todo Speicher für Verschiedene Construct definitions einbauen
-
-
 async function sendChat(input, history = []) {
     const cipher = window.currentAPIKey_enc;
     if (!cipher) {
@@ -245,6 +241,102 @@ if (allCheckbox) {
             cb.disabled = disable;
             if (disable) cb.checked = false;
         });
+    });
+}
+
+// Populate projects modal with list of project names
+async function populateProjectsModal() {
+    const modalEl = document.getElementById('projectsModal');
+    const body = modalEl.querySelector('.modal-body');
+    body.innerHTML = '';
+    const projects = await window.projects.getProjects() || [];
+    const activeId = await window.projects.getActiveProjectId();
+    const ul = document.createElement('ul');
+    ul.className = 'list-group list-group-flush';
+    projects.forEach(proj => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center border-secondary';
+
+        const nameDiv = document.createElement('div');
+        nameDiv.textContent = proj.name;
+        if (proj.id === activeId) {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-primary ms-2';
+            badge.textContent = 'Current';
+            nameDiv.appendChild(badge);
+        }
+
+        const btnDiv = document.createElement('div');
+        // Only show Select button for non-current projects
+        if (proj.id !== activeId) {
+            const selectBtn = document.createElement('button');
+            selectBtn.className = 'btn btn-sm btn-outline-success me-2';
+            // Use icon instead of text
+            selectBtn.innerHTML = '<i class="bi bi-check-circle"></i>';
+            selectBtn.setAttribute('aria-label', 'Select project');
+            selectBtn.onclick = async () => {
+                await window.projects.setActiveProjectId(proj.id);
+                populateProjectsModal();
+                syncData();
+                setTimeout(() => {
+                    bootstrap.Modal.getInstance(modalEl).hide();
+                }, 500);
+            };
+            btnDiv.appendChild(selectBtn);
+        }
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn btn-sm btn-outline-danger';
+        // Use icon instead of text
+        delBtn.innerHTML = '<i class="bi bi-trash"></i>';
+        delBtn.setAttribute('aria-label', 'Delete project');
+        delBtn.onclick = async () => {
+            const confirmed = await customConfirm({
+                title: 'Delete Project?',
+                message: `Are you sure you want to delete '${proj.name}'?`,
+                confirmText: 'Delete',
+                cancelText: 'Cancel'
+            });
+            if (confirmed) {
+                
+                await window.projects.deleteProject(proj.id);
+                populateProjectsModal();
+                syncData();
+                setTimeout(() => {
+                    bootstrap.Modal.getInstance(modalEl).hide();
+                }, 500);
+            }
+        };
+        btnDiv.appendChild(delBtn);
+
+        li.appendChild(nameDiv);
+        li.appendChild(btnDiv);
+        ul.appendChild(li);
+    });
+    body.appendChild(ul);
+}
+window.populateProjectsModal = populateProjectsModal;
+
+const projectsModal = document.getElementById('projectsModal');
+if (projectsModal) {
+    projectsModal.addEventListener('show.bs.modal', populateProjectsModal);
+}
+
+// After wiring up populateProjectsModal listener
+const addProjectBtn = document.getElementById('addProjectBtn');
+if (addProjectBtn) {
+    addProjectBtn.addEventListener('click', async () => {
+        const newProj = await window.projects.addProject();
+        if (newProj) {
+            window.displayInfo('success', `Project '${newProj.name}' added`);
+            populateProjectsModal();
+            syncData();
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(projectsModal).hide();
+            }, 500);
+        } else {
+            window.displayInfo('error', `Could not add project. It may already exist.`);
+        }
     });
 }
 

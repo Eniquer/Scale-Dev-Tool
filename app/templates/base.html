@@ -42,7 +42,7 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link text-light" href="#">Project</a>
+                        <a class="nav-link text-light" href="#" data-bs-toggle="modal" data-bs-target="#projectsModal">Project</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link text-light" data-bs-toggle="modal" data-bs-target="#exportModal">Export</a>
@@ -103,6 +103,25 @@
       </div>
     </div>
     <div id="displayInfoContainer"><!-- This container will be used to display info messages --></div>
+    
+    <!-- Projects Listing Modal -->
+    <div class="modal fade" id="projectsModal" tabindex="-1" aria-labelledby="projectsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light">
+          <div class="modal-header">
+            <h5 class="modal-title" id="projectsModalLabel">Projects</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>No additional content yet.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-success me-auto" id="addProjectBtn">Add Project</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Initialize Bootstrap tooltips for icon buttons
