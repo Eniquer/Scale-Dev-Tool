@@ -15,10 +15,15 @@ const domPanel1 = document.getElementById('step1panel1');
 const domPanel2 = document.getElementById('step1panel2');
 const domPanel3 = document.getElementById('step1panel3');
 const domPanel4 = document.getElementById('step1panel4');
+const domPanel5 = document.getElementById('step1panel5');
 const resultingDefinitionContainer = document.getElementById('resultingDefinitionContainer');
 const resultingDefinitionTextarea = document.getElementById('resultingDefinitionTextarea');
 const addAttributeButton = document.getElementById('addAttributeButton');
 const attributesContainer = document.getElementById('attributesContainer');
+const subdimensionsContainer = document.getElementById('subdimensionsContainer');
+// Available theme attributes from panel4
+let availableAttributes = [];
+const addSubdimensionButton = document.getElementById('addSubdimensionButton');
 
 
 
@@ -36,6 +41,7 @@ function syncData() {
             const panel2 = saved?.panel2
             const panel3 = saved?.panel3;
             const panel4 = saved?.panel4;
+            const panel5 = saved?.panel5;
 
             if (panel1) {
                 document.getElementById('constructName').value = panel1.constructName || '';
@@ -96,6 +102,16 @@ function syncData() {
             } else {
                 domPanel4.classList.remove('d-none');
                 loadPanel4();
+            }
+
+            // handle panel 5 (only if multidimensional)
+            if (panel4 && panel4.dimensionality === "Multidimensional") {
+                domPanel5.classList.remove('d-none');
+                subdimensions = panel5?.subdimensions || [{ name: '', definition: '', attributes: [] }];
+                renderSubdimensions();
+            } else {
+                resetPanel5();
+                domPanel5.classList.add('d-none');
             }
         });
     }
@@ -390,6 +406,7 @@ async function saveDefinition() {
     
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
     await resetPanel4(); // Reset panel 4 data
+    await resetPanel5(); // Reset panel 5 data
     console.log('Definition saved');
     
 
@@ -535,9 +552,11 @@ async function submitDomain() {
     console.log('Panel 3 data saved');
     // Display success message
     window.displayInfo('success', 'Construct domain and referent saved successfully.');
-    setTimeout(() => {
-        scrollToElement(document.getElementById("step1panel4"));
-    }, 400);
+    if (!step1Data.panel4) {
+        setTimeout(() => {
+            scrollToElement(document.getElementById("step1panel4"));
+        }, 400);
+    }
     // activate panel 4
     domPanel4.classList.remove('d-none');
     loadPanel4();
@@ -764,6 +783,99 @@ async function loadPanel4() {
     showThemeAISuggestion()
 }
 
+
+// Save Panel 4 data
+async function saveTheme() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    if (!step1Data.panel4) step1Data.panel4 = {};
+    // Attributes
+    // Collect attributes including indication
+    const attrs = Array.from(attributesContainer.querySelectorAll('.attribute-row')).map(row => ({
+        name: row.querySelector('.attribute-name').value.trim(),
+        classification: row.querySelector('.attribute-classification').value,
+        indication: row.querySelector('.attribute-indication').value,
+        core: row.querySelector('.attribute-core').checked
+    })).filter(a => a.name);
+
+    const prev = step1Data.panel4?.attributes || [];
+    // simplest deep-compare for JSON‐serializable arrays:
+    const resetP5 = JSON.stringify(attrs) !== JSON.stringify(prev);
+
+
+
+    step1Data.panel4.attributes = attrs;
+    // Breadth & Inclusiveness
+    step1Data.panel4.breadthInclusiveness = document.getElementById('breadthInclusivenessInput')?.value.trim() || null;
+    // Dimensionality
+    step1Data.panel4.dimensionality = (() => {
+        const sel = document.querySelector('input[name="dimensionality"]:checked');
+        return sel ? sel.value : null;
+    })();
+    // Stability via radios
+    step1Data.panel4.stabilityTime = document.querySelector('input[name="stabilityTime"]:checked')?.value || null;
+    step1Data.panel4.stabilitySituation = document.querySelector('input[name="stabilitySituation"]:checked')?.value || null;
+    step1Data.panel4.stabilityCases = document.querySelector('input[name="stabilityCases"]:checked')?.value || null;
+
+    // Ensure all required data is present before saving
+    if (!step1Data.panel4.attributes.length) {
+        window.displayInfo('warning', 'Please add at least one attribute before saving.');
+        return;
+    }
+    if (!step1Data.panel4.breadthInclusiveness) {
+        window.displayInfo('warning', 'Please provide breadth and inclusiveness information before saving.');
+        return;
+    }
+    if (!step1Data.panel4.dimensionality) {
+        window.displayInfo('warning', 'Please select dimensionality before saving.');
+        return;
+    }
+    if (!step1Data.panel4.stabilityTime || !step1Data.panel4.stabilitySituation || !step1Data.panel4.stabilityCases) {
+        window.displayInfo('warning', 'Please complete all stability fields before saving.');
+        return;
+    }
+    
+    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+    window.displayInfo('success', 'Conceptual theme saved successfully.');
+    if (resetP5) {
+            await resetPanel5(); // Reset panel 5 if attributes change
+        }
+    syncData();
+    
+
+    if (!step1Data.panel5) {
+        setTimeout(() => {
+            scrollToElement(document.getElementById("step1panel5"));
+        }, 400);
+    }
+}
+
+async function resetPanel4() {
+    // Clear all attributes
+    attributesContainer.innerHTML = '';
+    // Reset other fields
+    document.getElementById('breadthInclusivenessInput').value = '';
+    document.querySelectorAll('input[name="dimensionality"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[name="stabilityTime"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[name="stabilitySituation"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[name="stabilityCases"]').forEach(r => r.checked = false);
+    // Hide AI suggestion
+    document.getElementById('aiThemeSuggestion').classList.add('d-none');
+
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    if (!step1Data) {
+        console.warn('No step 1 data found');
+        return;
+    }
+    if (step1Data.panel4) {
+        delete step1Data.panel4; // Remove panel 4 data
+    }
+    if (step1Data.aiPanel4) {
+        delete step1Data.aiPanel4; // Remove AI theme suggestion data
+    }
+    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+    console.log('Panel 4 data reset');
+}
+
 // ***********************************    Panel 4 AI Suggestion ***********************************************
 // todo maybe add optional Comments on the panel
 
@@ -832,11 +944,12 @@ Given the construct definition, return:
         const response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
         
         try{
-            const match = input.match(/```json\s*({[\s\S]*?})\s*```/);
+            const match = response[0].match(/```json\s*({[\s\S]*?})\s*```/);
+            let responseJson = null;
             if (match) {
-                const responseJson = JSON.parse(match[1]);
+                responseJson = JSON.parse(match[1]);
             } else {
-                const responseJson = JSON.parse(response[0]);
+                responseJson = JSON.parse(response[0]);
             }
             // Save AI suggestion into aiPanel4
             const { attributes, breadthInclusiveness, dimensionality, stabilityTime, stabilitySituation, stabilityCases, justification } = responseJson;
@@ -844,13 +957,13 @@ Given the construct definition, return:
                 throw new Error('Incomplete AI response');
             }
             if (!step1Data.aiPanel4) step1Data.aiPanel4 = {};
-            step1Data.aiPanel4.attributes = responseJson.attributes;
-            step1Data.aiPanel4.breadthInclusiveness = responseJson.breadthInclusiveness;
-            step1Data.aiPanel4.dimensionality = responseJson.dimensionality;
-            step1Data.aiPanel4.stabilityTime = responseJson.stabilityTime;
-            step1Data.aiPanel4.stabilitySituation = responseJson.stabilitySituation;
-            step1Data.aiPanel4.stabilityCases = responseJson.stabilityCases;
-            step1Data.aiPanel4.justification = responseJson.justification;
+            step1Data.aiPanel4.attributes = attributes;
+            step1Data.aiPanel4.breadthInclusiveness = breadthInclusiveness;
+            step1Data.aiPanel4.dimensionality = dimensionality;
+            step1Data.aiPanel4.stabilityTime = stabilityTime;
+            step1Data.aiPanel4.stabilitySituation = stabilitySituation;
+            step1Data.aiPanel4.stabilityCases = stabilityCases;
+            step1Data.aiPanel4.justification = justification;
             
             await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
             
@@ -858,8 +971,6 @@ Given the construct definition, return:
         }
         catch (err) {
             if (tries < 2) {
-
-                console.log(response[0]);
                 console.error('Error processing AI response:', err, 'Response: ',response[0]);
                 window.displayInfo('info', 'AI suggestion format is invalid. Trying again...');
                 return await getThemeAISuggestion(tries + 1);
@@ -933,77 +1044,282 @@ async function takeThemeAISuggestion() {
     });
 }
 
-// Save Panel 4 data
-async function saveTheme() {
-    const step1Data = await window.dataStorage.getData('data_step_1');
-    if (!step1Data.panel4) step1Data.panel4 = {};
-    // Attributes
-    // Collect attributes including indication
-    const attrs = Array.from(attributesContainer.querySelectorAll('.attribute-row')).map(row => ({
-        name: row.querySelector('.attribute-name').value.trim(),
-        classification: row.querySelector('.attribute-classification').value,
-        indication: row.querySelector('.attribute-indication').value,
-        core: row.querySelector('.attribute-core').checked
-    })).filter(a => a.name);
-    step1Data.panel4.attributes = attrs;
-    // Breadth & Inclusiveness
-    step1Data.panel4.breadthInclusiveness = document.getElementById('breadthInclusivenessInput')?.value.trim() || null;
-    // Dimensionality
-    step1Data.panel4.dimensionality = (() => {
-        const sel = document.querySelector('input[name="dimensionality"]:checked');
-        return sel ? sel.value : null;
-    })();
-    // Stability via radios
-    step1Data.panel4.stabilityTime = document.querySelector('input[name="stabilityTime"]:checked')?.value || null;
-    step1Data.panel4.stabilitySituation = document.querySelector('input[name="stabilitySituation"]:checked')?.value || null;
-    step1Data.panel4.stabilityCases = document.querySelector('input[name="stabilityCases"]:checked')?.value || null;
-
-    // Ensure all required data is present before saving
-    if (!step1Data.panel4.attributes.length) {
-        window.displayInfo('warning', 'Please add at least one attribute before saving.');
-        return;
-    }
-    if (!step1Data.panel4.breadthInclusiveness) {
-        window.displayInfo('warning', 'Please provide breadth and inclusiveness information before saving.');
-        return;
-    }
-    if (!step1Data.panel4.dimensionality) {
-        window.displayInfo('warning', 'Please select dimensionality before saving.');
-        return;
-    }
-    if (!step1Data.panel4.stabilityTime || !step1Data.panel4.stabilitySituation || !step1Data.panel4.stabilityCases) {
-        window.displayInfo('warning', 'Please complete all stability fields before saving.');
-        return;
-    }
-    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
-    window.displayInfo('success', 'Conceptual theme saved successfully.');
-}
-
-async function resetPanel4() {
-    // Clear all attributes
-    attributesContainer.innerHTML = '';
-    // Reset other fields
-    document.getElementById('breadthInclusivenessInput').value = '';
-    document.querySelectorAll('input[name="dimensionality"]').forEach(r => r.checked = false);
-    document.querySelectorAll('input[name="stabilityTime"]').forEach(r => r.checked = false);
-    document.querySelectorAll('input[name="stabilitySituation"]').forEach(r => r.checked = false);
-    document.querySelectorAll('input[name="stabilityCases"]').forEach(r => r.checked = false);
-    // Hide AI suggestion
-    document.getElementById('aiThemeSuggestion').classList.add('d-none');
-
-    const step1Data = await window.dataStorage.getData('data_step_1');
-    if (!step1Data) {
-        console.warn('No step 1 data found');
-        return;
-    }
-    if (step1Data.panel4) {
-        delete step1Data.panel4; // Remove panel 4 data
-    }
-    if (step1Data.aiPanel4) {
-        delete step1Data.aiPanel4; // Remove AI theme suggestion data
-    }
-    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
-    console.log('Panel 4 data reset');
-}
 
 // todo multidimensionality. schaue obsidion meeting notizen
+
+// ***********************************    Panel 5: Subdimensions    ***********************************************
+
+// Panel 5 globals
+let subdimensions = [];
+let allAttrs = [];
+
+// Expose functions globally
+window.addSubdimension = addSubdimension;
+window.saveSubdimensions = saveSubdimensions;
+window.addSubAttr = addSubAttr;
+// Expose delete function for subdimensions
+window.deleteSubdimension = deleteSubdimension;
+// Expose AI suggestion functions for Panel 5
+window.getSubdimAISuggestion = getSubdimAISuggestion;
+window.showSubdimAISuggestion = showSubdimAISuggestion;
+window.takeSubdimAISuggestion = takeSubdimAISuggestion;
+
+addSubdimensionButton.addEventListener('click', addSubdimension);
+
+async function renderSubdimensions() {
+    const stepData = await window.dataStorage.getData('data_step_1') || {};
+    allAttrs = stepData?.panel4?.attributes || [];
+    subdimensionsContainer.innerHTML = '';
+    subdimensions.forEach((sd, idx) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'card mb-3 p-3';
+        wrapper.dataset.index = idx;
+        // build dropdown options excluding already-selected attributes
+        const availableOpts = allAttrs.filter(attrObj => !sd.attributes.includes(attrObj.name));
+        const optionsHtml = availableOpts.map(a => `<option value="${a.name}">${a.name}</option>`).join('');
+        wrapper.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0">Subdimension ${idx + 1}</h5>
+          <button class="btn btn-outline-danger btn-sm" type="button" onclick="deleteSubdimension(${idx})">&times;</button>
+        </div>
+        <input type="text" class="form-control mb-2" placeholder="Name" id="subdim-name-${idx}" value="${sd.name || ''}" />
+        <textarea class="form-control mb-2" placeholder="Definition" id="subdim-def-${idx}" rows="3">${sd.definition || ''}</textarea>
+        <div id="subattrs-${idx}" class="mb-2"></div>
+        <div class="input-group mb-2">
+            <select id="subdim-select-${idx}" class="form-select">
+            ${optionsHtml}
+            </select>
+            <button class="btn btn-outline-secondary" type="button" onclick="addSubAttr(${idx})">
+            <i class="bi bi-plus-lg"></i> Add Attribute
+            </button>
+        </div>
+        `;
+        subdimensionsContainer.appendChild(wrapper);
+        // display current attributes as badges
+        sd.attributes = sd.attributes || [];
+        const attrsDiv = document.getElementById(`subattrs-${idx}`);
+        sd.attributes.forEach(attr => {
+        // Badge with embedded close button
+        const badgeWrapper = document.createElement('span');
+        badgeWrapper.className = 'badge bg-secondary me-1 d-inline-flex align-items-center';
+        badgeWrapper.textContent = attr;
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn-close btn-close-white btn-sm ms-1';
+        removeBtn.onclick = () => {
+            subdimensions[idx].attributes = subdimensions[idx].attributes.filter(a => a !== attr);
+            renderSubdimensions();
+        };
+        badgeWrapper.appendChild(removeBtn);
+        attrsDiv.appendChild(badgeWrapper);
+        });
+    });
+    showSubdimAISuggestion()
+}
+
+function addSubdimension() {
+  subdimensions.push({ name: '', definition: '', attributes: [] });
+  renderSubdimensions();
+}
+
+function addSubAttr(subIdx) {
+  const selectEl = document.getElementById(`subdim-select-${subIdx}`);
+  const val = selectEl.value;
+  if (val && !subdimensions[subIdx].attributes.includes(val)) {
+    subdimensions[subIdx].attributes.push(val);
+    renderSubdimensions();
+  }
+}
+
+// Delete a subdimension by index
+function deleteSubdimension(subIdx) {
+  subdimensions.splice(subIdx, 1);
+  renderSubdimensions();
+}
+
+async function saveSubdimensions() {
+  // collect current values
+  subdimensions.forEach((sd, idx) => {
+    sd.name = document.getElementById(`subdim-name-${idx}`).value.trim();
+    sd.definition = document.getElementById(`subdim-def-${idx}`).value.trim();
+    const inputs = Array.from(document.querySelectorAll(`#subattrs-${idx} .badge`));
+    sd.attributes = inputs.map(i => i.textContent.trim()).filter(v => v);
+  });
+  // save to IndexedDB
+  const stepData = await window.dataStorage.getData('data_step_1') || {};
+  stepData.panel5 = { subdimensions };
+  await window.dataStorage.storeData('data_step_1', stepData, false);
+  window.displayInfo('success', 'Subdimensions saved successfully!');
+}
+
+async function resetPanel5() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+
+    if (step1Data.panel5) {
+        delete step1Data.panel5; // Remove panel 5 data
+    }
+    if (step1Data.aiPanel5) {
+        delete step1Data.aiPanel5; // Remove AI subdimension suggestion data
+    }
+    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+    console.log('Panel 5 data reset');
+  // Clear subdimensions
+  subdimensions = [];
+  renderSubdimensions();
+}
+
+// ***********************************    Panel 5 AI Suggestion ***********************************************
+
+async function getSubdimAISuggestion(tries = 0) {
+  const step1Data = await window.dataStorage.getData('data_step_1') || {};
+  const prompt = `
+You are assisting with construct conceptualization based on MacKenzie et al. (2011). 
+Your goal is to identify and define the construct's subdimensions. 
+
+---
+
+### Process You Must Follow
+
+1. **Understand the construct and the multidimensionality**
+   - Review the construct's integrated definition and attributes.
+   - MacKenzie et al. (2011, p. 296) state: 
+     "Many constructs are defined as having multiple, distinct sub-dimensions. 
+     If a construct is multidimensional, then it is important to define each of the sub-dimensions 
+     with the same care that was used in the case of the focal construct itself."
+
+2. **Apply diagnostic questions** (MacKenzie et al., 2011, p. 295):
+   - (a) How distinctive are the essential attributes from each other (apart from their common theme)?
+   - (b) Would eliminating any one of them restrict the domain of the construct in a significant way?
+
+3. **Group attributes into subdimensions**
+   - Combine attributes into meaningful clusters based on their conceptual similarity.
+   - Each subdimension should be conceptually distinct from the others but still aligned with the overall construct.
+
+4. **Define each subdimension**
+   - Provide a clear conceptual definition for each subdimension.
+   - Assign the attributes that belong to each subdimension.
+
+---
+### Input Data
+
+Construct name: **${step1Data.panel1.constructName}**
+
+Construct definition:  
+"${step1Data.panel2.savedDefinition || step1Data.panel2.resultingDefinition || step1Data.panel1.initialDefinition}"
+
+Attributes:  
+${JSON.stringify(step1Data?.panel4?.attributes, null, 2)}
+
+---
+
+Return your answer in **strict JSON format**:
+{
+  "diagnostic": {
+    "distinctiveness": "Brief answer to diagnostic question (a)",
+    "eliminationImpact": "Brief answer to diagnostic question (b)"
+  },
+  "subdimensions": [
+    {
+      "name": "Fitting Dimension Name",
+      "definition": "Short conceptual definition (1–2 sentences)",
+      "attributes": ["Attribute 1", "Attribute 2", "Attribute 3"]
+    }
+  ],
+  "justification": "Explain how the attributes were clustered and why they form a coherent subdimension.",
+}`;
+  try {
+    showLoading();
+    const response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
+    try {
+        const match = response[0].match(/```json\s*({[\s\S]*?})\s*```/);
+        let responseJson = null;
+        if (match) {
+            responseJson = JSON.parse(match[1]);
+        } else {
+            responseJson = JSON.parse(response[0]);
+        }
+        // Save AI suggestion
+        const { diagnostic, subdimensions, justification} = responseJson;
+        if (!diagnostic || !subdimensions || !justification) {
+            throw new Error('Incomplete AI response');
+        }
+        if(!step1Data.aiPanel5) step1Data.aiPanel5 = {};
+        step1Data.aiPanel5.diagnostic = diagnostic;
+        step1Data.aiPanel5.subdimensions = subdimensions;
+        step1Data.aiPanel5.justification = justification;
+        
+        await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+        showSubdimAISuggestion();
+    } catch (e) {
+         if (tries < 2) {
+                console.error('Error processing AI response:', e, 'Response: ',response[0]);
+                window.displayInfo('info', 'AI suggestion format is invalid. Trying again...');
+                return await getSubdimAISuggestion(tries + 1);
+            }
+      window.displayInfo('danger', 'AI subdimension suggestion failed to parse.');
+      return;
+        }
+    } catch (err) {
+        console.error('Error fetching subdimension AI suggestion:', err);
+        window.displayInfo('danger', 'Failed to retrieve AI subdimension suggestion.');
+    } finally {
+        hideLoading();
+    }   
+}
+
+/**
+ * Display the AI subdimension suggestion UI (Panel 5)
+ */
+async function showSubdimAISuggestion() {
+  const step1Data = await window.dataStorage.getData('data_step_1');
+  const container = document.getElementById('aiSubdimSuggestion');
+  const textEl = document.getElementById('aiSubdimSuggestionText');
+  // Hide if no suggestion
+  if (!step1Data?.aiPanel5?.subdimensions) {
+    container.classList.add('d-none');
+    textEl.innerHTML = '';
+    return;
+  }
+  // Render suggestion
+  const suggestion = step1Data.aiPanel5.subdimensions;
+  textEl.innerHTML = `<h4>AI Suggestion</h4>
+  <strong>Distinctiveness:</strong> ${step1Data.aiPanel5?.diagnostic?.distinctiveness}<br/>
+    <strong>Elimination Impact:</strong> ${step1Data.aiPanel5?.diagnostic?.eliminationImpact}<br/>
+  <strong>Justification:</strong> ${step1Data.aiPanel5.justification}<hr/>
+  `
+  + suggestion.map((sd, i) =>
+    `<strong>Subdimension ${i+1}</strong>: <em>${sd.name}</em><br/>` +
+    `Definition: ${sd.definition}<br/>` +
+    `Attributes: ${sd.attributes.join(', ')}<hr/>`
+  ).join('');
+  container.classList.remove('d-none');
+}
+
+/**
+ * Take and apply AI subdimension suggestion (Panel 5)
+ */
+async function takeSubdimAISuggestion() {
+  const step1Data = await window.dataStorage.getData('data_step_1');
+  if (!step1Data?.aiPanel5?.subdimensions || !step1Data.aiPanel5.subdimensions.length) {
+    window.displayInfo('warning', 'No AI subdimension suggestion available. Please generate one first.');
+    return;
+  }
+  // Confirm overwrite if existing data present
+  if (step1Data.panel5) {
+    const userConfirmed = await customConfirm({
+      title: '⚠️ Overwrite Subdimensions? ',
+      message: 'This will overwrite any existing subdimension definitions.<br/>Do you want to continue?',
+      confirmText: 'Yes, overwrite',
+      cancelText: 'No, keep existing'
+    });
+    if (!userConfirmed) return;
+  }
+  // Copy suggestion into panel5 storage
+  step1Data.panel5 = { "subdimensions": step1Data.aiPanel5.subdimensions };
+  await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+  // Apply to UI
+  subdimensions = step1Data.aiPanel5.subdimensions;
+  renderSubdimensions().then(() => {
+    saveSubdimensions();
+  });
+}

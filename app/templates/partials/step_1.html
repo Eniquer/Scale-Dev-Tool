@@ -300,6 +300,43 @@
                 </div>
 
             </div>
+        </div> <!-- end of panel 4 -->
+
+        <!-- Panel 5: Subdimensions -->
+        <div class="card mb-4 d-none" id="step1panel5">
+          <div class="card-body">
+            <h3 class="mb-4">Specify Subdimensions</h3>
+            <p>Define subdimensions for your construct. For each subdimension, provide a name, definition, and attributes.</p>
+            <!-- AI Suggestion for Subdimensions -->
+            <button class="btn btn-outline-info my-3" id="aiSubdimSuggestionButton" onclick="getSubdimAISuggestion()" aria-label="Get AI Subdimensions Suggestion" title="Get AI Subdimensions Suggestion">
+              <i class="bi bi-lightbulb"></i>
+            </button>
+            <div class="row mb-4 d-none" id="aiSubdimSuggestion">
+              <div class="container-fluid">
+                <div class="card text-bg-light">
+                  <div class="card-body">
+                    <div class="row">
+                      <p id="aiSubdimSuggestionText"></p>
+                    </div>
+                    <div class="row">
+                      <div class="col-auto ms-auto">
+                        <button class="btn btn-outline-secondary" onclick="takeSubdimAISuggestion()">Take</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="subdimensionsContainer"></div>
+            <button class="btn btn-outline-secondary" type="button" id="addSubdimensionButton">
+              <i class="bi bi-plus-lg"></i> Add Subdimension
+            </button>
+            <div class="row my-3">
+              <div class="col-auto ms-auto">
+                <button class="btn btn-primary" id="saveSubdimensionsButton" onclick="saveSubdimensions()"><i class="bi bi-check-lg"></i></button>
+              </div>
+            </div>
+          </div>
         </div>
     </div>
 

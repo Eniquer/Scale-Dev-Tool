@@ -10,7 +10,7 @@ function displayInfo(type = 'info', message = '') {
         type = "danger"; // Use 'danger' for error messages
     }
 
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show my-3 ms-auto`;
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show my-3`;
     alertDiv.style.opacity = '0'; // Slightly transparent for better visibility
     alertDiv.style.width = "fit-content"; // Adjust width to fit content
     alertDiv.style.maxWidth = "100%"; // Prevent overflow on small screens
@@ -53,10 +53,12 @@ window.hideLoading = hideLoading;
 
 // Scroll utility: scroll to a given element
 function scrollToElement(target, container = document.getElementById("area1")) {
+    
     if (container === window) {
-      target.scrollIntoView({ behavior: 'smooth' });
-      return;
+        target.scrollIntoView({ behavior: 'smooth' });
+        return;
     } 
+    if (target.offsetTop < 10) return;
     container.scrollTo({ top: target.offsetTop - 50, behavior: 'smooth' });
 }
 window.scrollToElement = scrollToElement;

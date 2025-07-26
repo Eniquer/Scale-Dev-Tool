@@ -321,8 +321,6 @@ class ProjectManager {
                     }
                 }
             const activeProjectId = await this.storage.getData('activeProject');
-            console.log(`Active project ID retrieved: ${activeProjectId}`);
-
 
             // If no active project ID is found, initialize with default project
             if (activeProjectId === undefined || activeProjectId === -1) {
