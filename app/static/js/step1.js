@@ -11,6 +11,15 @@ window.showThemeAISuggestion = showThemeAISuggestion;
 window.takeThemeAISuggestion = takeThemeAISuggestion;
 // window.analyseDefinition = analyseDefinition;
 
+// save buttons
+const saveBtns = {
+    "1": document.getElementById('saveContinueButton'),
+    "2": document.getElementById('saveDefinitionButton'),
+    "3": document.getElementById('submitDomainButton'),
+    "4": document.getElementById('saveThemeButton'),
+    "5": document.getElementById('saveSubdimensionsButton')
+}
+
 const domPanel1 = document.getElementById('step1panel1');
 const domPanel2 = document.getElementById('step1panel2');
 const domPanel3 = document.getElementById('step1panel3');
@@ -121,23 +130,28 @@ function syncData() {
 
 // ***********************************    Panel 1 Functions    ***********************************************
 
-async function saveConstructData() {
+async function saveConstructData(dontSave = false) {
     const constructName = document.getElementById('constructName')?.value?.trim();
     const initialDefinition = document.getElementById('initialDefinition')?.value?.trim();
     
-    if (!constructName || !initialDefinition) {
-        window.displayInfo('warning', 'Please fill in both the construct name and initial definition before saving.');
-        return false;
-    }
-
+    
     const constructData = {
         "constructName": constructName,
         "initialDefinition": initialDefinition,
         "timestamp": new Date().toISOString()
     };
     let step1Data = {}
-    step1Data.panel1 = constructData; 
-
+    step1Data.panel1 = constructData;
+    
+    if (dontSave) {
+        delete step1Data.panel1.timestamp
+        return {...step1Data.panel1}; // Return data without saving
+    }
+    
+    if (!constructName || !initialDefinition) {
+        window.displayInfo('warning', 'Please fill in both the construct name and initial definition before saving.');
+        return false;
+    }
     // Store in IndexedDB using the renamed DataStorage
     try {
         await window.dataStorage.storeData(
@@ -361,21 +375,42 @@ async function chooseDefinition() {
 
 }
 
-async function saveDefinition() {
+async function saveDefinition(dontSave = false) {
     const resultingDefinition = resultingDefinitionTextarea?.value?.trim();
-    if (!resultingDefinition) {
-        window.displayInfo('warning', 'Please enter a resulting definition before saving.');
-        return;
-    }
+    
+
+    
     const step1Data = await window.dataStorage.getData('data_step_1');
 
     // Check for conflicting definitions
     // console.log(step1Data.panel2.savedDefinition && (step1Data.panel2.savedDefinition !== resultingDefinition));
     // console.log(step1Data.panel2.resultingDefinition && (step1Data.panel2.resultingDefinition !== resultingDefinition));
 
-    let currentDefinition = step1Data.panel2.savedDefinition || step1Data.panel2.resultingDefinition;
+    const currentDefinition = step1Data.panel2.savedDefinition || step1Data.panel2.resultingDefinition;
+    const prevDefinition = step1Data.panel2.savedDefinition
 
-     
+
+    if (step1Data.panel2) {
+        step1Data.panel2.savedDefinition = resultingDefinition;
+        step1Data.panel2.savedSelectedDefinitions = step1Data.panel2.selectedDefinitions;
+    }
+
+    if (step1Data.panel3) {
+        delete step1Data.panel3; // Remove panel 3 data if it exists
+    }
+
+    if(dontSave) {
+        return {...step1Data.panel2}; // Return data without saving
+    }
+
+    if (!resultingDefinition) {
+        window.displayInfo('warning', 'Please enter a resulting definition before saving.');
+        return;
+    }
+    if (prevDefinition === resultingDefinition) {
+        window.displayInfo('info', "No changes found on Definition.");
+        return
+    }
     if (currentDefinition !== resultingDefinition) {
         const userConfirmed = await customConfirm({
             title: '⚠️ Overwrite Definition?',
@@ -390,19 +425,8 @@ async function saveDefinition() {
         }
     }
 
-    if (step1Data.panel2.savedDefinition === resultingDefinition) {
-        window.displayInfo('info', "No changes found on Definition.");
-        return
-    }
 
-    if (step1Data.panel2) {
-        step1Data.panel2.savedDefinition = resultingDefinition;
-        step1Data.panel2.savedSelectedDefinitions = step1Data.panel2.selectedDefinitions;
-    }
-
-    if (step1Data.panel3) {
-        delete step1Data.panel3; // Remove panel 3 data if it exists
-    }
+    
     
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
     await resetPanel4(); // Reset panel 4 data
@@ -526,7 +550,7 @@ function getSelectedValue(name) {
     return null;
 }
 
-async function submitDomain(dontSave = false) {
+async function saveDomainData(dontSave = false) {
     const step1Data = await window.dataStorage.getData('data_step_1');
     const property = getSelectedValue("property");
     const entity = getSelectedValue("entity");
@@ -660,7 +684,7 @@ async function showAISuggestion() {
 
 async function takeAISuggestion() {
     const step1Data = await window.dataStorage.getData('data_step_1');
-    panelData = await submitDomain(true); // Get the current panel 3 data without saving
+    panelData = await saveDomainData(true); // Get the current panel 3 data without saving
     if ((step1Data.panel3 && step1Data.panel3.property && step1Data.panel3.entity)|| panelData.property || panelData.entity || panelData.propertyExplanation || panelData.entityExplanation) {
         // If AI suggestion already exists, confirm overwrite
         const userConfirmed = await customConfirm({
@@ -823,10 +847,7 @@ async function saveTheme(dontSave = false) {
     step1Data.panel4.stabilitySituation = document.querySelector('input[name="stabilitySituation"]:checked')?.value || null;
     step1Data.panel4.stabilityCases = document.querySelector('input[name="stabilityCases"]:checked')?.value || null;
 
-    if (dontSave) {
-        return step1Data.panel4;
-        
-    }
+    if (dontSave) {return {...step1Data.panel4}}
     // Ensure all required data is present before saving
     if (!step1Data.panel4.attributes.length) {
         window.displayInfo('warning', 'Please add at least one attribute before saving.');
@@ -1207,13 +1228,12 @@ async function saveSubdimensions(dontSave=false) {
   resultSubdimensions = subdimensions.filter(sd => sd.name || sd.definition || sd.attributes.length > 0);
   // save to IndexedDB
   if (dontSave) {
-    return {"subdimensions": resultSubdimensions};
+    return {"subdimensions": [...resultSubdimensions]};
   }
   if (resultSubdimensions.length === 0) {
     window.displayInfo('warning', 'Please add at least one subdimension before saving.');
     return;
 
-    // todo when saved as unidimensional. reset panel 5
     
   }
   const step1Data = await window.dataStorage.getData('data_step_1') || {};
@@ -1406,4 +1426,72 @@ async function takeSubdimAISuggestion(overwrite = true) {
   // Apply to UI
   renderSubdimensions();
 }
+
+// ***********************************   Continue to Step 4    ***********************************************#
+
+// todo optional: review every result using AI and get results
+// todo optional: implement check if everything is saved before continuing/closing/changing project -> every save method. option to store on seperate var and then compare both storage and seperate var. Check saveTheme() for example if saveTheme(true) it returns only the data
+// todo check when warning save p4 that p5 data gets lost
+
+const continueBtn = document.getElementById('continueStep1Btn');
+if (continueBtn) {
+    continueBtn.addEventListener('click', async () => {
+        const step1Data = await window.dataStorage.getData('data_step_1');
+        if (!step1Data || !step1Data.panel1 || !step1Data.panel2 || !step1Data.panel3 || !step1Data.panel4 || !step1Data.panel5) {
+            console.warn('No step 1 data found');
+            continueBtn.disabled = true;
+            return;
+        }
+            
+        // persist any unsaved data if needed, then navigate:
+        window.location.href = '/step2';
+  });
+}
+
+async function checkIfSaved(panelId){
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    panelName = {
+        1: 'Panel: Construct Name',
+        2: 'Panel: Definition',
+        3: 'Panel: Conceptual Domain',
+        4: 'Panel: Conceptual Theme',
+        5: 'Panel: Subdimensions'
+    }
+    saveMethod = {
+        1: saveConstructData,
+        2: saveDefinition,
+        3: saveDomainData,
+        4: saveTheme,
+        5: saveSubdimensions
+    }
+    let availableData = await saveMethod[panelId](true); // get data without saving
+    let savedData = step1Data[`panel${panelId}`]
+    
+    if (panelId == 1) {
+        delete savedData.timestamp
+    }
+    // todo wrong bei panel5
+    
+    console.log(`Checking saved state for ${panelName[panelId]}:`, savedData, availableData);
+    if (savedData && (JSON.stringify(savedData) !== JSON.stringify(availableData))) {
+        return false;
+    }
+    return true;
+}
+
+async function checkAllSavedState(){
+    results = {}
+    for (let index = 1; index <= 5; index++) {
+        var isElementSaved = await checkIfSaved(index);
+        saveBtns[index.toString()].disabled = isElementSaved;
+        results[`panel${index}`] = isElementSaved;
+    }
+    return results;
+}
+
+async function anyUnsavedChanges() {
+    const savedState = await checkAllSavedState();
+    return Object.values(savedState).some(v => !v);
+}
+
 
