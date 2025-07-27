@@ -526,18 +526,13 @@ function getSelectedValue(name) {
     return null;
 }
 
-async function submitDomain() {
+async function submitDomain(dontSave = false) {
     const step1Data = await window.dataStorage.getData('data_step_1');
     const property = getSelectedValue("property");
     const entity = getSelectedValue("entity");
     const propertyNote = document.getElementById("propertyExplanation").value.trim();
     const entityNote = document.getElementById("entityExplanation").value.trim();
 
-    if (!property || !entity) {
-        window.displayInfo('warning', 'Please select both a property and an entity before saving.');
-        return;
-        
-    }
 
     if (!step1Data.panel3) {
         step1Data.panel3 = {};        
@@ -548,6 +543,13 @@ async function submitDomain() {
     step1Data.panel3.entity = entity;
     step1Data.panel3.propertyExplanation = propertyNote || null;
     step1Data.panel3.entityExplanation = entityNote || null;
+    if (dontSave) return {...step1Data.panel3};
+    
+    if (!property || !entity) {
+        window.displayInfo('warning', 'Please select both a property and an entity before saving.');
+        return;
+        
+    }
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
     console.log('Panel 3 data saved');
     // Display success message
@@ -785,7 +787,7 @@ async function loadPanel4() {
 
 
 // Save Panel 4 data
-async function saveTheme() {
+async function saveTheme(dontSave = false) {
     const step1Data = await window.dataStorage.getData('data_step_1');
     if (!step1Data.panel4) step1Data.panel4 = {};
     // Attributes
@@ -795,7 +797,7 @@ async function saveTheme() {
         classification: row.querySelector('.attribute-classification').value,
         indication: row.querySelector('.attribute-indication').value,
         core: row.querySelector('.attribute-core').checked
-    })).filter(a => a.name);
+    })).filter(a => a.name); // Filter out empty attributes
 
     const prev = step1Data.panel4?.attributes || [];
     // simplest deep-compare for JSON‐serializable arrays:
@@ -816,6 +818,11 @@ async function saveTheme() {
     step1Data.panel4.stabilitySituation = document.querySelector('input[name="stabilitySituation"]:checked')?.value || null;
     step1Data.panel4.stabilityCases = document.querySelector('input[name="stabilityCases"]:checked')?.value || null;
 
+    if (dontSave) {
+        console.log('Skipping save as requested');
+        return step1Data.panel4;
+        
+    }
     // Ensure all required data is present before saving
     if (!step1Data.panel4.attributes.length) {
         window.displayInfo('warning', 'Please add at least one attribute before saving.');
@@ -1137,7 +1144,7 @@ function deleteSubdimension(subIdx) {
   renderSubdimensions();
 }
 
-async function saveSubdimensions() {
+async function saveSubdimensions(dontSave=false) {
   // collect current values
   subdimensions.forEach((sd, idx) => {
     sd.name = document.getElementById(`subdim-name-${idx}`).value.trim();
@@ -1145,9 +1152,20 @@ async function saveSubdimensions() {
     const inputs = Array.from(document.querySelectorAll(`#subattrs-${idx} .badge`));
     sd.attributes = inputs.map(i => i.textContent.trim()).filter(v => v);
   });
+  resultSubdimensions = subdimensions.filter(sd => sd.name || sd.definition || sd.attributes.length > 0);
   // save to IndexedDB
+  if (dontSave) {
+    return {"subdimensions": resultSubdimensions};
+  }
+  if (resultSubdimensions.length === 0) {
+    window.displayInfo('warning', 'Please add at least one subdimension before saving.');
+    return;
+
+    // todo when saved as unidimensional. reset panel 5
+    
+  }
   const stepData = await window.dataStorage.getData('data_step_1') || {};
-  stepData.panel5 = { subdimensions };
+  stepData.panel5 = {"subdimensions": resultSubdimensions };
   await window.dataStorage.storeData('data_step_1', stepData, false);
   window.displayInfo('success', 'Subdimensions saved successfully!');
 }
