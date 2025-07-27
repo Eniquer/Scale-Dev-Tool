@@ -1036,7 +1036,7 @@ async function takeThemeAISuggestion(fill= false, onlyAttributes = false) {
             !panel.stabilityCases;
     }
 
-    if ((step1Data.panel4 || isPanelEmpty(dataPanel4)) && !fill && !onlyAttributes) {
+    if ((step1Data.panel4 || !isPanelEmpty(dataPanel4)) && !fill && !onlyAttributes) {
         // If panel4 already exists, confirm overwrite
         const userConfirmed = await customConfirm({
             title: '⚠️ Overwrite AI Theme Suggestion?',
