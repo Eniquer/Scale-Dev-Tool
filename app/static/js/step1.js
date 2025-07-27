@@ -803,7 +803,8 @@ async function saveTheme(dontSave = false) {
 
     const prev = step1Data.panel4?.attributes || [];
     // simplest deep-compare for JSON‐serializable arrays:
-    const resetP5 = JSON.stringify(attrs) !== JSON.stringify(prev);
+    
+    let resetP5 = JSON.stringify(attrs) !== JSON.stringify(prev);
 
 
 
@@ -811,17 +812,18 @@ async function saveTheme(dontSave = false) {
     // Breadth & Inclusiveness
     step1Data.panel4.breadthInclusiveness = document.getElementById('breadthInclusivenessInput')?.value.trim() || null;
     // Dimensionality
+    const prevDimensionality = step1Data?.panel4?.dimensionality;
     step1Data.panel4.dimensionality = (() => {
         const sel = document.querySelector('input[name="dimensionality"]:checked');
         return sel ? sel.value : null;
     })();
+    if (prevDimensionality !== step1Data.panel4.dimensionality) resetP5 = true; // If dimensionality changed, reset panel 5
     // Stability via radios
     step1Data.panel4.stabilityTime = document.querySelector('input[name="stabilityTime"]:checked')?.value || null;
     step1Data.panel4.stabilitySituation = document.querySelector('input[name="stabilitySituation"]:checked')?.value || null;
     step1Data.panel4.stabilityCases = document.querySelector('input[name="stabilityCases"]:checked')?.value || null;
 
     if (dontSave) {
-        console.log('Skipping save as requested');
         return step1Data.panel4;
         
     }
@@ -842,7 +844,27 @@ async function saveTheme(dontSave = false) {
         window.displayInfo('warning', 'Please complete all stability fields before saving.');
         return;
     }
-    
+
+    const storedData = await window.dataStorage.getData('data_step_1');
+
+    if (storedData.panel4) {
+        let messageText = "This will overwrite any stored theme data.<br/>Do you want to continue?.";
+        if (resetP5 && prevDimensionality === "Multidimensional"){
+            messageText = "You have changed the attributes or dimensionality of the construct. This will reset Panel 5 and all its data.";
+        } 
+
+        // If panel4 already exists, confirm overwrite
+        const userConfirmed = await customConfirm({
+            title: '⚠️ Overwrite stored Data?',
+            message: messageText,
+            confirmText: 'Yes, overwrite',
+            cancelText: 'No, keep it'
+        });
+        if (!userConfirmed) {
+            console.log('User cancelled data storage — existing data preserved');
+            return;
+        }
+    }
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
     window.displayInfo('success', 'Conceptual theme saved successfully.');
     if (resetP5) {
@@ -1036,7 +1058,7 @@ async function takeThemeAISuggestion(fill= false, onlyAttributes = false) {
             !panel.stabilityCases;
     }
 
-    if ((step1Data.panel4 || !isPanelEmpty(dataPanel4)) && !fill && !onlyAttributes) {
+    if (!isPanelEmpty(dataPanel4) && !fill && !onlyAttributes) {
         // If panel4 already exists, confirm overwrite
         const userConfirmed = await customConfirm({
             title: '⚠️ Overwrite AI Theme Suggestion?',
@@ -1104,8 +1126,8 @@ window.takeSubdimAISuggestion = takeSubdimAISuggestion;
 addSubdimensionButton.addEventListener('click', addSubdimension);
 
 async function renderSubdimensions() {
-    const stepData = await window.dataStorage.getData('data_step_1') || {};
-    allAttrs = stepData?.panel4?.attributes || [];
+    const step1Data = await window.dataStorage.getData('data_step_1') || {};
+    allAttrs = step1Data?.panel4?.attributes || [];
     subdimensionsContainer.innerHTML = '';
     subdimensions.forEach((sd, idx) => {
         const wrapper = document.createElement('div');
@@ -1194,9 +1216,19 @@ async function saveSubdimensions(dontSave=false) {
     // todo when saved as unidimensional. reset panel 5
     
   }
-  const stepData = await window.dataStorage.getData('data_step_1') || {};
-  stepData.panel5 = {"subdimensions": resultSubdimensions };
-  await window.dataStorage.storeData('data_step_1', stepData, false);
+  const step1Data = await window.dataStorage.getData('data_step_1') || {};
+  if (step1Data.panel5) {
+    const userConfirmed = await customConfirm({
+      title: '⚠️ Overwrite Subdimensions? ',
+      message: 'This will overwrite any stored subdimension definitions.<br/>Do you want to continue?',
+      confirmText: 'Yes, overwrite',
+      cancelText: 'No, keep existing'
+    });
+    if (!userConfirmed) return;
+  }
+  
+  step1Data.panel5 = {"subdimensions": resultSubdimensions };
+  await window.dataStorage.storeData('data_step_1', step1Data, false);
   window.displayInfo('success', 'Subdimensions saved successfully!');
 }
 
@@ -1354,7 +1386,7 @@ async function takeSubdimAISuggestion(overwrite = true) {
   }
   resultSubdimension = await saveSubdimensions(true); // Save current subdimensions to check for changes
   // Confirm overwrite if existing data present
-  if ((step1Data.panel5 || resultSubdimension.subdimensions?.length !== 0) && overwrite) {
+  if ((resultSubdimension.subdimensions?.length !== 0) && overwrite) {
     const userConfirmed = await customConfirm({
       title: '⚠️ Overwrite Subdimensions? ',
       message: 'This will overwrite any existing subdimension definitions.<br/>Do you want to continue?',
@@ -1374,3 +1406,4 @@ async function takeSubdimAISuggestion(overwrite = true) {
   // Apply to UI
   renderSubdimensions();
 }
+
