@@ -197,7 +197,13 @@
                                 </div>
                                 <div class="row">
                                     <div class="col-auto ms-auto">
-                                        <button class="btn btn-outline-secondary" onclick="takeThemeAISuggestion()">Take</button>
+                                        <button class="btn btn-outline-secondary" onclick="takeThemeAISuggestion(false,true)">Add Attributes</button>
+                                    </div>
+                                    <div class="col-auto">
+                                        <button class="btn btn-outline-secondary" onclick="takeThemeAISuggestion(true)">Fill</button>
+                                    </div>
+                                    <div class="col-auto">
+                                        <button class="btn btn-outline-secondary" onclick="takeThemeAISuggestion()" tooltip="Take AI Suggestion">Take</button>
                                     </div>
                                 </div>
                             </div>
@@ -319,9 +325,12 @@
                       <p id="aiSubdimSuggestionText"></p>
                     </div>
                     <div class="row">
-                      <div class="col-auto ms-auto">
-                        <button class="btn btn-outline-secondary" onclick="takeSubdimAISuggestion()">Take</button>
-                      </div>
+                        <div class="col-auto ms-auto">
+                            <button class="btn btn-outline-secondary" onclick="takeSubdimAISuggestion(false)">Add</button>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-outline-secondary" onclick="takeSubdimAISuggestion()">Take</button>
+                        </div>
                     </div>
                   </div>
                 </div>
@@ -337,6 +346,16 @@
               </div>
             </div>
           </div>
+        </div>
+
+                <!-- after the end of Panel 5 markup, just before closing the form or container -->
+        <div class="d-flex justify-content-end mt-3">
+          <button
+            id="continueStep1Btn"
+            type="button"
+            class="btn btn-success">
+            Continue to Next Step
+          </button>
         </div>
     </div>
 

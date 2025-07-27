@@ -533,7 +533,7 @@ async function submitDomain(dontSave = false) {
     const propertyNote = document.getElementById("propertyExplanation").value.trim();
     const entityNote = document.getElementById("entityExplanation").value.trim();
 
-
+    
     if (!step1Data.panel3) {
         step1Data.panel3 = {};        
     }
@@ -660,7 +660,8 @@ async function showAISuggestion() {
 
 async function takeAISuggestion() {
     const step1Data = await window.dataStorage.getData('data_step_1');
-    if (step1Data.panel3 && step1Data.panel3.property && step1Data.panel3.entity) {
+    panelData = await submitDomain(true); // Get the current panel 3 data without saving
+    if ((step1Data.panel3 && step1Data.panel3.property && step1Data.panel3.entity)|| panelData.property || panelData.entity || panelData.propertyExplanation || panelData.entityExplanation) {
         // If AI suggestion already exists, confirm overwrite
         const userConfirmed = await customConfirm({
             title: '⚠️ Overwrite AI Suggestion?',
@@ -678,7 +679,6 @@ async function takeAISuggestion() {
     const property = step1Data.panel3.aiProperty;
     const entity = step1Data.panel3.aiEntity;
     updateRadio(property, entity);
-    submitDomain();
 }
 
 function updateRadio(property, entity, propertyExplanation = null, entityExplanation = null) {
@@ -758,13 +758,15 @@ if (addAttributeButton) {
 }
 
 // Load Panel 4 data into form
-async function loadPanel4() {
+async function loadPanel4(data = null) {
     const step1Data = await window.dataStorage.getData('data_step_1');
-    const panel4 = step1Data?.panel4;
+    let panel4 = data || step1Data?.panel4;
+
     // Clear existing rows
     attributesContainer.innerHTML = '';
-    if (panel4?.attributes?.length) {
-        panel4.attributes.forEach(attr => addAttributeRow(attr.name, attr.classification, attr.indication, attr.core));
+
+    if (panel4?.attributes.length) {
+        panel4?.attributes.forEach(attr => addAttributeRow(attr.name, attr.classification, attr.indication, attr.core));
     } else {
         addAttributeRow();
     }
@@ -1013,7 +1015,7 @@ async function showThemeAISuggestion() {
     document.getElementById('aiThemeSuggestion').classList.remove('d-none');
 }
 
-async function takeThemeAISuggestion() {
+async function takeThemeAISuggestion(fill= false, onlyAttributes = false) {
     const step1Data = await window.dataStorage.getData('data_step_1');   
     
     if (!step1Data || !step1Data.aiPanel4) {
@@ -1022,8 +1024,19 @@ async function takeThemeAISuggestion() {
         window.displayInfo('warning', 'No AI theme suggestion available. Please generate one first.');
         return;
     }
+    let dataPanel4 = await saveTheme(true) 
 
-    if (step1Data.panel4){
+    function isPanelEmpty(panel) {
+        return !panel || 
+            (!panel.attributes || panel.attributes.length === 0) &&
+            !panel.breadthInclusiveness &&
+            !panel.dimensionality &&
+            !panel.stabilityTime &&
+            !panel.stabilitySituation &&
+            !panel.stabilityCases;
+    }
+
+    if ((step1Data.panel4 || isPanelEmpty(dataPanel4)) && !fill && !onlyAttributes) {
         // If panel4 already exists, confirm overwrite
         const userConfirmed = await customConfirm({
             title: '⚠️ Overwrite AI Theme Suggestion?',
@@ -1038,21 +1051,38 @@ async function takeThemeAISuggestion() {
         }
     }
 
-    let copy = {...step1Data.aiPanel4} || null;
-    if (copy) {
-        delete copy.justification;
-    }
-    step1Data.panel4 = copy;
-    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+    if (fill) {
+        // Collect attributes including indication
+        dataPanel4.attributes = dataPanel4.attributes.length === 0 ? [...(dataPanel4.attributes|| []), ...(step1Data?.aiPanel4?.attributes || [])] : dataPanel4.attributes;
+        dataPanel4.breadthInclusiveness = dataPanel4.breadthInclusiveness || step1Data?.aiPanel4?.breadthInclusiveness || '';
+        dataPanel4.dimensionality = dataPanel4.dimensionality || step1Data?.aiPanel4?.dimensionality || '';
+        dataPanel4.stabilityTime = dataPanel4.stabilityTime || step1Data?.aiPanel4?.stabilityTime || '';
+        dataPanel4.stabilitySituation = dataPanel4.stabilitySituation || step1Data?.aiPanel4?.stabilitySituation || '';
+        dataPanel4.stabilityCases = dataPanel4.stabilityCases || step1Data?.aiPanel4?.stabilityCases || '';
 
-    // Load attributes
-    loadPanel4().then(() => {
-        saveTheme();
-    });
+        // Load attributes
+        loadPanel4({...dataPanel4});
+
+        return;
+    }
+    if(onlyAttributes){
+        // Only save attributes, no other data
+        dataPanel4.attributes = [...(dataPanel4.attributes|| []), ...(step1Data?.aiPanel4?.attributes || [])];
+        // Load attributes
+        loadPanel4({...dataPanel4});
+        return
+    }
+
+        
+        let copy = {...step1Data.aiPanel4} || null;
+        if (copy) {
+            delete copy.justification;
+        }
+        step1Data.panel4 = copy;
+        loadPanel4({...copy})
+
 }
 
-
-// todo multidimensionality. schaue obsidion meeting notizen
 
 // ***********************************    Panel 5: Subdimensions    ***********************************************
 
@@ -1147,10 +1177,10 @@ function deleteSubdimension(subIdx) {
 async function saveSubdimensions(dontSave=false) {
   // collect current values
   subdimensions.forEach((sd, idx) => {
-    sd.name = document.getElementById(`subdim-name-${idx}`).value.trim();
-    sd.definition = document.getElementById(`subdim-def-${idx}`).value.trim();
-    const inputs = Array.from(document.querySelectorAll(`#subattrs-${idx} .badge`));
-    sd.attributes = inputs.map(i => i.textContent.trim()).filter(v => v);
+      sd.name = document.getElementById(`subdim-name-${idx}`).value.trim();
+      sd.definition = document.getElementById(`subdim-def-${idx}`).value.trim();
+      const inputs = Array.from(document.querySelectorAll(`#subattrs-${idx} .badge`));
+      sd.attributes = inputs.map(i => i.textContent.trim()).filter(v => v);
   });
   resultSubdimensions = subdimensions.filter(sd => sd.name || sd.definition || sd.attributes.length > 0);
   // save to IndexedDB
@@ -1316,14 +1346,15 @@ async function showSubdimAISuggestion() {
 /**
  * Take and apply AI subdimension suggestion (Panel 5)
  */
-async function takeSubdimAISuggestion() {
+async function takeSubdimAISuggestion(overwrite = true) {
   const step1Data = await window.dataStorage.getData('data_step_1');
   if (!step1Data?.aiPanel5?.subdimensions || !step1Data.aiPanel5.subdimensions.length) {
     window.displayInfo('warning', 'No AI subdimension suggestion available. Please generate one first.');
     return;
   }
+  resultSubdimension = await saveSubdimensions(true); // Save current subdimensions to check for changes
   // Confirm overwrite if existing data present
-  if (step1Data.panel5) {
+  if ((step1Data.panel5 || resultSubdimension.subdimensions?.length !== 0) && overwrite) {
     const userConfirmed = await customConfirm({
       title: '⚠️ Overwrite Subdimensions? ',
       message: 'This will overwrite any existing subdimension definitions.<br/>Do you want to continue?',
@@ -1332,12 +1363,14 @@ async function takeSubdimAISuggestion() {
     });
     if (!userConfirmed) return;
   }
+  if (overwrite) {
+      subdimensions = step1Data.aiPanel5.subdimensions;
+  } else {
+      // If not overwriting, just append AI subdimensions
+      subdimensions = [...(subdimensions || []), ...(step1Data.aiPanel5.subdimensions || [])];
+  }
+
   // Copy suggestion into panel5 storage
-  step1Data.panel5 = { "subdimensions": step1Data.aiPanel5.subdimensions };
-  await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
   // Apply to UI
-  subdimensions = step1Data.aiPanel5.subdimensions;
-  renderSubdimensions().then(() => {
-    saveSubdimensions();
-  });
+  renderSubdimensions();
 }
