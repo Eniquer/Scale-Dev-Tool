@@ -22,7 +22,7 @@
 <!-- Include our custom JS files in proper order -->
 <script src="{{ url_for('static', path='js/indexeddb.js') }}" defer></script>
 <script src="{{ url_for('static', path='js/table.js') }}" defer></script>
-<script type="module" src="{{ url_for('static', path='js/app.js') }}" defer></script>
+    <script type="module" src="{{ url_for('static', path='js/app.js') }}" defer></script>
 
 </head>
 <body class="d-flex flex-column h-100 bg-dark text-light">
@@ -137,17 +137,14 @@
 
         // Handle active navigation state for HTMX requests
         document.addEventListener('htmx:beforeRequest', function(evt) {
-            
             // Remove active class from all nav links
             document.querySelectorAll('.nav-link').forEach(link => {
                 link.classList.remove('active');
             });
-            
             // Add active class to the clicked link if it's a nav-link
             if (evt.detail.elt.classList.contains('nav-link')) {
                 evt.detail.elt.classList.add('active');
             }
-            
             // Handle buttons that navigate to specific steps
             const hxGet = evt.detail.elt.getAttribute('hx-get');
             if (hxGet && hxGet.startsWith('/step/')) {
@@ -156,6 +153,15 @@
                 if (navLink) {
                     navLink.classList.add('active');
                 }
+            }
+        });
+        
+        // Reinitialize functionality after HTMX content swap
+        document.addEventListener('htmx:afterSwap', function(evt) {
+            // Only reinit for main content area
+            if (evt.detail.target.id === 'content') {
+                initTooltips();
+                // TODO: call other init functions (e.g., table setup, split.js) here
             }
         });
     </script>

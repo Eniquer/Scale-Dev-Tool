@@ -1,3 +1,4 @@
+<div id="step1-content" data-requires-script="js/step1.js" data-namespace="Step1" data-get-sync-function="syncData" data-init-function="init"></div>
 <div id="area1">
     <div class="container-fluid">
         <h2 class="h3 mb-4">Step 1: Develop a Conceptual Definition of the Construct</h2>
@@ -19,7 +20,7 @@
                 </div>
                 <div class="row">
                     <div class="col-auto ms-auto">
-                        <button class="btn btn-primary" id="saveContinueButton" onclick="saveConstructData()"
+                        <button class="btn btn-primary" id="saveContinueButton" onclick="window.Step1.saveConstructData()"
                             aria-label="Save and continue" title="Save and continue" data-bs-toggle="tooltip"
                             data-bs-placement="top">
                             <i class="bi bi-check-lg"></i>
@@ -36,14 +37,14 @@
                 <!-- Container for displaying academic definitions as cards -->
                 <div class="row my-3">
                     <div class="col-auto ms-auto p-0">
-                        <button class="btn btn-outline-info" id="generateMoreButton" onclick="getDefinitionsMore()"
+                        <button class="btn btn-outline-info" id="generateMoreButton" onclick="window.Step1.getDefinitionsMore()"
                             aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip"
                             data-bs-placement="top">
                             <i class="bi bi-plus-lg"></i>
                         </button>
                     </div>
                     <div class="col-auto ps-2">
-                        <button class="btn btn-outline-info" id="tryAgainButton" onclick="getDefinitionsAgain()"
+                        <button class="btn btn-outline-info" id="tryAgainButton" onclick="window.Step1.getDefinitionsAgain()"
                             aria-label="Generate New Definitions" title="Generate New Definitions"
                             data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-arrow-clockwise"></i>
@@ -54,13 +55,13 @@
                 <div class="row my-3">
                     <div class="col-auto ms-auto">
                         <!-- button to choose selected definition -->
-                        <button class="btn btn-primary d-none" id="chooseDefinitionButton" onclick="chooseDefinition()"
+                        <button class="btn btn-primary d-none" id="chooseDefinitionButton" onclick="window.Step1.chooseDefinition()"
                             aria-label="Select Definition" title="Select Definition" data-bs-toggle="tooltip"
                             data-bs-placement="top">
                             <i class="bi bi-check-lg"></i>
                         </button>
                         <!-- Button to merge Selected -->
-                        <button class="btn btn-info d-none" id="mergeDefinitionsButton" onclick="chooseDefinition()"
+                        <button class="btn btn-info d-none" id="mergeDefinitionsButton" onclick="window.Step1.chooseDefinition()"
                             aria-label="Merge Definitions" title="Merge Definitions" data-bs-toggle="tooltip"
                             data-bs-placement="top">
                             <i class="bi bi-union"></i>
@@ -74,7 +75,7 @@
                     <div class="row mb-3">
                         <!-- button to choose selected definition -->
                         <div class="col-auto ms-auto">
-                            <button class="btn btn-primary" id="saveDefinitionButton" onclick="saveDefinition()"
+                            <button class="btn btn-primary" id="saveDefinitionButton" onclick="window.Step1.saveDefinition()"
                                 aria-label="Save Definition" title="Save Definition" data-bs-toggle="tooltip"
                                 data-bs-placement="top">
                                 <i class="bi bi-floppy2"></i>
@@ -88,7 +89,7 @@
         <div class="card mb-4 d-none" id="step1panel3">
             <div class="card-body">
                 <h2 class="mb-4">Specify the Conceptual Domain</h2>
-                <button class="btn btn-outline-info my-3" id="aiSuggestionButton" onclick="getAISuggestion()"
+                <button class="btn btn-outline-info my-3" id="aiSuggestionButton" onclick="window.Step1.getAISuggestion()"
                     aria-label="Get AI Suggestion" title="Get AI Suggestion" data-bs-toggle="tooltip"
                     data-bs-placement="top">
                     <i class="bi bi-lightbulb"></i>
@@ -103,7 +104,7 @@
                                 <div class="row">
                                     <div class="col-auto ms-auto">
                                         <button class="btn btn-outline-secondary"
-                                            onclick="takeAISuggestion()">Take</button>
+                                            onclick="window.Step1.takeAISuggestion()">Take</button>
                                     </div>
                                 </div>
                             </div>
@@ -170,7 +171,7 @@
                 <!-- Submit -->
                 <div class="row my-3">
                     <div class="col-auto ms-auto">
-                        <button class="btn btn-primary" id="submitDomainButton" onclick="saveDomainData()"
+                        <button class="btn btn-primary" id="submitDomainButton" onclick="window.Step1.saveDomainData()"
                             aria-label="Select Conceptual Domain" title="Select Conceptual Domain"
                             data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-check-lg"></i>
@@ -185,7 +186,7 @@
                 <h3 class="mb-4">Specify the Conceptual Theme</h3>
                 <!-- Panel 4: Conceptual Theme Inputs -->
                 <!-- AI Suggestion for Theme -->
-                <button class="btn btn-outline-info my-3" id="aiThemeSuggestionButton" onclick="getThemeAISuggestion()" aria-label="Get AI Theme Suggestion" title="Get AI Theme Suggestion">
+                <button class="btn btn-outline-info my-3" id="aiThemeSuggestionButton" onclick="window.Step1.getThemeAISuggestion()" aria-label="Get AI Theme Suggestion" title="Get AI Theme Suggestion">
                     <i class="bi bi-lightbulb"></i>
                 </button>
                 <div class="row mb-4 d-none" id="aiThemeSuggestion">
@@ -197,13 +198,13 @@
                                 </div>
                                 <div class="row">
                                     <div class="col-auto ms-auto">
-                                        <button class="btn btn-outline-secondary" onclick="takeThemeAISuggestion(false,true)">Add Attributes</button>
+                                        <button class="btn btn-outline-secondary" onclick="window.Step1.takeThemeAISuggestion(false,true)">Add Attributes</button>
                                     </div>
                                     <div class="col-auto">
-                                        <button class="btn btn-outline-secondary" onclick="takeThemeAISuggestion(true)">Fill</button>
+                                        <button class="btn btn-outline-secondary" onclick="window.Step1.takeThemeAISuggestion(true)">Fill</button>
                                     </div>
                                     <div class="col-auto">
-                                        <button class="btn btn-outline-secondary" onclick="takeThemeAISuggestion()" tooltip="Take AI Suggestion">Take</button>
+                                        <button class="btn btn-outline-secondary" onclick="window.Step1.takeThemeAISuggestion()" tooltip="Take AI Suggestion">Take</button>
                                     </div>
                                 </div>
                             </div>
@@ -301,7 +302,7 @@
 
                 <div class="row my-3">
                     <div class="col-auto ms-auto">
-                        <button class="btn btn-primary" id="saveThemeButton" onclick="saveTheme()"><i class="bi bi-check-lg"></i></button>
+                        <button class="btn btn-primary" id="saveThemeButton" onclick="window.Step1.saveTheme()"><i class="bi bi-check-lg"></i></button>
                     </div>
                 </div>
 
@@ -314,7 +315,7 @@
             <h3 class="mb-4">Specify Subdimensions</h3>
             <p>Define subdimensions for your construct. For each subdimension, provide a name, definition, and attributes.</p>
             <!-- AI Suggestion for Subdimensions -->
-            <button class="btn btn-outline-info my-3" id="aiSubdimSuggestionButton" onclick="getSubdimAISuggestion()" aria-label="Get AI Subdimensions Suggestion" title="Get AI Subdimensions Suggestion">
+            <button class="btn btn-outline-info my-3" id="aiSubdimSuggestionButton" onclick="window.Step1.getSubdimAISuggestion()" aria-label="Get AI Subdimensions Suggestion" title="Get AI Subdimensions Suggestion">
               <i class="bi bi-lightbulb"></i>
             </button>
             <div class="row mb-4 d-none" id="aiSubdimSuggestion">
@@ -326,10 +327,10 @@
                     </div>
                     <div class="row">
                         <div class="col-auto ms-auto">
-                            <button class="btn btn-outline-secondary" onclick="takeSubdimAISuggestion(false)">Add</button>
+                            <button class="btn btn-outline-secondary" onclick="window.Step1.takeSubdimAISuggestion(false)">Add</button>
                         </div>
                         <div class="col-auto">
-                            <button class="btn btn-outline-secondary" onclick="takeSubdimAISuggestion()">Take</button>
+                            <button class="btn btn-outline-secondary" onclick="window.Step1.takeSubdimAISuggestion()">Take</button>
                         </div>
                     </div>
                   </div>
@@ -342,7 +343,7 @@
             </button>
             <div class="row my-3">
               <div class="col-auto ms-auto">
-                <button class="btn btn-primary" id="saveSubdimensionsButton" onclick="saveSubdimensions()"><i class="bi bi-check-lg"></i></button>
+                <button class="btn btn-primary" id="saveSubdimensionsButton" onclick="window.Step1.saveSubdimensions()"><i class="bi bi-check-lg"></i></button>
               </div>
             </div>
           </div>
@@ -359,4 +360,3 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', path='js/step1.js') }}" defer></script>

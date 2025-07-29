@@ -279,7 +279,7 @@ async function populateProjectsModal() {
             selectBtn.onclick = async () => {
                 await window.projects.setActiveProjectId(proj.id);
                 populateProjectsModal();
-                syncData();
+                getSyncData();
                 setTimeout(() => {
                     bootstrap.Modal.getInstance(modalEl).hide();
                 }, 500);
@@ -303,7 +303,7 @@ async function populateProjectsModal() {
                 
                 await window.projects.deleteProject(proj.id);
                 populateProjectsModal();
-                syncData();
+                getSyncData();
                 setTimeout(() => {
                     bootstrap.Modal.getInstance(modalEl).hide();
                 }, 500);
@@ -332,7 +332,7 @@ if (addProjectBtn) {
         if (newProj) {
             window.displayInfo('success', `Project '${newProj.name}' added`);
             populateProjectsModal();
-            syncData();
+            getSyncData();
             setTimeout(() => {
                 bootstrap.Modal.getInstance(projectsModal).hide();
             }, 500);
@@ -413,4 +413,57 @@ function customConfirm({
   });
 }
 
+let callInitIfExists = null;
+let getNamespace = null;
+let getSyncData = null;
+
+
 window.customConfirm = customConfirm;
+document.body.addEventListener('htmx:afterSwap', (e) => {
+  let fragment = e.target;
+  if (!(fragment instanceof HTMLElement)) return;
+
+  fragment.querySelectorAll('[data-requires-script]').forEach(el => {
+    const scriptPath = el.getAttribute('data-requires-script');
+    const initFunc = el.getAttribute('data-init-function');
+    const initNamespace = el.getAttribute('data-namespace');
+    const syncFunction = el.getAttribute('data-get-sync-function');
+
+    window.loadedScripts = window.loadedScripts || {};
+
+    callInitIfExists = function() {
+      if (initFunc && typeof window[initNamespace] === "object" && typeof window[initNamespace][initFunc] === "function") {
+        window[initNamespace][initFunc]();
+      }
+    }
+    getSyncData = function() {
+      if (syncFunction && typeof window[initNamespace] === "object" && typeof window[initNamespace][syncFunction] === "function") {
+        window[initNamespace][syncFunction]();
+      }
+    }
+    getNamespace = function() {
+        if (initNamespace && typeof window[initNamespace] === "object") {
+            return window[initNamespace];
+        } else {
+            console.warn(`Namespace '${initNamespace}' not found.`);
+            return null;
+        }
+    }
+    
+
+    if (scriptPath && !window.loadedScripts[scriptPath]) {
+      // Dynamically load the script, then call its init function
+      const script = document.createElement('script');
+      script.src = `/static/${scriptPath}`;
+      script.defer = true;
+      script.onload = () => {
+        window.loadedScripts[scriptPath] = true;
+        callInitIfExists();
+      };
+      document.body.appendChild(script);
+    } else {
+      // Script already loaded, just call the init function
+      callInitIfExists();
+    }
+  });
+});

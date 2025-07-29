@@ -1,23 +1,32 @@
-// Make functions available globally
-window.saveConstructData = saveConstructData;
-window.getDefinitions = getDefinitions;
-window.getDefinitionsAgain = getDefinitionsAgain;
-window.getDefinitionsMore = getDefinitionsMore;
-window.chooseDefinition = chooseDefinition;
-// Expose functions globally
-window.saveTheme = saveTheme;
-window.getThemeAISuggestion = getThemeAISuggestion;
-window.showThemeAISuggestion = showThemeAISuggestion;
-window.takeThemeAISuggestion = takeThemeAISuggestion;
-// window.analyseDefinition = analyseDefinition;
+window.Step1 = window.Step1 || {};
+
+// Attach all your logic to an init function
+window.Step1.init = function() {
+
+window.Step1.saveConstructData = saveConstructData;
+window.Step1.getDefinitionsMore = getDefinitionsMore;
+window.Step1.getDefinitionsAgain = getDefinitionsAgain;
+window.Step1.chooseDefinition = chooseDefinition;
+window.Step1.saveDefinition = saveDefinition;
+window.Step1.getAISuggestion = getAISuggestion;
+window.Step1.takeAISuggestion = takeAISuggestion;
+window.Step1.saveDomainData = saveDomainData;
+window.Step1.getThemeAISuggestion = getThemeAISuggestion;
+window.Step1.takeThemeAISuggestion = takeThemeAISuggestion;
+window.Step1.saveTheme = saveTheme;
+window.Step1.getSubdimAISuggestion = getSubdimAISuggestion;
+window.Step1.takeSubdimAISuggestion = takeSubdimAISuggestion;
+window.Step1.saveSubdimensions = saveSubdimensions;
+
+
 
 // save buttons
 const saveBtns = {
-    "1": document.getElementById('saveContinueButton'),
-    "2": document.getElementById('saveDefinitionButton'),
-    "3": document.getElementById('submitDomainButton'),
-    "4": document.getElementById('saveThemeButton'),
-    "5": document.getElementById('saveSubdimensionsButton')
+        "1": document.getElementById('saveContinueButton'),
+        "2": document.getElementById('saveDefinitionButton'),
+        "3": document.getElementById('submitDomainButton'),
+        "4": document.getElementById('saveThemeButton'),
+        "5": document.getElementById('saveSubdimensionsButton')
 }
 
 const domPanel1 = document.getElementById('step1panel1');
@@ -37,9 +46,8 @@ const addSubdimensionButton = document.getElementById('addSubdimensionButton');
 
 
 // ***********************************    Auto-load Data    ***********************************************
-
-// Auto-load data and existing definitions on page load
-document.addEventListener('DOMContentLoaded', syncData);
+syncData()
+window.Step1.syncData = syncData; // Expose syncData function globally
 
 
 function syncData() {
@@ -666,7 +674,6 @@ async function getAISuggestion() {
     } finally {
         hideLoading();
     }
-    window.testing = responseText;
 
     if (responseText.property && responseText.entity && responseText.justification) {
         // Validate the response structure
@@ -940,7 +947,6 @@ async function saveTheme(dontSave = false) {
     }
     emitDataChanged();
 }
-
 async function resetPanel4() {
     // Clear all attributes
     attributesContainer.innerHTML = '';
@@ -1173,16 +1179,6 @@ async function takeThemeAISuggestion(fill= false, onlyAttributes = false) {
 let subdimensions = [];
 let allAttrs = [];
 
-// Expose functions globally
-window.addSubdimension = addSubdimension;
-window.saveSubdimensions = saveSubdimensions;
-window.addSubAttr = addSubAttr;
-// Expose delete function for subdimensions
-window.deleteSubdimension = deleteSubdimension;
-// Expose AI suggestion functions for Panel 5
-window.getSubdimAISuggestion = getSubdimAISuggestion;
-window.showSubdimAISuggestion = showSubdimAISuggestion;
-window.takeSubdimAISuggestion = takeSubdimAISuggestion;
 
 addSubdimensionButton.addEventListener('click', addSubdimension);
 
@@ -1474,6 +1470,7 @@ async function takeSubdimAISuggestion(overwrite = true) {
 // todo optional: implement check if everything is saved before continuing/closing/changing project -> every save method. option to store on seperate var and then compare both storage and seperate var. Check saveTheme() for example if saveTheme(true) it returns only the data
 // todo check when warning save p4 that p5 data gets lost
 
+const continueBtn = document.getElementById('continueStep1Btn');
 if (continueBtn) {
     continueBtn.addEventListener('click', async () => {
         const step1Data = await window.dataStorage.getData('data_step_1');
@@ -1488,7 +1485,7 @@ if (continueBtn) {
             });
             if (!userConfirmed) {
                 console.log('User cancelled navigation — unsaved changes preserved');
-            return;
+                return;
             }
         }
             
@@ -1512,12 +1509,12 @@ document.body.addEventListener('htmx:afterSwap', (e) => {
 
 // ***********************************    Save Methods    ***********************************************
 const saveMethod = {
-        1: saveConstructData,
-        2: saveDefinition,
-        3: saveDomainData,
-        4: saveTheme,
-        5: saveSubdimensions
-    }
+            1: saveConstructData,
+            2: saveDefinition,
+            3: saveDomainData,
+            4: saveTheme,
+            5: saveSubdimensions
+        }
 
 const panelName = {
             "panel1": 'Panel: Construct Name',
@@ -1535,11 +1532,11 @@ async function checkIfSaved(panelId){
 
 
         let domVisible = !document.getElementById('step1panel' + panelId).classList.contains("d-none");
-    let availableData = await saveMethod[panelId](true); // get data without saving
-    let savedData = step1Data[`panel${panelId}`]
-    if (panelId == 1) {
+        let availableData = await saveMethod[panelId](true); // get data without saving
+        let savedData = step1Data[`panel${panelId}`]
+        if (panelId == 1) {
             delete savedData?.timestamp
-    }
+        }
         if (panelId == 2) domVisible = !resultingDefinitionContainer.classList.contains("d-none"); // Panel 2 is special, we check if the resulting definition is visible
         
         // if we cant see the panel. Say it is saved
@@ -1551,11 +1548,11 @@ async function checkIfSaved(panelId){
         // todo available data returns something. check if its really empty. by their methods?
 
         if (JSON.stringify(savedData) !== JSON.stringify(availableData.data)) {
-        return false;
-    }
+            return false;
+        }
 
 
-    return true;
+        return true;
     } catch (error) {
         console.log("couldn't get save data on Panel " + panelId + ": ", error);
         return false;
@@ -1624,12 +1621,10 @@ function emitDataChanged() {
 
 // Delegated event listener for input events on inputs, textareas, and selects (handles dynamic elements)
 document.addEventListener('input', event => {
-    console.log("???");
-    
     const el = event.target;
     if (el.matches('input, textarea, select')) {
         emitDataChanged();
-}
+    }
 });
 
 // Delegated event listener for button clicks (handles dynamic buttons)
@@ -1651,7 +1646,6 @@ document.getElementById("area1").addEventListener("click", emitDataChanged);
 let hasUnsavedChangesFlag = false;
 
 
-console.log("laoding");
 
 
 
@@ -1677,4 +1671,6 @@ function nextStepBtnThere(){
             }
         }
     });
+}
+
 }
