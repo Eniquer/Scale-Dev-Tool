@@ -113,6 +113,10 @@ html[data-bs-theme="dark"] body {
 }
 /*******************************      Split Screen     **********************************+ */
 
+#navbar, #right-panel {
+    overflow-y: auto; /* Allow vertical scrolling */
+}
+
 html, body {
     margin: 0;
     padding: 0;
@@ -165,6 +169,17 @@ main{
 
 #navbar {
     width: 25%;
+}
+
+
+.btn-primary.disabled-like {
+    background-color: #267761;
+  border-color: #06654a;
+}
+.btn-primary.disabled-like:hover {
+    /* background-color: #267761;
+  border-color: #06654a; */
+    cursor: default;
 }
 
 /* --- GUTTER STYLING --- */

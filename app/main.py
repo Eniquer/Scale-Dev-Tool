@@ -31,7 +31,7 @@ app.include_router(api_router, prefix="/api")
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse("base.html", {"request": request, "current_step": 1})
+    return templates.TemplateResponse("base.html", {"request": request, "current_step": 0})
 
 
 

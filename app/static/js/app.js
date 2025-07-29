@@ -67,7 +67,7 @@ window.scrollToElement = scrollToElement;
 
 // then split the outer container horizontally into #left / #sidebar
 // Initialize Split.js and keep instance for programmatic control
-const splitInstance = Split(['#navbar', '#content'], {
+const splitInstance = Split(['#navbar', '#right-panel'], {
     direction: 'horizontal',
     sizes: [20, 80],
     minSize: [0, 400],  // px minimum for each

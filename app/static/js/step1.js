@@ -118,10 +118,25 @@ function syncData() {
                 domPanel5.classList.remove('d-none');
                 subdimensions = panel5?.subdimensions || [{ name: '', definition: '', attributes: [] }];
                 renderSubdimensions();
-            } else {
+                if (panel5?.subdimensions && panel5.subdimensions.length > 0 && panel3) {
+                    // If subdimensions exist
+                    continueBtn.classList.remove("d-none")
+                }else{
+                    continueBtn.classList.add("d-none")
+                }
+            }
+            else { // if not panel4 or not multidimensional
+                if(panel4?.dimensionality !== "Multidimensional" && panel3) {
+                    continueBtn.classList.remove("d-none")
+                }else{
+                    continueBtn.classList.add("d-none")
+                }
                 resetPanel5();
                 domPanel5.classList.add('d-none');
+
             }
+
+            emitDataChanged();
         });
     }
 }
@@ -145,11 +160,12 @@ async function saveConstructData(dontSave = false) {
     
     if (dontSave) {
         delete step1Data.panel1.timestamp
-        return {...step1Data.panel1}; // Return data without saving
+        return {"data":{...step1Data.panel1}, "empty": !constructName && !initialDefinition}; // Return data without saving
     }
     
     if (!constructName || !initialDefinition) {
         window.displayInfo('warning', 'Please fill in both the construct name and initial definition before saving.');
+        emitDataChanged()
         return false;
     }
     // Store in IndexedDB using the renamed DataStorage
@@ -167,15 +183,18 @@ async function saveConstructData(dontSave = false) {
         window.displayInfo('success', 'Construct data saved successfully!');
         // After saving, fetch and display definitions
         getDefinitions();
+        emitDataChanged()
         return true;
     } catch (error) {
         if (error === 'User cancelled overwrite') {
             // Treat cancellation as successful, non-error
             window.displayInfo('info', 'Data overwrite cancelled; existing data preserved.');
+            emitDataChanged()
             return true;
         }
         console.error('Error saving construct data:', error);
         window.displayInfo('danger', 'Failed to save construct data. Please try again.');
+        emitDataChanged()
         return false;
     }
 }
@@ -284,7 +303,30 @@ async function getDefinitionsMore() {
 // Choose the definition
 async function chooseDefinition() {
     const step1Data = await window.dataStorage.getData('data_step_1');
-    if (resultingDefinitionTextarea?.value?.trim()) {
+    
+
+    let resultDefinition = "";
+    let references = [];
+    let displayMessage = "";
+
+    const cards = document.querySelectorAll('#definitionsContainer .card.selected');
+    if (cards.length < 1) {
+        window.displayInfo('warning', 'Select at least one definition.');
+        return;
+    }
+
+    
+    // Just selected one Card
+    if (cards.length == 1) {
+        const card = cards[0];
+        references = [card.querySelector('.card-title')?.textContent];
+        resultDefinition = card.querySelector('.card-text')?.textContent.trim();
+        displayMessage = `Selected definition: ${references}`;
+        if (resultingDefinitionTextarea?.value?.trim() === resultDefinition) {
+            displayMessage = `No changes detected. Selected definition: ${references}`;
+        }
+    }
+    if ((resultingDefinitionTextarea?.value?.trim() && resultingDefinitionTextarea?.value?.trim() !== resultDefinition) || cards.length > 1) {
         const userConfirmed = await customConfirm({
         title: '⚠️ Overwrite Definition?',
         message: `This will overwrite the existing definition.<br/>
@@ -296,23 +338,6 @@ async function chooseDefinition() {
         console.log('User cancelled data storage — existing data preserved');
         return;
         }
-    }
-
-    let resultDefinition = "";
-    let references = [];
-    let displayMessage = "";
-
-    const cards = document.querySelectorAll('#definitionsContainer .card.selected');
-    if (cards.length < 1) {
-        window.displayInfo('warning', 'Select at least one definition.');
-        return;
-    }
-    // Just selected one Card
-    if (cards.length == 1) {
-        const card = cards[0];
-        references = [card.querySelector('.card-title')?.textContent];
-        resultDefinition = card.querySelector('.card-text')?.textContent.trim();
-        displayMessage = `Selected definition: ${references}`;
     }
     if (cards.length > 1) {
         // Multiple cards selected, merge their definitions
@@ -368,7 +393,7 @@ async function chooseDefinition() {
     console.log('Resulting definition saved');
 
     // Display success message and set the resulting definition in the textarea
-    window.displayInfo('success', displayMessage);
+    window.displayInfo('info', displayMessage);
     resultingDefinitionTextarea.value = resultDefinition; // Set the definition in the textarea
     resultingDefinitionContainer.classList.remove('d-none'); // Ensure the textarea is visible
 
@@ -386,29 +411,31 @@ async function saveDefinition(dontSave = false) {
     // console.log(step1Data.panel2.savedDefinition && (step1Data.panel2.savedDefinition !== resultingDefinition));
     // console.log(step1Data.panel2.resultingDefinition && (step1Data.panel2.resultingDefinition !== resultingDefinition));
 
-    const currentDefinition = step1Data.panel2.savedDefinition || step1Data.panel2.resultingDefinition;
-    const prevDefinition = step1Data.panel2.savedDefinition
+    const currentDefinition = step1Data?.panel2?.savedDefinition || step1Data?.panel2?.resultingDefinition;
+    const prevDefinition = step1Data?.panel2?.savedDefinition;
 
 
-    if (step1Data.panel2) {
+    if (step1Data?.panel2) {
         step1Data.panel2.savedDefinition = resultingDefinition;
         step1Data.panel2.savedSelectedDefinitions = step1Data.panel2.selectedDefinitions;
     }
 
-    if (step1Data.panel3) {
+    if (step1Data?.panel3) {
         delete step1Data.panel3; // Remove panel 3 data if it exists
     }
 
     if(dontSave) {
-        return {...step1Data.panel2}; // Return data without saving
+        return {"data":{...step1Data.panel2}, "empty": !resultingDefinition}; // Return data without saving
     }
 
     if (!resultingDefinition) {
         window.displayInfo('warning', 'Please enter a resulting definition before saving.');
+        emitDataChanged()
         return;
     }
     if (prevDefinition === resultingDefinition) {
         window.displayInfo('info', "No changes found on Definition.");
+        emitDataChanged()
         return
     }
     if (currentDefinition !== resultingDefinition) {
@@ -421,6 +448,7 @@ async function saveDefinition(dontSave = false) {
         });
         if (!userConfirmed) {
         console.log('User cancelled data storage — existing data preserved');
+        emitDataChanged()
         return;
         }
     }
@@ -441,6 +469,7 @@ async function saveDefinition(dontSave = false) {
     setTimeout(() => {
         scrollToElement(document.getElementById("step1panel3"));
     }, 400);
+    emitDataChanged()
 }
 
 
@@ -567,7 +596,8 @@ async function saveDomainData(dontSave = false) {
     step1Data.panel3.entity = entity;
     step1Data.panel3.propertyExplanation = propertyNote || null;
     step1Data.panel3.entityExplanation = entityNote || null;
-    if (dontSave) return {...step1Data.panel3};
+    if (dontSave) return {"data":{...step1Data.panel3}, "empty": !property && !entity && !step1Data.panel3.propertyExplanation && !step1Data.panel3.entityExplanation}; // Return data without saving
+
     
     if (!property || !entity) {
         window.displayInfo('warning', 'Please select both a property and an entity before saving.');
@@ -847,7 +877,15 @@ async function saveTheme(dontSave = false) {
     step1Data.panel4.stabilitySituation = document.querySelector('input[name="stabilitySituation"]:checked')?.value || null;
     step1Data.panel4.stabilityCases = document.querySelector('input[name="stabilityCases"]:checked')?.value || null;
 
-    if (dontSave) {return {...step1Data.panel4}}
+    if (dontSave) return {"data":{...step1Data.panel4}, "empty": 
+        !step1Data.panel4.stabilitySituation && 
+        !step1Data.panel4.stabilityCases && 
+        !step1Data.panel4.stabilityTime && 
+        !step1Data.panel4.breadthInclusiveness && 
+        !step1Data.panel4.dimensionality && 
+        step1Data.panel4.attributes.length === 0 
+    }; // Return data without saving
+    emitDataChanged();  
     // Ensure all required data is present before saving
     if (!step1Data.panel4.attributes.length) {
         window.displayInfo('warning', 'Please add at least one attribute before saving.');
@@ -883,6 +921,7 @@ async function saveTheme(dontSave = false) {
         });
         if (!userConfirmed) {
             console.log('User cancelled data storage — existing data preserved');
+            emitDataChanged()
             return;
         }
     }
@@ -899,6 +938,7 @@ async function saveTheme(dontSave = false) {
             scrollToElement(document.getElementById("step1panel5"));
         }, 400);
     }
+    emitDataChanged();
 }
 
 async function resetPanel4() {
@@ -1228,7 +1268,8 @@ async function saveSubdimensions(dontSave=false) {
   resultSubdimensions = subdimensions.filter(sd => sd.name || sd.definition || sd.attributes.length > 0);
   // save to IndexedDB
   if (dontSave) {
-    return {"subdimensions": [...resultSubdimensions]};
+    return {"data":{"subdimensions": [...resultSubdimensions]}, "empty": resultSubdimensions.length === 0}; // Return data without saving
+
   }
   if (resultSubdimensions.length === 0) {
     window.displayInfo('warning', 'Please add at least one subdimension before saving.');
@@ -1255,10 +1296,10 @@ async function saveSubdimensions(dontSave=false) {
 async function resetPanel5() {
     const step1Data = await window.dataStorage.getData('data_step_1');
 
-    if (step1Data.panel5) {
+    if (step1Data?.panel5) {
         delete step1Data.panel5; // Remove panel 5 data
     }
-    if (step1Data.aiPanel5) {
+    if (step1Data?.aiPanel5) {
         delete step1Data.aiPanel5; // Remove AI subdimension suggestion data
     }
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
@@ -1433,14 +1474,22 @@ async function takeSubdimAISuggestion(overwrite = true) {
 // todo optional: implement check if everything is saved before continuing/closing/changing project -> every save method. option to store on seperate var and then compare both storage and seperate var. Check saveTheme() for example if saveTheme(true) it returns only the data
 // todo check when warning save p4 that p5 data gets lost
 
-const continueBtn = document.getElementById('continueStep1Btn');
 if (continueBtn) {
     continueBtn.addEventListener('click', async () => {
         const step1Data = await window.dataStorage.getData('data_step_1');
-        if (!step1Data || !step1Data.panel1 || !step1Data.panel2 || !step1Data.panel3 || !step1Data.panel4 || !step1Data.panel5) {
-            console.warn('No step 1 data found');
-            continueBtn.disabled = true;
+        if (unsavedPanels.length > 0) {
+            // Warn user about unsaved changes
+            const message = `You have unsaved changes in the following ${unsavedPanels.length == 1 ? 'panel' : 'panels'}: <br><strong>${unsavedPanels.map(panel => panelName[panel]).join('<br>')}</strong><br><br>Do you want to continue and lose these changes?`;
+            const userConfirmed = await customConfirm({
+                title: '⚠️ Unsaved Changes',
+                message: message,
+                confirmText: 'Yes, continue',
+                cancelText: 'No, go back'
+            });
+            if (!userConfirmed) {
+                console.log('User cancelled navigation — unsaved changes preserved');
             return;
+            }
         }
             
         // persist any unsaved data if needed, then navigate:
@@ -1448,50 +1497,184 @@ if (continueBtn) {
   });
 }
 
-async function checkIfSaved(panelId){
-    const step1Data = await window.dataStorage.getData('data_step_1');
-    panelName = {
-        1: 'Panel: Construct Name',
-        2: 'Panel: Definition',
-        3: 'Panel: Conceptual Domain',
-        4: 'Panel: Conceptual Theme',
-        5: 'Panel: Subdimensions'
-    }
-    saveMethod = {
+// warn on unload
+window.addEventListener('beforeunload', e => {
+  if (hasUnsavedChangesFlag) {
+    e.preventDefault();
+  }
+});
+
+document.body.addEventListener('htmx:afterSwap', (e) => {
+    console.log("swapped: ", e.detail.elt.id);
+    
+});
+
+
+// ***********************************    Save Methods    ***********************************************
+const saveMethod = {
         1: saveConstructData,
         2: saveDefinition,
         3: saveDomainData,
         4: saveTheme,
         5: saveSubdimensions
     }
+
+const panelName = {
+            "panel1": 'Panel: Construct Name',
+            "panel2": 'Panel: Definition',
+            "panel3": 'Panel: Conceptual Domain',
+            "panel4": 'Panel: Conceptual Theme',
+            "panel5": 'Panel: Subdimensions'
+        }
+async function checkIfSaved(panelId){
+    try {
+        
+        const step1Data = await window.dataStorage.getData('data_step_1');
+        
+        
+
+
+        let domVisible = !document.getElementById('step1panel' + panelId).classList.contains("d-none");
     let availableData = await saveMethod[panelId](true); // get data without saving
     let savedData = step1Data[`panel${panelId}`]
-    
     if (panelId == 1) {
-        delete savedData.timestamp
+            delete savedData?.timestamp
     }
-    // todo wrong bei panel5
-    
-    console.log(`Checking saved state for ${panelName[panelId]}:`, savedData, availableData);
-    if (savedData && (JSON.stringify(savedData) !== JSON.stringify(availableData))) {
+        if (panelId == 2) domVisible = !resultingDefinitionContainer.classList.contains("d-none"); // Panel 2 is special, we check if the resulting definition is visible
+        
+        // if we cant see the panel. Say it is saved
+        if (!domVisible) {
+            return true; 
+        }
+
+        
+        // todo available data returns something. check if its really empty. by their methods?
+
+        if (JSON.stringify(savedData) !== JSON.stringify(availableData.data)) {
         return false;
     }
+
+
     return true;
+    } catch (error) {
+        console.log("couldn't get save data on Panel " + panelId + ": ", error);
+        return false;
+    }
 }
 
 async function checkAllSavedState(){
+    console.log("checking");
+    
     results = {}
     for (let index = 1; index <= 5; index++) {
         var isElementSaved = await checkIfSaved(index);
-        saveBtns[index.toString()].disabled = isElementSaved;
+        if (isElementSaved) {
+            saveBtns[index.toString()].classList.add('disabled-like');
+        }else{
+            saveBtns[index.toString()].classList.remove('disabled-like');
+        }
         results[`panel${index}`] = isElementSaved;
     }
     return results;
 }
 
 async function anyUnsavedChanges() {
-    const savedState = await checkAllSavedState();
-    return Object.values(savedState).some(v => !v);
+    results = {}
+    for (let index = 1; index <= 5; index++) {
+        panelData = await saveMethod[index](true); // get data without saving
+        if (panelData.empty) {
+            results[`panel${index}`] = true;
+        }else{
+            var isElementSaved = await checkIfSaved(index);
+            saveBtns[index.toString()].disabled = isElementSaved;
+            results[`panel${index}`] = isElementSaved;
+        }
+    }
+    unsavedPanels = Object.keys(results).filter(key => !results[key]);
+    return Object.values(results).some(v => !v);
+}
+
+let unsavedPanels = []
+
+function debounce(fn, delay=300) {
+    let timeout;
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(async function () {
+            fn(...args);
+            // track unsaved edits
+            hasUnsavedChangesFlag = await anyUnsavedChanges();
+            if (hasUnsavedChangesFlag) {
+                continueBtn.classList.add("disabled-like");
+            } else {
+                continueBtn.classList.remove("disabled-like");
+            }
+            nextStepBtnThere();
+
+        }, delay);
+    };
+}
+
+document.addEventListener('dataChanged', debounce(checkAllSavedState, 300));
+
+function emitDataChanged() {
+    document.dispatchEvent(new Event('dataChanged'));
 }
 
 
+// Delegated event listener for input events on inputs, textareas, and selects (handles dynamic elements)
+document.addEventListener('input', event => {
+    console.log("???");
+    
+    const el = event.target;
+    if (el.matches('input, textarea, select')) {
+        emitDataChanged();
+}
+});
+
+// Delegated event listener for button clicks (handles dynamic buttons)
+document.addEventListener('click', event => {
+    const btn = event.target.closest('button');
+    if (btn) {
+        emitDataChanged();
+    }
+});
+
+document.getElementById("area1").addEventListener("click", emitDataChanged);
+
+// todo on nav click no syncdata
+// todo on reload check
+// todo decide how to restart which panel after change on other steps/Panels
+
+
+// track unsaved edits
+let hasUnsavedChangesFlag = false;
+
+
+console.log("laoding");
+
+
+
+function nextStepBtnThere(){
+    // handle panel 5 (only if multidimensional)
+    window.dataStorage.getData('data_step_1').then(saved => {
+        const panel3 = saved?.panel3;
+        const panel4 = saved?.panel4;
+        const panel5 = saved?.panel5;
+        if (panel4 && panel4.dimensionality === "Multidimensional") {
+            if (panel5?.subdimensions && panel5.subdimensions.length > 0 && panel3) {
+                // If subdimensions exist
+                continueBtn.classList.remove("d-none")
+            }else{
+                continueBtn.classList.add("d-none")
+            }
+        }
+        else { // if not panel4 or not multidimensional
+            if(panel4?.dimensionality !== "Multidimensional" && panel3) {
+                continueBtn.classList.remove("d-none")
+            }else{
+                continueBtn.classList.add("d-none")
+            }
+        }
+    });
+}
