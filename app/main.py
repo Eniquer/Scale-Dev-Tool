@@ -15,8 +15,6 @@ import pandas as pd
 # Functions
 
 
-def is_htmx(request: Request) -> bool:
-    return request.headers.get("hx-request") == "true"
 
 
 
@@ -37,20 +35,11 @@ async def home(request: Request):
 
 @app.get("/step/{step_id}", response_class=HTMLResponse)
 async def load_step(request: Request, step_id: int):
-    template = f"partials/step_{step_id}.html"
-    print(f"Loading template for step {step_id}: {template}")
-    print(is_htmx(request))  # Debugging line to check HTMX request
-    if is_htmx(request):
-        return templates.TemplateResponse(template, {"request": request})
-    else:
-        # Direct browser navigation → send the full page shell
-        return templates.TemplateResponse(
-            "base.html",
-            {
-                "request": request,
-                "current_step": step_id,
-            }
-        )
+    # Always render the full page shell with the requested step
+    return templates.TemplateResponse(
+        "base.html",
+        {"request": request, "current_step": step_id}
+    )
 
 
 

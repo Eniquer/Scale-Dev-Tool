@@ -1,4 +1,4 @@
-import { initAPIKey,deleteAPIKey,storeAPIKey } from './handleAPIKey.js';
+import { initAPIKey, deleteAPIKey, storeAPIKey } from './handleAPIKey.js';
 window.currentAPIKey_enc = await initAPIKey();
 
 
@@ -22,7 +22,7 @@ function displayInfo(type = 'info', message = '') {
     `;
     const container = document.getElementById("displayInfoContainer");
     container.insertBefore(alertDiv, container.firstChild);
-    
+
     setTimeout(() => {
         alertDiv.style.opacity = '0.9'; // Slightly transparent for better visibility
     }, 10);
@@ -53,11 +53,11 @@ window.hideLoading = hideLoading;
 
 // Scroll utility: scroll to a given element
 function scrollToElement(target, container = document.getElementById("area1")) {
-    
+
     if (container === window) {
         target.scrollIntoView({ behavior: 'smooth' });
         return;
-    } 
+    }
     if (target.offsetTop < 10) return;
     container.scrollTo({ top: target.offsetTop - 50, behavior: 'smooth' });
 }
@@ -67,7 +67,7 @@ window.scrollToElement = scrollToElement;
 
 // then split the outer container horizontally into #left / #sidebar
 // Initialize Split.js and keep instance for programmatic control
-const splitInstance = Split(['#navbar', '#right-panel'], {
+const splitInstance = Split(['#navbar', '#content'], {
     direction: 'horizontal',
     sizes: [20, 80],
     minSize: [0, 400],  // px minimum for each
@@ -118,13 +118,13 @@ async function sendChat(input, history = []) {
     }
     const promptText = input;
     if (!cipher || !promptText) {
-    alert('Both key cipher and prompt are required');
-    return;
+        alert('Both key cipher and prompt are required');
+        return;
     }
     const resp = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: promptText, keyCipher: cipher, history: history })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptText, keyCipher: cipher, history: history })
     });
     if (resp.ok) {
         const { reply, history: updatedHistory } = await resp.json();
@@ -143,7 +143,7 @@ async function sendChat(input, history = []) {
         if ((resp.status === 401) && /invalid/i.test(errorDetail)) {
             const newKey = prompt('Your API key appears invalid or unauthorized. Please re-enter your key.');
             // Re-init API key and retry storing cipher
-            window.currentAPIKey_enc = await storeAPIKey(newKey,false);
+            window.currentAPIKey_enc = await storeAPIKey(newKey, false);
             return await sendChat(input, history); // Retry with new key
         }
     }
@@ -279,7 +279,7 @@ async function populateProjectsModal() {
             selectBtn.onclick = async () => {
                 await window.projects.setActiveProjectId(proj.id);
                 populateProjectsModal();
-                getSyncData();
+                await window.getSyncFunc();
                 setTimeout(() => {
                     bootstrap.Modal.getInstance(modalEl).hide();
                 }, 500);
@@ -300,10 +300,10 @@ async function populateProjectsModal() {
                 cancelText: 'Cancel'
             });
             if (confirmed) {
-                
+
                 await window.projects.deleteProject(proj.id);
                 populateProjectsModal();
-                getSyncData();
+                await window.getSyncFunc();
                 setTimeout(() => {
                     bootstrap.Modal.getInstance(modalEl).hide();
                 }, 500);
@@ -332,7 +332,7 @@ if (addProjectBtn) {
         if (newProj) {
             window.displayInfo('success', `Project '${newProj.name}' added`);
             populateProjectsModal();
-            getSyncData();
+            await window.getSyncFunc();
             setTimeout(() => {
                 bootstrap.Modal.getInstance(projectsModal).hide();
             }, 500);
@@ -353,16 +353,16 @@ if (addProjectBtn) {
  * @returns {Promise<boolean>} — Resolves true if confirmed, false otherwise.
  */
 function customConfirm({
-  title,
-  message,
-  confirmText = 'OK',
-  cancelText = 'Cancel'
+    title,
+    message,
+    confirmText = 'OK',
+    cancelText = 'Cancel'
 }) {
-  return new Promise(resolve => {
-    // 1) Create a unique container for this modal
-    const container = document.createElement('div');
-    const modalId = `dynamicModal_${Date.now()}`;
-    container.innerHTML = `
+    return new Promise(resolve => {
+        // 1) Create a unique container for this modal
+        const container = document.createElement('div');
+        const modalId = `dynamicModal_${Date.now()}`;
+        container.innerHTML = `
       <div class="modal fade" id="${modalId}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content rounded-3 shadow-lg">
@@ -385,85 +385,44 @@ function customConfirm({
         </div>
       </div>
     `;
-    document.body.appendChild(container);
+        document.body.appendChild(container);
 
-    // 2) Bootstrap modal instance
-    const modalEl = document.getElementById(modalId);
-    const bsModal = new bootstrap.Modal(modalEl);
+        // 2) Bootstrap modal instance
+        const modalEl = document.getElementById(modalId);
+        const bsModal = new bootstrap.Modal(modalEl);
 
-    // 3) Handle button clicks
-    modalEl.querySelector(`#${modalId}_confirm`).onclick = () => {
-      resolve(true);
-      bsModal.hide();
-    };
-    modalEl.querySelector(`#${modalId}_cancel`).onclick =
-    modalEl.querySelector('.btn-close').onclick = () => {
-      resolve(false);
-      bsModal.hide();
-    };
+        // 3) Handle button clicks
+        modalEl.querySelector(`#${modalId}_confirm`).onclick = () => {
+            resolve(true);
+            bsModal.hide();
+        };
+        modalEl.querySelector(`#${modalId}_cancel`).onclick =
+            modalEl.querySelector('.btn-close').onclick = () => {
+                resolve(false);
+                bsModal.hide();
+            };
 
-    // 4) Cleanup after hide
-    modalEl.addEventListener('hidden.bs.modal', () => {
-      bsModal.dispose();
-      container.remove();
+        // 4) Cleanup after hide
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            bsModal.dispose();
+            container.remove();
+        });
+
+        // 5) Show it
+        bsModal.show();
     });
-
-    // 5) Show it
-    bsModal.show();
-  });
 }
 
-let callInitIfExists = null;
-let getNamespace = null;
-let getSyncData = null;
 
+window.getSyncFunc = function () {
+    document.querySelectorAll('[data-get-sync-function]').forEach(el => {
+        const syncFunction = el.getAttribute('data-get-sync-function');
+        console.log(syncFunction);
+        
+        if (syncFunction && typeof window[syncFunction] === "function") {
+            window[syncFunction]();
+        }
+    })
+}
 
 window.customConfirm = customConfirm;
-document.body.addEventListener('htmx:afterSwap', (e) => {
-  let fragment = e.target;
-  if (!(fragment instanceof HTMLElement)) return;
-
-  fragment.querySelectorAll('[data-requires-script]').forEach(el => {
-    const scriptPath = el.getAttribute('data-requires-script');
-    const initFunc = el.getAttribute('data-init-function');
-    const initNamespace = el.getAttribute('data-namespace');
-    const syncFunction = el.getAttribute('data-get-sync-function');
-
-    window.loadedScripts = window.loadedScripts || {};
-
-    callInitIfExists = function() {
-      if (initFunc && typeof window[initNamespace] === "object" && typeof window[initNamespace][initFunc] === "function") {
-        window[initNamespace][initFunc]();
-      }
-    }
-    getSyncData = function() {
-      if (syncFunction && typeof window[initNamespace] === "object" && typeof window[initNamespace][syncFunction] === "function") {
-        window[initNamespace][syncFunction]();
-      }
-    }
-    getNamespace = function() {
-        if (initNamespace && typeof window[initNamespace] === "object") {
-            return window[initNamespace];
-        } else {
-            console.warn(`Namespace '${initNamespace}' not found.`);
-            return null;
-        }
-    }
-    
-
-    if (scriptPath && !window.loadedScripts[scriptPath]) {
-      // Dynamically load the script, then call its init function
-      const script = document.createElement('script');
-      script.src = `/static/${scriptPath}`;
-      script.defer = true;
-      script.onload = () => {
-        window.loadedScripts[scriptPath] = true;
-        callInitIfExists();
-      };
-      document.body.appendChild(script);
-    } else {
-      // Script already loaded, just call the init function
-      callInitIfExists();
-    }
-  });
-});

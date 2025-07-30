@@ -3,6 +3,7 @@
     <div class="card ">
         <div class="card-body">
             <p class="card-text ">Please upload your CSV file to start the item generation process.</p>
+            <!-- //todo remove hx? -->
             <form hx-post="/analyze" hx-encoding="multipart/form-data" hx-target="#content">
                 <div class="mb-3">
                     <input id="csvInput" type="file" name="file" accept=".csv"

@@ -234,7 +234,15 @@ if (typeof window !== 'undefined' && !window.DataStorage) {
             return key;
         }
 
-
+        async hasKeyEntryLax(key) {
+            if (!this.db) {
+                await this.init()
+            }
+            const entries = await this.getAllEntries()
+            return entries
+                .map(entry => entry.key)
+                .some(name => name.startsWith(key))
+        }
 
         async getAllEntries() {
             if (!this.db) {
@@ -312,8 +320,7 @@ class ProjectManager {
             // Check if activeProject exists, if not initialize it
             if (!await this.storage.hasData('activeProject')) {
                     console.log('No active project found, initializing with default project');
-                    const projects = await this.getProjects()
-                    if (projects.length > 0) {
+                    if (await this.storage.hasKeyEntryLax('proj_')) { // Check if any project data exists
                         console.log('Project data exists, setting first project as active');
                         return await this.storage.storeData('activeProject', 0, false);
                     } else {

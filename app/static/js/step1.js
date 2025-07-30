@@ -1,23 +1,3 @@
-window.Step1 = window.Step1 || {};
-
-// Attach all your logic to an init function
-window.Step1.init = function() {
-
-window.Step1.saveConstructData = saveConstructData;
-window.Step1.getDefinitionsMore = getDefinitionsMore;
-window.Step1.getDefinitionsAgain = getDefinitionsAgain;
-window.Step1.chooseDefinition = chooseDefinition;
-window.Step1.saveDefinition = saveDefinition;
-window.Step1.getAISuggestion = getAISuggestion;
-window.Step1.takeAISuggestion = takeAISuggestion;
-window.Step1.saveDomainData = saveDomainData;
-window.Step1.getThemeAISuggestion = getThemeAISuggestion;
-window.Step1.takeThemeAISuggestion = takeThemeAISuggestion;
-window.Step1.saveTheme = saveTheme;
-window.Step1.getSubdimAISuggestion = getSubdimAISuggestion;
-window.Step1.takeSubdimAISuggestion = takeSubdimAISuggestion;
-window.Step1.saveSubdimensions = saveSubdimensions;
-
 
 
 // save buttons
@@ -46,14 +26,12 @@ const addSubdimensionButton = document.getElementById('addSubdimensionButton');
 
 
 // ***********************************    Auto-load Data    ***********************************************
-syncData()
-window.Step1.syncData = syncData; // Expose syncData function globally
 
-
-function syncData() {
+document.addEventListener("DOMContentLoaded", () => syncData());
+syncData = async function () {
     if (document.getElementById('constructName') && document.getElementById('initialDefinition')) {
         // If definitions were previously fetched, re-render them
-        window.dataStorage.getData('data_step_1').then(saved => {
+        const saved = await window.dataStorage.getData('data_step_1')
             const panel1 = saved?.panel1
             const panel2 = saved?.panel2
             const panel3 = saved?.panel3;
@@ -67,7 +45,6 @@ function syncData() {
                 document.getElementById('constructName').value = '';
                 document.getElementById('initialDefinition').value = '';
             }
-
             // handle panel 2
             if(!panel2){
                 domPanel2.classList.add("d-none")
@@ -134,7 +111,7 @@ function syncData() {
                 }
             }
             else { // if not panel4 or not multidimensional
-                if(panel4?.dimensionality !== "Multidimensional" && panel3) {
+                if(panel4?.dimensionality === "Unidimensional" && panel3) {
                     continueBtn.classList.remove("d-none")
                 }else{
                     continueBtn.classList.add("d-none")
@@ -145,7 +122,6 @@ function syncData() {
             }
 
             emitDataChanged();
-        });
     }
 }
 
@@ -178,12 +154,23 @@ async function saveConstructData(dontSave = false) {
     }
     // Store in IndexedDB using the renamed DataStorage
     try {
-        await window.dataStorage.storeData(
-            'data_step_1',
-            step1Data,
-            true,
-            'Are you sure? This will restart step 1'
-        );
+        const storedStep1Data = await window.dataStorage.getData('data_step_1')
+        console.log(storedStep1Data);
+        
+        if (storedStep1Data.panel1) {
+            const userConfirmed = await customConfirm({
+                title: '⚠️ Start Over?',
+                message: `Are you sure? This will restart step 1`,
+                confirmText: 'Yes, overwrite',
+                cancelText: 'No, keep it'
+            });
+            if (!userConfirmed) {
+            console.log('User cancelled data storage — existing data preserved');
+            emitDataChanged()
+            return;
+            }
+        }
+        await window.dataStorage.storeData('data_step_1', step1Data, false);
 
         projects.changeProjectName(constructName); // Update project name in ProjectManager
         syncData();
@@ -291,6 +278,8 @@ async function getDefinitions(history = []) {
     renderDefinitions(definitions);
 }
 
+// todo show warning if unsaved changes and wants to change project or export
+
 async function getDefinitionsAgain() {
     const step1Data = await window.dataStorage.getData('data_step_1')
     if (step1Data.panel2.definitions) {
@@ -334,7 +323,7 @@ async function chooseDefinition() {
             displayMessage = `No changes detected. Selected definition: ${references}`;
         }
     }
-    if ((resultingDefinitionTextarea?.value?.trim() && resultingDefinitionTextarea?.value?.trim() !== resultDefinition) || cards.length > 1) {
+    if ((resultingDefinitionTextarea?.value?.trim() && resultingDefinitionTextarea.value.trim() !== resultDefinition) || cards.length > 1) {
         const userConfirmed = await customConfirm({
         title: '⚠️ Overwrite Definition?',
         message: `This will overwrite the existing definition.<br/>
@@ -722,7 +711,7 @@ async function showAISuggestion() {
 async function takeAISuggestion() {
     const step1Data = await window.dataStorage.getData('data_step_1');
     panelData = await saveDomainData(true); // Get the current panel 3 data without saving
-    if ((step1Data.panel3 && step1Data.panel3.property && step1Data.panel3.entity)|| panelData.property || panelData.entity || panelData.propertyExplanation || panelData.entityExplanation) {
+    if ((step1Data.panel3 && step1Data.panel3.property && step1Data.panel3.entity)|| panelData.data.property || panelData.data.entity || panelData.data.propertyExplanation || panelData.data.entityExplanation) {
         // If AI suggestion already exists, confirm overwrite
         const userConfirmed = await customConfirm({
             title: '⚠️ Overwrite AI Suggestion?',
@@ -1114,6 +1103,9 @@ async function takeThemeAISuggestion(fill= false, onlyAttributes = false) {
         return;
     }
     let dataPanel4 = await saveTheme(true) 
+    dataPanel4 = dataPanel4.data;
+
+    
 
     function isPanelEmpty(panel) {
         return !panel || 
@@ -1443,7 +1435,7 @@ async function takeSubdimAISuggestion(overwrite = true) {
   }
   resultSubdimension = await saveSubdimensions(true); // Save current subdimensions to check for changes
   // Confirm overwrite if existing data present
-  if ((resultSubdimension.subdimensions?.length !== 0) && overwrite) {
+  if ((resultSubdimension.data.subdimensions.length !== 0) && overwrite) {
     const userConfirmed = await customConfirm({
       title: '⚠️ Overwrite Subdimensions? ',
       message: 'This will overwrite any existing subdimension definitions.<br/>Do you want to continue?',
@@ -1501,9 +1493,24 @@ window.addEventListener('beforeunload', e => {
   }
 });
 
-document.body.addEventListener('htmx:afterSwap', (e) => {
-    console.log("swapped: ", e.detail.elt.id);
-    
+// warn on navbar navigation
+const navbarLinks = document.querySelectorAll('#navbar a');
+navbarLinks.forEach(link => {
+  link.addEventListener('click', async function(e) {
+    if (hasUnsavedChangesFlag) {
+      e.preventDefault();
+      const targetUrl = this.href;
+      const confirmed = await customConfirm({
+        title: '⚠️ Unsaved Changes',
+        message: 'You have unsaved changes. Do you want to leave this page and lose them?',
+        confirmText: 'Yes, leave',
+        cancelText: 'No, stay'
+      });
+      if (confirmed) {
+        window.location.href = targetUrl;
+      }
+    }
+  });
 });
 
 
@@ -1593,6 +1600,7 @@ async function anyUnsavedChanges() {
 
 let unsavedPanels = []
 
+
 function debounce(fn, delay=300) {
     let timeout;
     return (...args) => {
@@ -1612,7 +1620,11 @@ function debounce(fn, delay=300) {
     };
 }
 
-document.addEventListener('dataChanged', debounce(checkAllSavedState, 300));
+function runDebounce(){
+    debounce(checkAllSavedState,300)()
+}
+
+document.addEventListener('dataChanged',runDebounce);
 
 function emitDataChanged() {
     document.dispatchEvent(new Event('dataChanged'));
@@ -1637,8 +1649,7 @@ document.addEventListener('click', event => {
 
 document.getElementById("area1").addEventListener("click", emitDataChanged);
 
-// todo on nav click no syncdata
-// todo on reload check
+// todo on nav click no warning unsaved
 // todo decide how to restart which panel after change on other steps/Panels
 
 
@@ -1647,7 +1658,7 @@ let hasUnsavedChangesFlag = false;
 
 
 
-
+window.nextStepBtnThere = nextStepBtnThere
 
 function nextStepBtnThere(){
     // handle panel 5 (only if multidimensional)
@@ -1655,8 +1666,9 @@ function nextStepBtnThere(){
         const panel3 = saved?.panel3;
         const panel4 = saved?.panel4;
         const panel5 = saved?.panel5;
-        if (panel4 && panel4.dimensionality === "Multidimensional") {
-            if (panel5?.subdimensions && panel5.subdimensions.length > 0 && panel3) {
+        
+        if (panel4 && panel4?.dimensionality === "Multidimensional") {
+            if (panel5?.subdimensions && panel5.subdimensions.length > 0 && panel3 && panel3.property && panel3.entity) {
                 // If subdimensions exist
                 continueBtn.classList.remove("d-none")
             }else{
@@ -1664,7 +1676,7 @@ function nextStepBtnThere(){
             }
         }
         else { // if not panel4 or not multidimensional
-            if(panel4?.dimensionality !== "Multidimensional" && panel3) {
+            if(panel4?.dimensionality === "Unidimensional" && panel3 && panel3.property && panel3.entity) {
                 continueBtn.classList.remove("d-none")
             }else{
                 continueBtn.classList.add("d-none")
@@ -1673,4 +1685,5 @@ function nextStepBtnThere(){
     });
 }
 
-}
+
+// todo chatgot prompt mit ob alles fine ist mit step 1

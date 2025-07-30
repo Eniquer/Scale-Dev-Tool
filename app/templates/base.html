@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="/static/custom-theme.min.css" rel="stylesheet">
     <link href="/static/style.css" rel="stylesheet">
-    <script src="https://unpkg.com/htmx.org@1.9.2"></script>
+    <!-- Removed HTMX; load scripts statically -->
     <script src="https://unpkg.com/split.js/dist/split.min.js"></script>
 
 
@@ -22,14 +22,18 @@
 <!-- Include our custom JS files in proper order -->
 <script src="{{ url_for('static', path='js/indexeddb.js') }}" defer></script>
 <script src="{{ url_for('static', path='js/table.js') }}" defer></script>
-    <script type="module" src="{{ url_for('static', path='js/app.js') }}" defer></script>
+<script type="module" src="{{ url_for('static', path='js/app.js') }}" defer></script>
+{# Load the JS module for the current step if one exists #}
+{% if current_step > 0 %}
+  <script src="{{ url_for('static', path='js/step' ~ current_step ~ '.js') }}" defer></script>
+{% endif %}
 
 </head>
 <body class="d-flex flex-column h-100 bg-dark text-light">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary">
         <div class="container-fluid">
             <!-- Logo/Brand -->
-            <a class="navbar-brand fw-bold text-primary" href="#" hx-get="/step/0" hx-target="#content" hx-swap="innerHTML">
+            <a class="navbar-brand fw-bold text-primary" href="/step/0">
                 ScaleDev
             </a>
             
@@ -58,25 +62,15 @@
         <div class="bg-dark border-end border-secondary p-0 d-flex flex-column" id="navbar">
             <!-- Header with collapse button -->            
             <ul class="list-unstyled d-flex flex-column m-3 justify-content-center flex-grow-1">
-                <li class="mb-2"><a hx-get="/step/1" hx-target="#content" hx-swap="innerHTML" class="text-decoration-none text-info nav-link{% if current_step == 1 %} active{% endif %}" data-step="1">Conceptualization</a></li>
-                <li class="mb-2"><a hx-get="/step/2" hx-target="#content" hx-swap="innerHTML" class="text-decoration-none text-info nav-link{% if current_step == 2 %} active{% endif %}" data-step="2">Step 2: Data input</a></li>
-                <li class="mb-2"><a hx-get="/step/3" hx-target="#content" hx-swap="innerHTML" class="text-decoration-none text-info nav-link{% if current_step == 3 %} active{% endif %}" data-step="3">Step 3: EFA</a></li>
-                <li class="mb-2"><a hx-get="/step/4" hx-target="#content" hx-swap="innerHTML" class="text-decoration-none text-info nav-link{% if current_step == 4 %} active{% endif %}" data-step="4">Step 4: Validation</a></li>
+                <li class="mb-2"><a href="/step/1" class="text-decoration-none text-info nav-link{% if current_step == 1 %} active{% endif %}">Conceptualization</a></li>
+                <li class="mb-2"><a href="/step/2" class="text-decoration-none text-info nav-link{% if current_step == 2 %} active{% endif %}">Step 2: Data input</a></li>
+                <li class="mb-2"><a href="/step/3" class="text-decoration-none text-info nav-link{% if current_step == 3 %} active{% endif %}">Step 3: EFA</a></li>
+                <li class="mb-2"><a href="/step/4" class="text-decoration-none text-info nav-link{% if current_step == 4 %} active{% endif %}">Step 4: Validation</a></li>
                 <!-- More steps -->
             </ul>
         </div>
-        <main class="bg-dark position-relative" id="right-panel">
-            <div id="loadingOverlay"
-                class="visually-hidden position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 
-                        d-flex align-items-center justify-content-center"
-                style="z-index:1050">
-            <div class="spinner-border text-light" role="status">
-                <span class="visually-hidden">Loading…</span>
-            </div>
-            </div>
-            <div id="content">
-                {% include "partials/step_0.html" %}
-            </div>
+        <main class="bg-dark position-relative" id="content">
+            {% include "partials/step_" ~ current_step ~ ".html" %}
         </main>
     </div>
 
@@ -124,6 +118,13 @@
         </div>
       </div>
     </div>
+
+    <!-- Steps -->
+    <div id="initStep1" data-initialized="false"></div>
+
+
+
+    <!-- Bootstrap Bundle JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Initialize Bootstrap tooltips for icon buttons
@@ -146,6 +147,7 @@
                 evt.detail.elt.classList.add('active');
             }
             // Handle buttons that navigate to specific steps
+            // todo hx xhange?
             const hxGet = evt.detail.elt.getAttribute('hx-get');
             if (hxGet && hxGet.startsWith('/step/')) {
                 const stepNumber = hxGet.match(/\/step\/(\d+)/)[1];

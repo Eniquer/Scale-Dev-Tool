@@ -51,6 +51,7 @@ router = APIRouter()
 
 @router.post("/encrypt-key")
 async def encrypt_key(req: EncryptKey):
+    print(f"Encrypting key: {req.key[-3:]}")
     cipher = simple_encrypt(req.key)
     return {"cipher": cipher}
 

@@ -6,7 +6,7 @@ async function storeAPIKey(apiKeyPlain, showWarning = true) {
         
     }
     // send raw key to server to encrypt
-    const resp = await fetch('api/encrypt-key', {
+    const resp = await fetch('/api/encrypt-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: apiKeyPlain })

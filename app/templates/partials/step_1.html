@@ -1,4 +1,12 @@
-<div id="step1-content" data-requires-script="js/step1.js" data-namespace="Step1" data-get-sync-function="syncData" data-init-function="init"></div>
+<div id="loadingOverlay"
+    class="visually-hidden position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 d-flex align-items-center justify-content-center"
+    style="z-index:1050">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Loading…</span>
+    </div>
+</div>
+
+<div id="step1-content" data-get-sync-function="syncData"></div>    
 <div id="area1">
     <div class="container-fluid">
         <h2 class="h3 mb-4">Step 1: Develop a Conceptual Definition of the Construct</h2>
@@ -20,9 +28,9 @@
                 </div>
                 <div class="row">
                     <div class="col-auto ms-auto">
-                        <button class="btn btn-primary" id="saveContinueButton" onclick="window.Step1.saveConstructData()"
-                            aria-label="Save and continue" title="Save and continue" data-bs-toggle="tooltip"
-                            data-bs-placement="top">
+                        <button class="btn btn-primary" id="saveContinueButton"
+                            onclick="saveConstructData()" aria-label="Save and continue"
+                            title="Save and continue" data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-check-lg"></i>
                         </button>
                     </div>
@@ -37,16 +45,16 @@
                 <!-- Container for displaying academic definitions as cards -->
                 <div class="row my-3">
                     <div class="col-auto ms-auto p-0">
-                        <button class="btn btn-outline-info" id="generateMoreButton" onclick="window.Step1.getDefinitionsMore()"
-                            aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip"
-                            data-bs-placement="top">
+                        <button class="btn btn-outline-info" id="generateMoreButton"
+                            onclick="getDefinitionsMore()" aria-label="Generate More" title="Generate More"
+                            data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-plus-lg"></i>
                         </button>
                     </div>
                     <div class="col-auto ps-2">
-                        <button class="btn btn-outline-info" id="tryAgainButton" onclick="window.Step1.getDefinitionsAgain()"
-                            aria-label="Generate New Definitions" title="Generate New Definitions"
-                            data-bs-toggle="tooltip" data-bs-placement="top">
+                        <button class="btn btn-outline-info" id="tryAgainButton"
+                            onclick="getDefinitionsAgain()" aria-label="Generate New Definitions"
+                            title="Generate New Definitions" data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
                     </div>
@@ -55,15 +63,15 @@
                 <div class="row my-3">
                     <div class="col-auto ms-auto">
                         <!-- button to choose selected definition -->
-                        <button class="btn btn-primary d-none" id="chooseDefinitionButton" onclick="window.Step1.chooseDefinition()"
-                            aria-label="Select Definition" title="Select Definition" data-bs-toggle="tooltip"
-                            data-bs-placement="top">
+                        <button class="btn btn-primary d-none" id="chooseDefinitionButton"
+                            onclick="chooseDefinition()" aria-label="Select Definition"
+                            title="Select Definition" data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-check-lg"></i>
                         </button>
                         <!-- Button to merge Selected -->
-                        <button class="btn btn-info d-none" id="mergeDefinitionsButton" onclick="window.Step1.chooseDefinition()"
-                            aria-label="Merge Definitions" title="Merge Definitions" data-bs-toggle="tooltip"
-                            data-bs-placement="top">
+                        <button class="btn btn-info d-none" id="mergeDefinitionsButton"
+                            onclick="chooseDefinition()" aria-label="Merge Definitions"
+                            title="Merge Definitions" data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-union"></i>
                         </button>
                     </div>
@@ -75,9 +83,9 @@
                     <div class="row mb-3">
                         <!-- button to choose selected definition -->
                         <div class="col-auto ms-auto">
-                            <button class="btn btn-primary" id="saveDefinitionButton" onclick="window.Step1.saveDefinition()"
-                                aria-label="Save Definition" title="Save Definition" data-bs-toggle="tooltip"
-                                data-bs-placement="top">
+                            <button class="btn btn-primary" id="saveDefinitionButton"
+                                onclick="saveDefinition()" aria-label="Save Definition"
+                                title="Save Definition" data-bs-toggle="tooltip" data-bs-placement="top">
                                 <i class="bi bi-floppy2"></i>
                             </button>
                         </div>
@@ -89,9 +97,9 @@
         <div class="card mb-4 d-none" id="step1panel3">
             <div class="card-body">
                 <h2 class="mb-4">Specify the Conceptual Domain</h2>
-                <button class="btn btn-outline-info my-3" id="aiSuggestionButton" onclick="window.Step1.getAISuggestion()"
-                    aria-label="Get AI Suggestion" title="Get AI Suggestion" data-bs-toggle="tooltip"
-                    data-bs-placement="top">
+                <button class="btn btn-outline-info my-3" id="aiSuggestionButton"
+                    onclick="getAISuggestion()" aria-label="Get AI Suggestion" title="Get AI Suggestion"
+                    data-bs-toggle="tooltip" data-bs-placement="top">
                     <i class="bi bi-lightbulb"></i>
                 </button>
                 <div class="row mb-4 d-none" id="aiSuggestion">
@@ -104,7 +112,7 @@
                                 <div class="row">
                                     <div class="col-auto ms-auto">
                                         <button class="btn btn-outline-secondary"
-                                            onclick="window.Step1.takeAISuggestion()">Take</button>
+                                            onclick="takeAISuggestion()">Take</button>
                                     </div>
                                 </div>
                             </div>
@@ -171,7 +179,7 @@
                 <!-- Submit -->
                 <div class="row my-3">
                     <div class="col-auto ms-auto">
-                        <button class="btn btn-primary" id="submitDomainButton" onclick="window.Step1.saveDomainData()"
+                        <button class="btn btn-primary" id="submitDomainButton" onclick="saveDomainData()"
                             aria-label="Select Conceptual Domain" title="Select Conceptual Domain"
                             data-bs-toggle="tooltip" data-bs-placement="top">
                             <i class="bi bi-check-lg"></i>
@@ -186,7 +194,9 @@
                 <h3 class="mb-4">Specify the Conceptual Theme</h3>
                 <!-- Panel 4: Conceptual Theme Inputs -->
                 <!-- AI Suggestion for Theme -->
-                <button class="btn btn-outline-info my-3" id="aiThemeSuggestionButton" onclick="window.Step1.getThemeAISuggestion()" aria-label="Get AI Theme Suggestion" title="Get AI Theme Suggestion">
+                <button class="btn btn-outline-info my-3" id="aiThemeSuggestionButton"
+                    onclick="getThemeAISuggestion()" aria-label="Get AI Theme Suggestion"
+                    title="Get AI Theme Suggestion">
                     <i class="bi bi-lightbulb"></i>
                 </button>
                 <div class="row mb-4 d-none" id="aiThemeSuggestion">
@@ -198,13 +208,18 @@
                                 </div>
                                 <div class="row">
                                     <div class="col-auto ms-auto">
-                                        <button class="btn btn-outline-secondary" onclick="window.Step1.takeThemeAISuggestion(false,true)">Add Attributes</button>
+                                        <button class="btn btn-outline-secondary"
+                                            onclick="takeThemeAISuggestion(false,true)">Add
+                                            Attributes</button>
                                     </div>
                                     <div class="col-auto">
-                                        <button class="btn btn-outline-secondary" onclick="window.Step1.takeThemeAISuggestion(true)">Fill</button>
+                                        <button class="btn btn-outline-secondary"
+                                            onclick="takeThemeAISuggestion(true)">Fill</button>
                                     </div>
                                     <div class="col-auto">
-                                        <button class="btn btn-outline-secondary" onclick="window.Step1.takeThemeAISuggestion()" tooltip="Take AI Suggestion">Take</button>
+                                        <button class="btn btn-outline-secondary"
+                                            onclick="takeThemeAISuggestion()"
+                                            tooltip="Take AI Suggestion">Take</button>
                                     </div>
                                 </div>
                             </div>
@@ -214,8 +229,8 @@
                 <div class="mb-4">
                     <h5 class="form-label fw-bold">
                         Attributes
-<i class="bi bi-info-circle text-muted ms-2 " data-bs-toggle="tooltip" data-bs-placement="top" data-bs-html="true" data-bs-custom-class="custom-tooltip" data-bs-theme="dark"
-   title="<h5>Classification</h5><p><ul class='list-unstyled mb-2'>
+                        <i class="bi bi-info-circle text-muted ms-2 " data-bs-toggle="tooltip" data-bs-placement="top"
+                            data-bs-html="true" data-bs-custom-class="custom-tooltip" data-bs-theme="dark" title="<h5>Classification</h5><p><ul class='list-unstyled mb-2'>
 <li><strong>Common</strong>: shared by many similar or related constructs.</li>
 <li><strong>Unique</strong>: distinctively associated with this construct.</li>
 <li><strong>Both</strong>: partly shared and partly distinct.</li>
@@ -233,21 +248,26 @@
 "></i>
                     </h5>
                     <div id="attributesContainer"></div>
-                    <button class="btn btn-outline-secondary" type="button" id="addAttributeButton">                            
+                    <button class="btn btn-outline-secondary" type="button" id="addAttributeButton">
                         <i class="bi bi-plus-lg"></i>
                     </button>
                 </div>
 
                 <div class="mb-5">
                     <h5 class="form-label fw-bold">Breadth and Inclusiveness</h5>
-                    <textarea class="form-control" id="breadthInclusivenessInput" rows="3" placeholder="Describe the breadth and inclusiveness of the construct"></textarea>
+                    <textarea class="form-control" id="breadthInclusivenessInput" rows="3"
+                        placeholder="Describe the breadth and inclusiveness of the construct"></textarea>
                 </div>
 
                 <div class="mb-5">
                     <h5 class="form-label fw-bold">Dimensionality</h5>
                     <div id="dimensionalityOptions">
-                        <div class="form-check"><input class="form-check-input" type="radio" name="dimensionality" id="dimUnidimensional" value="Unidimensional"><label class="form-check-label" for="dimUnidimensional">Unidimensional</label></div>
-                        <div class="form-check"><input class="form-check-input" type="radio" name="dimensionality" id="dimMultidimensional" value="Multidimensional"><label class="form-check-label" for="dimMultidimensional">Multidimensional</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="dimensionality"
+                                id="dimUnidimensional" value="Unidimensional"><label class="form-check-label"
+                                for="dimUnidimensional">Unidimensional</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="dimensionality"
+                                id="dimMultidimensional" value="Multidimensional"><label class="form-check-label"
+                                for="dimMultidimensional">Multidimensional</label></div>
                     </div>
                 </div>
 
@@ -257,12 +277,16 @@
                         <label class="form-label">Over Time:</label>
                         <div class="card" style="width: fit-content;">
                             <div class="card-boy p-2">
-                                <div class="d-grid gap-2 d-md-flex justify-content-start" role="group" aria-label="Stability Over Time">
-                                    <input type="radio" class="btn-check" name="stabilityTime" id="stableTrait" autocomplete="off" value="Stable (trait-like)">
+                                <div class="d-grid gap-2 d-md-flex justify-content-start" role="group"
+                                    aria-label="Stability Over Time">
+                                    <input type="radio" class="btn-check" name="stabilityTime" id="stableTrait"
+                                        autocomplete="off" value="Stable (trait-like)">
                                     <label class="btn" for="stableTrait">Stable (trait-like)</label>
-                                    <input type="radio" class="btn-check" name="stabilityTime" id="variableState" autocomplete="off" value="Variable (state-like)">
+                                    <input type="radio" class="btn-check" name="stabilityTime" id="variableState"
+                                        autocomplete="off" value="Variable (state-like)">
                                     <label class="btn" for="variableState">Variable (state-like)</label>
-                                    <input type="radio" class="btn-check" name="stabilityTime" id="timeDepends" autocomplete="off" value="Depends / Not sure">
+                                    <input type="radio" class="btn-check" name="stabilityTime" id="timeDepends"
+                                        autocomplete="off" value="Depends / Not sure">
                                     <label class="btn" for="timeDepends">Depends / Not sure</label>
                                 </div>
                             </div>
@@ -272,12 +296,16 @@
                         <label class="form-label">Across Situations:</label>
                         <div class="card" style="width: fit-content;">
                             <div class="card-boy p-2">
-                                <div class="d-grid gap-2 d-md-flex justify-content-start" role="group" aria-label="Stability Across Situations">
-                                    <input type="radio" class="btn-check" name="stabilitySituation" id="situationGeneralizable" autocomplete="off" value="Generalizable">
+                                <div class="d-grid gap-2 d-md-flex justify-content-start" role="group"
+                                    aria-label="Stability Across Situations">
+                                    <input type="radio" class="btn-check" name="stabilitySituation"
+                                        id="situationGeneralizable" autocomplete="off" value="Generalizable">
                                     <label class="btn" for="situationGeneralizable">Generalizable</label>
-                                    <input type="radio" class="btn-check" name="stabilitySituation" id="situationSpecific" autocomplete="off" value="Situation-specific">
+                                    <input type="radio" class="btn-check" name="stabilitySituation"
+                                        id="situationSpecific" autocomplete="off" value="Situation-specific">
                                     <label class="btn" for="situationSpecific">Situation-specific</label>
-                                    <input type="radio" class="btn-check" name="stabilitySituation" id="situationDepends" autocomplete="off" value="Depends / Not sure">
+                                    <input type="radio" class="btn-check" name="stabilitySituation"
+                                        id="situationDepends" autocomplete="off" value="Depends / Not sure">
                                     <label class="btn" for="situationDepends">Depends / Not sure</label>
                                 </div>
                             </div>
@@ -287,12 +315,16 @@
                         <label class="form-label">Across Cases:</label>
                         <div class="card" style="width: fit-content;">
                             <div class="card-body p-2">
-                                <div class="d-grid gap-2 d-md-flex justify-content-start" role="group" aria-label="Stability Across Cases">
-                                    <input type="radio" class="btn-check" name="stabilityCases" id="casesBroadly" autocomplete="off" value="Broadly applicable">
+                                <div class="d-grid gap-2 d-md-flex justify-content-start" role="group"
+                                    aria-label="Stability Across Cases">
+                                    <input type="radio" class="btn-check" name="stabilityCases" id="casesBroadly"
+                                        autocomplete="off" value="Broadly applicable">
                                     <label class="btn" for="casesBroadly">Broadly applicable</label>
-                                    <input type="radio" class="btn-check" name="stabilityCases" id="casesSubgroups" autocomplete="off" value="Applies only to specific subgroups">
+                                    <input type="radio" class="btn-check" name="stabilityCases" id="casesSubgroups"
+                                        autocomplete="off" value="Applies only to specific subgroups">
                                     <label class="btn" for="casesSubgroups">Applies only to specific subgroups</label>
-                                    <input type="radio" class="btn-check" name="stabilityCases" id="casesDepends" autocomplete="off" value="Depends / Not sure">
+                                    <input type="radio" class="btn-check" name="stabilityCases" id="casesDepends"
+                                        autocomplete="off" value="Depends / Not sure">
                                     <label class="btn" for="casesDepends">Depends / Not sure</label>
                                 </div>
                             </div>
@@ -302,7 +334,8 @@
 
                 <div class="row my-3">
                     <div class="col-auto ms-auto">
-                        <button class="btn btn-primary" id="saveThemeButton" onclick="window.Step1.saveTheme()"><i class="bi bi-check-lg"></i></button>
+                        <button class="btn btn-primary" id="saveThemeButton" onclick="saveTheme()"><i
+                                class="bi bi-check-lg"></i></button>
                     </div>
                 </div>
 
@@ -311,52 +344,54 @@
 
         <!-- Panel 5: Subdimensions -->
         <div class="card mb-4 d-none" id="step1panel5">
-          <div class="card-body">
-            <h3 class="mb-4">Specify Subdimensions</h3>
-            <p>Define subdimensions for your construct. For each subdimension, provide a name, definition, and attributes.</p>
-            <!-- AI Suggestion for Subdimensions -->
-            <button class="btn btn-outline-info my-3" id="aiSubdimSuggestionButton" onclick="window.Step1.getSubdimAISuggestion()" aria-label="Get AI Subdimensions Suggestion" title="Get AI Subdimensions Suggestion">
-              <i class="bi bi-lightbulb"></i>
-            </button>
-            <div class="row mb-4 d-none" id="aiSubdimSuggestion">
-              <div class="container-fluid">
-                <div class="card text-bg-light">
-                  <div class="card-body">
-                    <div class="row">
-                      <p id="aiSubdimSuggestionText"></p>
-                    </div>
-                    <div class="row">
-                        <div class="col-auto ms-auto">
-                            <button class="btn btn-outline-secondary" onclick="window.Step1.takeSubdimAISuggestion(false)">Add</button>
+            <div class="card-body">
+                <h3 class="mb-4">Specify Subdimensions</h3>
+                <p>Define subdimensions for your construct. For each subdimension, provide a name, definition, and
+                    attributes.</p>
+                <!-- AI Suggestion for Subdimensions -->
+                <button class="btn btn-outline-info my-3" id="aiSubdimSuggestionButton"
+                    onclick="getSubdimAISuggestion()" aria-label="Get AI Subdimensions Suggestion"
+                    title="Get AI Subdimensions Suggestion">
+                    <i class="bi bi-lightbulb"></i>
+                </button>
+                <div class="row mb-4 d-none" id="aiSubdimSuggestion">
+                    <div class="container-fluid">
+                        <div class="card text-bg-light">
+                            <div class="card-body">
+                                <div class="row">
+                                    <p id="aiSubdimSuggestionText"></p>
+                                </div>
+                                <div class="row">
+                                    <div class="col-auto ms-auto">
+                                        <button class="btn btn-outline-secondary"
+                                            onclick="takeSubdimAISuggestion(false)">Add</button>
+                                    </div>
+                                    <div class="col-auto">
+                                        <button class="btn btn-outline-secondary"
+                                            onclick="takeSubdimAISuggestion()">Take</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-auto">
-                            <button class="btn btn-outline-secondary" onclick="window.Step1.takeSubdimAISuggestion()">Take</button>
-                        </div>
                     </div>
-                  </div>
                 </div>
-              </div>
+                <div id="subdimensionsContainer"></div>
+                <button class="btn btn-outline-secondary" type="button" id="addSubdimensionButton">
+                    <i class="bi bi-plus-lg"></i> Add Subdimension
+                </button>
+                <div class="row my-3">
+                    <div class="col-auto ms-auto">
+                        <button class="btn btn-primary" id="saveSubdimensionsButton"
+                            onclick="saveSubdimensions()"><i class="bi bi-check-lg"></i></button>
+                    </div>
+                </div>
             </div>
-            <div id="subdimensionsContainer"></div>
-            <button class="btn btn-outline-secondary" type="button" id="addSubdimensionButton">
-              <i class="bi bi-plus-lg"></i> Add Subdimension
-            </button>
-            <div class="row my-3">
-              <div class="col-auto ms-auto">
-                <button class="btn btn-primary" id="saveSubdimensionsButton" onclick="window.Step1.saveSubdimensions()"><i class="bi bi-check-lg"></i></button>
-              </div>
-            </div>
-          </div>
         </div>
 
-                <!-- after the end of Panel 5 markup, just before closing the form or container -->
+        <!-- after the end of Panel 5 markup, just before closing the form or container -->
         <div class="d-flex justify-content-end">
-          <button
-            id="continueStep1Btn"
-            type="button"
-            class="btn btn-primary d-none my-3">
-            Continue to Next Step
-          </button>
+            <button id="continueStep1Btn" type="button" class="btn btn-primary d-none my-3">
+                Continue to Next Step
+            </button>
         </div>
     </div>
-

@@ -14,6 +14,13 @@
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
       "disableOptimisticBPs": true
+    },{
+      "name": "Launch Chrome against localhost",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://127.0.0.1:8000", 
+      "webRoot": "${workspaceFolder}",
+      "breakOnLoad": true
     }
   ]
 }
