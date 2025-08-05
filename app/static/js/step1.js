@@ -146,8 +146,24 @@ async function saveConstructData(dontSave = false) {
         delete step1Data.panel1.timestamp
         return {"data":{...step1Data.panel1}, "empty": !constructName && !initialDefinition}; // Return data without saving
     }
+    if (!initialDefinition) {
+        const userConfirmed = await customConfirm({
+                title: '⚠️ Leave Definition Empty?',
+                message: `Are you sure?`,
+                confirmText: 'Yes, leave it empty',
+                cancelText: 'No, add definition'
+        });
+        if (!userConfirmed) {
+        console.log('User cancelled data storage — existing data preserved');
+        emitDataChanged()
+        return;
+        } else {
+            step1Data.panel1.initialDefinition = 'no definition provided'; // Set a placeholder if the user confirms leaving it empty
+        }
+    }
+
     
-    if (!constructName || !initialDefinition) {
+    if (!constructName) {
         window.displayInfo('warning', 'Please fill in both the construct name and initial definition before saving.');
         emitDataChanged()
         return false;
@@ -323,7 +339,7 @@ async function chooseDefinition() {
             displayMessage = `No changes detected. Selected definition: ${references}`;
         }
     }
-    if ((resultingDefinitionTextarea?.value?.trim() && resultingDefinitionTextarea.value.trim() !== resultDefinition) || cards.length > 1) {
+    if ((resultingDefinitionTextarea?.value?.trim() && resultingDefinitionTextarea.value.trim() !== resultDefinition) || (cards.length > 1 && resultingDefinitionTextarea?.value?.trim() !== "")) {
         const userConfirmed = await customConfirm({
         title: '⚠️ Overwrite Definition?',
         message: `This will overwrite the existing definition.<br/>
@@ -349,7 +365,6 @@ async function chooseDefinition() {
 
                 - clear and concise,
                 - theoretically grounded and distinct from related constructs,
-                - specific about the essential attributes and the domain of the construct (including property type, target entity, and dimensionality, if applicable).
 
             Your task is to synthesize a definition of the construct "${step1Data.panel1.constructName}" based on the following selected definitions. The resulting definition should integrate their core ideas while adhering to the above criteria.
 
@@ -357,14 +372,14 @@ async function chooseDefinition() {
             ${definitionsList}
 
             Instructions:
-                - Focus only on merging and refining the content of these two definitions.
+                - Focus only on merging and refining the content of these definitions.
                 - Avoid redundancies and ensure theoretical clarity.
             `;
         // Send prompt to chat API and retrieve JSON text
         try {
             showLoading();
             response = await window.sendChat(promptText);
-            displayMessage = 'Definitions merged into initial definition.';
+            displayMessage = 'Definitions merged.';
             resultDefinition = response[0].trim();
         } catch (error) {
             console.error('Error fetching chat response:', error);
@@ -381,12 +396,13 @@ async function chooseDefinition() {
         "definition": card.querySelector('.card-text')?.textContent.trim()
     }));
     step1Data.panel2.selectedDefinitions = selectedDefinitions;
-
-
+    
+    
     // Store the resulting definition in IndexedDB
     step1Data.panel2.resultingDefinition = resultDefinition;
     step1Data.panel2.references = references;
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+    emitDataChanged();
     console.log('Resulting definition saved');
 
     // Display success message and set the resulting definition in the textarea
@@ -1011,8 +1027,8 @@ Given the construct definition, return:
   Return your answer in **strict JSON format**:
 {
   "attributes": [
-    { "name": "AttributeName1", "classification": "CLASSIFICATION HERE", "indication": "INDICATION HERE", "core": CORE STATUS HERE },
-    { "name": "AttributeName2", "classification": "CLASSIFICATION HERE", "indication": "INDICATION HERE", "core": CORE STATUS HERE },
+    { "name": "AttributeName1", "classification": "CLASSIFICATION HERE", "indication": "INDICATION HERE", "core": "CORE STATUS HERE" },
+    { "name": "AttributeName2", "classification": "CLASSIFICATION HERE", "indication": "INDICATION HERE", "core": "CORE STATUS HERE" },
     ...
   ],
   "breadthInclusiveness": "TEXT HERE",
@@ -1482,7 +1498,7 @@ if (continueBtn) {
         }
             
         // persist any unsaved data if needed, then navigate:
-        window.location.href = '/step2';
+        window.location.href = '/step/2';
   });
 }
 
@@ -1687,3 +1703,22 @@ function nextStepBtnThere(){
 
 
 // todo chatgot prompt mit ob alles fine ist mit step 1
+// todo commend thi js
+// todo custom alert?
+
+
+async function getAllResults() {
+    const step1Data = await window.dataStorage.getData('data_step_1');
+    delete step1Data.panel3.aiProperty
+    delete step1Data.panel3.aiEntity
+    delete step1Data.panel3.aiJustification
+    results = {
+        "constructName": step1Data?.panel1?.constructName || '',
+        "initialDefinition": step1Data?.panel1?.initialDefinition || '',
+        "savedDefinition": step1Data?.panel2?.savedDefinition || '',
+        "domain": step1Data?.panel3 || {},
+        "theme": step1Data?.panel4 || {},
+        "subdimensions": step1Data?.panel5?.subdimensions || [],
+    };
+    return results
+}

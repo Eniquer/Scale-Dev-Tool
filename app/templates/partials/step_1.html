@@ -86,7 +86,7 @@
                             <button class="btn btn-primary" id="saveDefinitionButton"
                                 onclick="saveDefinition()" aria-label="Save Definition"
                                 title="Save Definition" data-bs-toggle="tooltip" data-bs-placement="top">
-                                <i class="bi bi-floppy2"></i>
+                                <i class="bi bi-floppy2 floppy-custom-color"></i>
                             </button>
                         </div>
                     </div>
@@ -209,17 +209,20 @@
                                 <div class="row">
                                     <div class="col-auto ms-auto">
                                         <button class="btn btn-outline-secondary"
-                                            onclick="takeThemeAISuggestion(false,true)">Add
-                                            Attributes</button>
+                                            onclick="takeThemeAISuggestion(false,true)"
+                                            title="Append the generated attributes" data-bs-toggle="tooltip" data-bs-placement="top"
+                                            >Add Attributes</button>
                                     </div>
                                     <div class="col-auto">
                                         <button class="btn btn-outline-secondary"
-                                            onclick="takeThemeAISuggestion(true)">Fill</button>
+                                            onclick="takeThemeAISuggestion(true)"
+                                            title="Fill in the theme input fields" data-bs-toggle="tooltip" data-bs-placement="top"
+                                            >Fill</button>
                                     </div>
                                     <div class="col-auto">
                                         <button class="btn btn-outline-secondary"
                                             onclick="takeThemeAISuggestion()"
-                                            tooltip="Take AI Suggestion">Take</button>
+                                            title="Use the Suggested Theme" data-bs-toggle="tooltip" data-bs-placement="top">Take</button>
                                     </div>
                                 </div>
                             </div>
@@ -247,10 +250,10 @@
 
 "></i>
                     </h5>
-                    <div id="attributesContainer"></div>
-                    <button class="btn btn-outline-secondary" type="button" id="addAttributeButton">
-                        <i class="bi bi-plus-lg"></i>
-                    </button>
+                        <div id="attributesContainer"></div>
+                        <button class="btn btn-outline-secondary" type="button" id="addAttributeButton">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
                 </div>
 
                 <div class="mb-5">

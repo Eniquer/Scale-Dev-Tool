@@ -300,13 +300,15 @@ async function populateProjectsModal() {
                 cancelText: 'Cancel'
             });
             if (confirmed) {
-
+                
                 await window.projects.deleteProject(proj.id);
                 populateProjectsModal();
                 await window.getSyncFunc();
-                setTimeout(() => {
-                    bootstrap.Modal.getInstance(modalEl).hide();
-                }, 500);
+                // if (nameDiv.childNodes.length > 1) { 
+                //     setTimeout(() => {
+                //         bootstrap.Modal.getInstance(modalEl).hide();
+                //     }, 500);
+                // }
             }
         };
         btnDiv.appendChild(delBtn);

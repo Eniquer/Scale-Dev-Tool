@@ -59,7 +59,7 @@ html[data-bs-theme="dark"] body {
     background-color: #36393b;
 }
 
-.bi-union, .bi-floppy2 {
+.bi-union, .floppy-custom-color {
     color: var(--color-card-body);
 }
 
