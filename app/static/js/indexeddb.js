@@ -142,6 +142,24 @@ if (typeof window !== 'undefined' && !window.DataStorage) {
             });
         }
 
+        // Recursively sanitize strings in data using DOMPurify
+        sanitizeData(input) {
+            if (typeof input === 'string') {
+                return window.DOMPurify ? DOMPurify.sanitize(input) : input;
+            } else if (Array.isArray(input)) {
+                return input.map(item => this.sanitizeData(item));
+            } else if (input && typeof input === 'object') {
+                const out = {};
+                for (const k in input) {
+                    if (Object.prototype.hasOwnProperty.call(input, k)) {
+                        out[k] = this.sanitizeData(input[k]);
+                    }
+                }
+                return out;
+            }
+            return input;
+        }
+
         async getData(key) {
             if (!this.db) {
                 await this.init();
@@ -154,23 +172,29 @@ if (typeof window !== 'undefined' && !window.DataStorage) {
                 const request = store.get(key);
                 
                 request.onsuccess = () => {
-                    if (request.result !== undefined) {
-                        let data = request.result;
-                        
-                        // Try to parse as JSON, if it fails return as string
-                        if (typeof data === 'string') {
-                            try {
-                                data = JSON.parse(data);
-                            } catch (e) {
-                                // Not JSON, return as string
-                                console.log(`Data for key '${key}' is not JSON, returning as string`);
-                            }
-                        }
-                        
-                        resolve(data);
-                    } else {
-                        resolve(null); // Return null instead of rejecting for consistency
+                    if (request.result === undefined) {
+                        resolve(null); // no data
+                        return;
                     }
+                    // Sanitize raw stored string before parsing
+                    let raw = request.result;
+                    if (typeof raw === 'string' && window.DOMPurify) {
+                        raw = DOMPurify.sanitize(raw);
+                    }
+                    let data;
+                    if (typeof raw === 'string') {
+                        try {
+                            data = JSON.parse(raw);
+                        } catch (e) {
+                            console.log(`Data for key '${key}' is not JSON, returning sanitized string`);
+                            data = raw;
+                        }
+                    } else {
+                        data = raw;
+                    }
+                    // Recursively sanitize parsed data
+                    data = this.sanitizeData(data);
+                    resolve(data);
                 };
                 
                 request.onerror = () => {
