@@ -1670,7 +1670,7 @@ document.getElementById("area1").addEventListener("click", emitDataChanged);
 
 
 // track unsaved edits
-let hasUnsavedChangesFlag = false;
+window.hasUnsavedChangesFlag = false;
 
 
 

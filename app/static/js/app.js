@@ -179,6 +179,19 @@ async function exportSelected() {
         return;
     }
 
+    if (window.getUnsavedChangesFlag()) {
+        const confirmed = await customConfirm({
+            title: '⚠️ Unsaved Changes',
+            message: 'You have unsaved changes. Do you want to export without saving?',
+            confirmText: 'Yes, export',
+            cancelText: 'No'
+        });
+        if (!confirmed) {
+            return; // User chose to stay
+        }
+    }
+
+
     const jsonString = JSON.stringify(output, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -277,6 +290,17 @@ async function populateProjectsModal() {
             selectBtn.innerHTML = '<i class="bi bi-check-circle"></i>';
             selectBtn.setAttribute('aria-label', 'Select project');
             selectBtn.onclick = async () => {
+                 if (window.getUnsavedChangesFlag()) {
+                    const confirmed = await customConfirm({
+                        title: '⚠️ Unsaved Changes',
+                        message: 'You have unsaved changes. Do you want to leave this project and lose them?',
+                        confirmText: 'Yes, leave',
+                        cancelText: 'No, stay'
+                    });
+                    if (!confirmed) {
+                        return; // User chose to stay
+                    }
+                    }
                 await window.projects.setActiveProjectId(proj.id);
                 populateProjectsModal();
                 await window.getSyncFunc();
@@ -354,6 +378,7 @@ if (addProjectBtn) {
  * @param {string} [cancelText="Cancel"] — Text for the cancel button
  * @returns {Promise<boolean>} — Resolves true if confirmed, false otherwise.
  */
+// todo prevent double activation
 function customConfirm({
     title,
     message,
@@ -365,11 +390,11 @@ function customConfirm({
         const container = document.createElement('div');
         const modalId = `dynamicModal_${Date.now()}`;
         container.innerHTML = `
-      <div class="modal fade" id="${modalId}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+      <div class="modal text-center fade" id="${modalId}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content rounded-3 shadow-lg">
             <div class="modal-header border-0">
-              <h5 class="modal-title">${title}</h5>
+              <h5 class="modal-title w-100">${title}</h5>
               <button type="button" class="btn-close" data-bs-dismiss="modal"
                       aria-label="Close"></button>
             </div>
@@ -388,6 +413,14 @@ function customConfirm({
       </div>
     `;
         document.body.appendChild(container);
+        if (cancelText == '__ONLYALERT__') {
+            // If only alert, hide cancel button
+            container.querySelector(`#${modalId}_cancel`).style.display = 'none';
+            container.querySelector(`#${modalId}_confirm`).classList.remove('btn-danger');
+            container.querySelector(`#${modalId}_confirm`).classList.add('btn-info');
+            container.querySelector('.btn-close').style.display = 'none';
+            container.querySelector('.modal-footer').classList.add('justify-content-center');   
+        }
 
         // 2) Bootstrap modal instance
         const modalEl = document.getElementById(modalId);
@@ -419,12 +452,24 @@ function customConfirm({
 window.getSyncFunc = function () {
     document.querySelectorAll('[data-get-sync-function]').forEach(el => {
         const syncFunction = el.getAttribute('data-get-sync-function');
-        console.log(syncFunction);
         
         if (syncFunction && typeof window[syncFunction] === "function") {
             window[syncFunction]();
         }
     })
 }
+
+// Returns true if any element has an associated unsaved-changes flag set to true
+window.getUnsavedChangesFlag = function () {
+    const elements = document.querySelectorAll('[data-get-unsaved-changes-flag]');
+    for (const el of elements) {
+        const flagName = el.getAttribute('data-get-unsaved-changes-flag');
+        if (flagName && typeof window[flagName] === 'boolean') {
+            return window[flagName];
+        }
+    }
+    // No flag found or none true
+    return false;
+};
 
 window.customConfirm = customConfirm;

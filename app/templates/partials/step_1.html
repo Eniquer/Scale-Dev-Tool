@@ -6,7 +6,7 @@
     </div>
 </div>
 
-<div id="step1-content" data-get-sync-function="syncData"></div>    
+<div id="step1-content" data-get-sync-function="syncData" data-get-unsaved-changes-flag="hasUnsavedChangesFlag"></div>
 <div id="area1">
     <div class="container-fluid">
         <h2 class="h3 mb-4">Step 1: Develop a Conceptual Definition of the Construct</h2>
@@ -210,19 +210,19 @@
                                     <div class="col-auto ms-auto">
                                         <button class="btn btn-outline-secondary"
                                             onclick="takeThemeAISuggestion(false,true)"
-                                            title="Append the generated attributes" data-bs-toggle="tooltip" data-bs-placement="top"
+                                            title="Append the generated attributes"  data-bs-custom-class="custom-tooltip" data-bs-toggle="tooltip" data-bs-placement="top"
                                             >Add Attributes</button>
                                     </div>
                                     <div class="col-auto">
                                         <button class="btn btn-outline-secondary"
                                             onclick="takeThemeAISuggestion(true)"
-                                            title="Fill in the theme input fields" data-bs-toggle="tooltip" data-bs-placement="top"
+                                            title="Fill in the theme input fields" data-bs-custom-class="custom-tooltip" data-bs-toggle="tooltip" data-bs-placement="top"
                                             >Fill</button>
                                     </div>
                                     <div class="col-auto">
                                         <button class="btn btn-outline-secondary"
                                             onclick="takeThemeAISuggestion()"
-                                            title="Use the Suggested Theme" data-bs-toggle="tooltip" data-bs-placement="top">Take</button>
+                                            title="Use the Suggested Theme" data-bs-custom-class="custom-tooltip" data-bs-toggle="tooltip" data-bs-placement="top">Take</button>
                                     </div>
                                 </div>
                             </div>
