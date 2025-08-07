@@ -369,7 +369,7 @@ if (addProjectBtn) {
 }
 
 // custom confirm
-
+let customConfirmActive = false;
 /**
  * Show a Bootstrap “are you sure?” modal with custom title & message.
  * @param {string} title — Modal header text (can include emojis)
@@ -378,14 +378,16 @@ if (addProjectBtn) {
  * @param {string} [cancelText="Cancel"] — Text for the cancel button
  * @returns {Promise<boolean>} — Resolves true if confirmed, false otherwise.
  */
-// todo prevent double activation
 function customConfirm({
     title,
     message,
     confirmText = 'OK',
     cancelText = 'Cancel'
 }) {
-    return new Promise(resolve => {
+    // If a customConfirm is already active, ignore and resolve false
+    if (customConfirmActive) return Promise.resolve(false);
+    customConfirmActive = true;
+     return new Promise(resolve => {
         // 1) Create a unique container for this modal
         const container = document.createElement('div');
         const modalId = `dynamicModal_${Date.now()}`;
@@ -439,6 +441,8 @@ function customConfirm({
 
         // 4) Cleanup after hide
         modalEl.addEventListener('hidden.bs.modal', () => {
+            // Reset active flag when closed
+            customConfirmActive = false;
             bsModal.dispose();
             container.remove();
         });
