@@ -477,3 +477,18 @@ window.getUnsavedChangesFlag = function () {
 };
 
 window.customConfirm = customConfirm;
+
+
+function cleanAIRespond(input) {
+    // Remove leading/trailing whitespace and newlines
+    input = input.trim();
+    const match = input.match(/```json\s*([\s\S]*?)\s*```/);
+    let responseJson = null;
+    if (match) {
+        responseJson = JSON.parse(match[1]);
+    } else {
+        responseJson = JSON.parse(input);
+    }
+    return responseJson;
+}
+window.cleanAIRespond = cleanAIRespond;

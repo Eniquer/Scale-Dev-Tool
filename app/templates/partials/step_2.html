@@ -25,6 +25,274 @@
                         <i class="bi bi-plus-lg"></i>
                     </button>
                 </div>
+                <hr>
+                <h4 class="card-title m-0 d-flex align-items-center">
+                    <button id="toggleAIItemsBtn" class="btn btn-lg btn-outline-secondary me-3" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#AIItemsContainer"
+                    aria-expanded="true" aria-controls="AIItemsContainer">
+                    <i class="bi bi-chevron-up"></i>
+                    <span>Generate Items</span>
+                </button>
+                </h4>
+                <div id="AIItemsContainer" class="collapse show">
+                    <div class="row my-3">
+                        <div class="col-auto pe-0">
+                            <button class="btn btn-outline-info" onclick="generateItems('literature')"
+                                aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-info" onclick="generateItems('literature',true)"
+                                aria-label="Generate New Items" title="Generate New Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-danger remove-item" onclick="deleteItems('literature')"
+                                aria-label="Delete Generated Items" title="Delete Generated Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                &times;
+                            </button>
+                        </div>
+                        <div class="col-auto d-flex align-items-center">
+                            <h5 style="margin: 0px;">Reviews of the literature</h5>
+                        </div>
+                    </div>
+                    <div class="card d-none" data-bs-theme="light">
+                        <div class="card-body">
+                            <div class="container-fluid">
+                                <div class="row gen-item-container row-cols-1 g-3"
+                                    id="literature-item-container">
+                                </div>
+                                <div class=" my-3 row g-3">
+                                    <div class="col form-check">
+                                        <input class="form-check-input" type="checkbox" id="selectAllliterature"
+                                        onchange="document.querySelectorAll('.literature-checkbox').forEach(cb => !cb.disabled ? cb.checked = this.checked : null)">
+                                        <label class="form-check-label" for="selectAllliterature">Select All</label> <button class="btn btn-secondary btn-sm ms-3" onclick="chooseSelectItems('literature')">Choose Selected</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row my-3">
+                        <div class="col-auto pe-0">
+                            <button class="btn btn-outline-info" onclick="generateItems('deduction')"
+                                aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-info" onclick="generateItems('deduction',true)"
+                                aria-label="Generate New Items" title="Generate New Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-danger remove-item" onclick="deleteItems('deduction')"
+                                aria-label="Delete Generated Items" title="Delete Generated Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                &times;
+                            </button>
+                        </div>
+                        <div class="col-auto d-flex align-items-center">
+                            <h5 style="margin: 0px;">Deduction from the Theoretical definition of the construct</h5>
+                        </div>
+                    </div>
+                    <div class="card d-none" data-bs-theme="light">
+                        <div class="card-body">
+                            <div class="container-fluid">
+                                <div class="row gen-item-container row-cols-1 g-3"
+                                    id="deduction-item-container">
+                                </div>
+                                <div class=" my-3 row g-3">
+                                    <div class="col form-check">
+                                        <input class="form-check-input" type="checkbox" id="selectAlldeduction"
+                                        onchange="document.querySelectorAll('.deduction-checkbox').forEach(cb => !cb.disabled ? cb.checked = this.checked : null)">
+                                        <label class="form-check-label" for="selectAlldeduction">Select All</label> <button class="btn btn-secondary btn-sm ms-3" onclick="chooseSelectItems('deduction')">Choose Selected</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row my-3">
+                        <div class="col-auto pe-0">
+                            <button class="btn btn-outline-info" onclick="generateItems('summary')"
+                                aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-info" onclick="generateItems('summary',true)"
+                                aria-label="Generate New Items" title="Generate New Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-danger remove-item" onclick="deleteItems('summary')"
+                                aria-label="Delete Generated Items" title="Delete Generated Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                &times;
+                            </button>
+                        </div>
+                        <div class="col-auto d-flex align-items-center">
+                            <h5 style="margin: 0px;">Theoretical and empirical research on the focal construct</h5>
+                        </div>
+                    </div>
+                    <div class="card d-none" data-bs-theme="light">
+                        <div class="card-body">
+                            <div class="container-fluid">
+                                <div class="row gen-item-container row-cols-1 g-3"
+                                    id="summary-item-container">
+                                </div>
+                                <div class=" my-3 row g-3">
+                                    <div class="col form-check">
+                                        <input class="form-check-input" type="checkbox" id="selectAllsummary"
+                                        onchange="document.querySelectorAll('.summary-checkbox').forEach(cb => !cb.disabled ? cb.checked = this.checked : null)">
+                                        <label class="form-check-label" for="selectAllsummary">Select All</label> <button class="btn btn-secondary btn-sm ms-3" onclick="chooseSelectItems('summary')">Choose Selected</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row my-3">
+                        <div class="col-auto pe-0">
+                            <button class="btn btn-outline-info" onclick="generateItems('expert')"
+                                aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-info" onclick="generateItems('expert',true)"
+                                aria-label="Generate New Items" title="Generate New Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-danger remove-item" onclick="deleteItems('expert')"
+                                aria-label="Delete Generated Items" title="Delete Generated Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                &times;
+                            </button>
+                        </div>
+                        <div class="col-auto d-flex align-items-center">
+                            <h5 style="margin: 0px;">Experts in the field</h5>
+                        </div>
+                    </div>
+                    <div class="card d-none" data-bs-theme="light">
+                        <div class="card-body">
+                            <div class="container-fluid">
+                                <div class="row gen-item-container row-cols-1 g-3"
+                                    id="expert-item-container">
+                                </div>
+                                <div class=" my-3 row g-3">
+                                    <div class="col form-check">
+                                        <input class="form-check-input" type="checkbox" id="selectAllexpert"
+                                        onchange="document.querySelectorAll('.expert-checkbox').forEach(cb => !cb.disabled ? cb.checked = this.checked : null)">
+                                        <label class="form-check-label" for="selectAllexpert">Select All</label> <button class="btn btn-secondary btn-sm ms-3" onclick="chooseSelectItems('expert')">Choose Selected</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row my-3">
+                        <div class="col-auto pe-0">
+                            <button class="btn btn-outline-info" onclick="generateItems('focusGroup')"
+                                aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-info" onclick="generateItems('focusGroup',true)"
+                                aria-label="Generate New Items" title="Generate New Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-danger remove-item" onclick="deleteItems('focusGroup')"
+                                aria-label="Delete Generated Items" title="Delete Generated Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                &times;
+                            </button>
+                        </div>
+                        <div class="col-auto d-flex align-items-center">
+                            <h5 style="margin: 0px;">Focus group discussions</h5>
+                        </div>
+                    </div>
+                    <div class="card d-none" data-bs-theme="light">
+                        <div class="card-body">
+                            <div class="container-fluid">
+                                <div class="row gen-item-container row-cols-1 g-3"
+                                    id="focusGroup-item-container">
+                                </div>
+                                <div class=" my-3 row g-3">
+                                    <div class="col form-check">
+                                        <input class="form-check-input" type="checkbox" id="selectAllfocusGroup"
+                                        onchange="document.querySelectorAll('.focusGroup-checkbox').forEach(cb => !cb.disabled ? cb.checked = this.checked : null)">
+                                        <label class="form-check-label" for="selectAllfocusGroup">Select All</label> <button class="btn btn-secondary btn-sm ms-3" onclick="chooseSelectItems('focusGroup')">Choose Selected</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row my-3">
+                        <div class="col-auto pe-0">
+                            <button class="btn btn-outline-info" onclick="generateItems('existing')"
+                                aria-label="Generate More" title="Generate More" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-info" onclick="generateItems('existing',true)"
+                                aria-label="Generate New Items" title="Generate New Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto ps-2">
+                            <button class="btn btn-outline-danger remove-item" onclick="deleteItems('existing')"
+                                aria-label="Delete Generated Items" title="Delete Generated Items" data-bs-toggle="tooltip"
+                                data-bs-placement="top">
+                                &times;
+                            </button>
+                        </div>
+                        <div class="col-auto d-flex align-items-center">
+                            <h5 style="margin: 0px;">Other existing measures of the construct</h5>
+                        </div>
+                    </div>
+                    <div class="card d-none" data-bs-theme="light">
+                        <div class="card-body">
+                            <div class="container-fluid">
+                                <div class="row gen-item-container row-cols-1 g-3"
+                                    id="existing-item-container">
+                                </div>
+                                <div class=" my-3 row g-3">
+                                    <div class="col form-check">
+                                        <input class="form-check-input" type="checkbox" id="selectAllexisting"
+                                        onchange="document.querySelectorAll('.existing-checkbox').forEach(cb => !cb.disabled ? cb.checked = this.checked : null)">
+                                        <label class="form-check-label" for="selectAllexisting">Select All</label> <button class="btn btn-secondary btn-sm ms-3" onclick="chooseSelectItems('existing')">Choose Selected</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <div id="subdimensionsContainer"></div>

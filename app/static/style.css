@@ -111,6 +111,17 @@ html[data-bs-theme="dark"] body {
 .nav-link{
     cursor: pointer;
 }
+
+
+/*  Rotate chevron using Bootstrap's .collapsed class on the toggle button --> */
+  #toggleAIItemsBtn i:before {
+    transition: all 0.3s ease;
+  }
+  /* When target is collapsed, Bootstrap adds .collapsed to the trigger */
+  #toggleAIItemsBtn.collapsed i:before {
+    rotate: 180deg; 
+  }
+
 /*******************************      Split Screen     **********************************+ */
 
 #navbar, #content {

@@ -48,7 +48,6 @@ syncData = async function () {
             // handle panel 2
             if(!panel2){
                 domPanel2.classList.add("d-none")
-                definitionHistory = []
                 resultingDefinitionTextarea.value = "";
                 resultingDefinitionContainer.classList.add('d-none'); // Ensure the textarea is visible  
             }else{
@@ -57,9 +56,7 @@ syncData = async function () {
                 // Handle Cards
                 if (panel2.definitions) {
                     renderDefinitions();
-                } else{
-                    definitionHistory = []
-                }
+                } 
                 // Handle resulting definition
                 if (panel2.resultingDefinition) {
                     resultingDefinitionTextarea.value = panel2.savedDefinition || panel2.resultingDefinition;
@@ -211,9 +208,7 @@ async function saveConstructData(dontSave = false) {
 }
 
 // ***********************************    Panel 2 Functions    ***********************************************
-definitionHistory = [];
-async function getDefinitions(history = []) {
-    showLoading();
+async function getDefinitions(forceNewDefs = false) {
     const step1Data = await window.dataStorage.getData('data_step_1')
     const constructData = step1Data.panel1;
     const getDefinitionsPrompt = `
@@ -242,14 +237,30 @@ async function getDefinitions(history = []) {
 
     // Send prompt to chat API and retrieve JSON text
     let responseText;
+    
     try {
-        if (history.length > 0) { // If history is provided, include it in the request. This happens when the user has already generated definitions
-            response = await window.sendChat("Generate 2 or 3 Definitions more", history);
+        showLoading();
+        let generatedDefinitions = step1Data.panel2?.definitions || [];
+        if (generatedDefinitions.length > 0 && !forceNewDefs) { // If definitions is provided, include it in the request. This happens when the user has already generated definitions
+            let fakeHistory = [
+                {
+                    "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers.",
+                    "role": "system"
+                },
+                {
+                    "content": getDefinitionsPrompt,
+                    "role": "user"
+                },
+                {
+                    "content": "These definitions are already existent: "+ JSON.stringify(step1Data.panel2.definitions),
+                    "role": "system"
+                }
+            ]
+            response = await window.sendChat(" Generate 2 or 3 different definitions: ", fakeHistory);
         }else{ // If no history, use default system prompt
             response = await window.sendChat(getDefinitionsPrompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
         }
         responseText = response[0]; // Get the reply text from the response
-        definitionHistory = response[1]; // Store the history for future requests
     } catch (err) {
         console.error('Error fetching definitions:', err);
         window.displayInfo('danger', 'Failed to retrieve definitions. Please try again.');
@@ -294,7 +305,6 @@ async function getDefinitions(history = []) {
     renderDefinitions(definitions);
 }
 
-// todo show warning if unsaved changes and wants to change project or export
 
 async function getDefinitionsAgain() {
     const step1Data = await window.dataStorage.getData('data_step_1')
@@ -304,13 +314,12 @@ async function getDefinitionsAgain() {
         console.log('Definitions removed');
     }
     // Re-fetch definitions
-    definitionHistory = []; // Reset history for new fetch
-    await getDefinitions();
+    await getDefinitions(true);
 }
 
 async function getDefinitionsMore() {
     // Fetch and append more definitions
-    await getDefinitions(definitionHistory);
+    await getDefinitions();
 }
 
 // Choose the definition
@@ -538,6 +547,9 @@ async function renderDefinitions() {
         console.warn('No definitions to render');
         return;
     }
+
+
+    
     const container = document.getElementById('definitionsContainer');
     if (!container) return;
     container.innerHTML = '';

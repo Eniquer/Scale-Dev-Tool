@@ -12,7 +12,8 @@ except ImportError:
 import pandas as pd
 
 
-# Functions
+# todos
+# integrate web search API to make it use the web
 
 
 
