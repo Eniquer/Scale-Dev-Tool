@@ -31,10 +31,11 @@ function syncData() {
     items.forEach(item => {
         createItemRow(item.text, item.subdimension, item.id);
     });
-    
-        Object.entries(aiItems).forEach(([key, itemList]) => {
-            createAiItemRows(key);
-        });
+    revealNextStepButton();
+
+    Object.entries(aiItems).forEach(([key, itemList]) => {
+        createAiItemRows(key);
+    });
         
 
 }
@@ -571,4 +572,13 @@ async function deleteItems(indicator) {
 
     // Refresh the UI to reflect changes
     syncData();
+}
+
+function revealNextStepButton(){
+    const btn = document.getElementById('continueStep2Btn');
+   if (items.length > 0) {
+       btn.classList.remove('d-none');
+   } else {
+       btn.classList.add('d-none');
+   }    
 }
