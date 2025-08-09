@@ -1,9 +1,21 @@
-<div class="container-fluid">
-    <h2 class="h3 mb-4 text-light">Step 3: Exploratory Factor Analysis (EFA)</h2>
-    <div class="card bg-secondary border-secondary">
-        <div class="card-body">
-            <p class="card-text text-light">Perform exploratory factor analysis on your scale items.</p>
-            <button class="btn btn-primary">Run EFA</button>
+<div id="loadingOverlay"
+    class="visually-hidden position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 d-flex align-items-center justify-content-center"
+    style="z-index:1050">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Loading…</span>
+    </div>
+</div>
+
+<div id="step2-content" data-get-sync-function="init"></div>
+<div id="area1">
+    <div class="container-fluid">
+        <h2 class="h3 mb-4">Step 3: Assess the Content Validity of the Items</h2>
+
+        <!-- Panel 1: List Items -->
+        <div class="card mb-4" id="itemPanel">
+            <div class="card-body">
+                <h4 class="card-title mb-3">Content</h4>
+            </div>
         </div>
     </div>
 </div>
