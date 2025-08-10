@@ -1,20 +1,8 @@
-function displayTable(jsonData, tableId) {
-    // Add index property to each row
-    const indexedData = jsonData.map((row, index) => ({
-        ...row,
-        _index: index + 1  // Add 1-based index to each row
-    }));
+function displayTable(jsonData, tableId, indexColumn = true) {
 
-    // Create row number column first
-    const rowNumberColumn = {
-        title: "#",
-        field: "_index",
-        width: 30,
-        headerSort: true,  // Allow sorting by index
-        resizable: false,
-        frozen: true,  // Keep this column visible when scrolling horizontally
-        sorter: "number", // Ensure it sorts as numbers, not strings
-    };
+
+
+
 
     // Create columns from data
     const dataColumns = Object.keys(jsonData[0] || {}).map((field) => ({
@@ -23,8 +11,31 @@ function displayTable(jsonData, tableId) {
         editor: "input",        // double-click to rename header value
     }));
 
-    // Combine row number column with data columns
-    const allColumns = [rowNumberColumn, ...dataColumns];
+    let indexedData = jsonData;
+    let allColumns = dataColumns;
+    
+    
+    // Add index property to each row
+    if (indexColumn) {
+        indexedData = jsonData.map((row, index) => ({
+            ...row,
+            _index: index + 1  // Add 1-based index to each row
+        }));
+        // Create row number column first
+        const rowNumberColumn = {
+            title: "#",
+            field: "_index",
+            width: 30,
+            headerSort: true,  // Allow sorting by index
+            resizable: false,
+            frozen: true,  // Keep this column visible when scrolling horizontally
+            sorter: "number", // Ensure it sorts as numbers, not strings
+        };
+        
+        // Combine row number column with data columns
+        allColumns = [rowNumberColumn, ...dataColumns];
+    }
+
 
     new Tabulator(tableId, {
         data: indexedData,  // Use the data with added indices

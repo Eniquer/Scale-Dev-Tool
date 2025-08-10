@@ -15,7 +15,59 @@
         <div class="card mb-4" id="itemPanel">
             <div class="card-body">
                 <h4 class="card-title mb-3">Content</h4>
+                <div id="item-rating-table"></div>
             </div>
         </div>
     </div>
 </div>
+<style>
+    #item-rating-table {
+        background-color: var(--bs-dark) !important;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 5px;
+    }
+
+    /* Dark zebra stripes matching Bootstrap dark */
+    #item-rating-table .tabulator-row {
+        background-color: var(--bs-secondary-bg) !important;
+        border-color: var(--bs-border-color) !important;
+    }
+
+    #item-rating-table .tabulator-row-odd {
+        background-color: var(--bs-tertiary-bg) !important;
+    }
+
+    #item-rating-table .tabulator-row-odd:hover {
+        background-color: #2d3237 !important;
+    }
+
+    #item-rating-table .tabulator-row-even {
+        background-color: var(--bs-secondary-bg) !important;
+    }
+
+    #item-rating-table .tabulator-row-even:hover {
+        background-color: #32383e !important;
+    }
+
+    #item-rating-table .tabulator-cell:not(.tabulator-frozen-left):hover {
+        background-color: #20c9975c !important;
+    }
+
+    #item-rating-table .tabulator-cell:last-of-type,
+    #item-rating-table .tabulator-col:last-of-type {
+        border-right: 0px !important;
+    }
+
+    /* Header styling */
+    #item-rating-table .tabulator-header .tabulator-col {
+        background-color: var(--bs-dark) !important;
+        border-bottom: 1px solid var(--bs-border-color) !important;
+        padding: 10px 0px;
+        font-size: 1.1rem;
+        text-align: center;
+    }
+
+    .tabulator-frozen-left {
+        cursor: default;
+    }
+</style>
