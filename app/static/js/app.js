@@ -478,6 +478,122 @@ window.getUnsavedChangesFlag = function () {
 
 window.customConfirm = customConfirm;
 
+// custom prompt
+let customPromptActive = false;
+/**
+ * Show a Bootstrap prompt modal to collect a single text value.
+ * @param {object} opts
+ * @param {string} opts.title - Modal title
+ * @param {string} [opts.message] - Optional HTML message
+ * @param {string} [opts.placeholder] - Input placeholder
+ * @param {string} [opts.defaultValue] - Initial value in the input
+ * @param {string} [opts.confirmText='OK'] - Confirm button text
+ * @param {string} [opts.cancelText='Cancel'] - Cancel button text
+ * @param {boolean} [opts.multiline=false] - Use a textarea instead of input
+ * @param {number} [opts.rows=3] - Rows for textarea
+ * @returns {Promise<string|null>} resolves to input string, or null if cancelled
+ */
+function customPrompt({
+    title,
+    message = '',
+    placeholder = '',
+    defaultValue = '',
+    confirmText = 'OK',
+    cancelText = 'Cancel',
+    multiline = false,
+    rows = 3,
+} = {}) {
+    if (customPromptActive) return Promise.resolve(null);
+    customPromptActive = true;
+    return new Promise(resolve => {
+        const container = document.createElement('div');
+        const modalId = `dynamicPrompt_${Date.now()}`;
+        const inputId = `${modalId}_input`;
+        container.innerHTML = `
+      <div class="modal text-center fade" id="${modalId}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content rounded-3 shadow-lg">
+            <div class="modal-header border-0">
+              <h5 class="modal-title w-100">${title || 'Input'}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-start">
+              ${message || ''}
+              <div class="mt-2">
+                ${multiline
+                    ? `<textarea id="${inputId}" class="form-control" rows="${rows}" placeholder="${placeholder || ''}">${defaultValue || ''}</textarea>`
+                    : `<input id="${inputId}" class="form-control" type="text" placeholder="${placeholder || ''}" value="${defaultValue || ''}" />`
+                }
+              </div>
+            </div>
+            <div class="modal-footer border-0">
+              <button id="${modalId}_cancel" type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${cancelText}</button>
+              <button id="${modalId}_confirm" type="button" class="btn btn-primary">${confirmText}</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+        document.body.appendChild(container);
+
+        const modalEl = document.getElementById(modalId);
+        const bsModal = new bootstrap.Modal(modalEl);
+        const inputEl = () => document.getElementById(inputId);
+        const confirmBtn = () => modalEl.querySelector(`#${modalId}_confirm`);
+        const cancelBtn = () => modalEl.querySelector(`#${modalId}_cancel`);
+
+        const doConfirm = () => {
+            const el = inputEl();
+            const val = ((el?.value ?? '') + '').trim();
+            if (!val) {
+                if (window.displayInfo) window.displayInfo('error', 'Please enter a value.');
+                // keep modal open and refocus input
+                if (el) {
+                    el.focus();
+                    if (!multiline && el.select) el.select();
+                }
+                return; // do not resolve/close when empty
+            }
+            resolve(val);
+            bsModal.hide();
+        };
+        const doCancel = () => {
+            resolve(null);
+            bsModal.hide();
+        };
+
+        confirmBtn().addEventListener('click', doConfirm, { once: true });
+        cancelBtn().addEventListener('click', doCancel, { once: true });
+        modalEl.querySelector('.btn-close').addEventListener('click', doCancel, { once: true });
+
+        modalEl.addEventListener('shown.bs.modal', () => {
+            const el = inputEl();
+            if (!el) return;
+            el.focus();
+            if (!multiline && el.select) el.select();
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !multiline) {
+                    e.preventDefault();
+                    doConfirm();
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    doCancel();
+                }
+            }, { once: false });
+        });
+
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            customPromptActive = false;
+            bsModal.dispose();
+            container.remove();
+        });
+
+        bsModal.show();
+    });
+}
+
+window.customPrompt = customPrompt;
+
 
 function cleanAIRespond(input) {
     // Remove leading/trailing whitespace and newlines

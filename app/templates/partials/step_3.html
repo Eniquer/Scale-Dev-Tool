@@ -15,16 +15,53 @@
         <div class="card mb-4" id="itemPanel">
             <div class="card-body">
                 <h4 class="card-title mb-3">Content</h4>
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1 overflow-auto">
+                        <ul class="nav nav-tabs flex-nowrap" id="raterTabs" role="tablist"><!-- dynamic --></ul>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" id="addRaterBtn" type="button">
+                        <i class="bi bi-person-plus"></i> Add Rater
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger ms-2" id="deleteRatersBtn" type="button">
+                        <i class="bi bi-person-dash"></i> Delete Raters
+                    </button>
+                </div>
                 <div id="item-rating-table"></div>
             </div>
         </div>
     </div>
 </div>
+<!-- Bulk Delete Raters Modal -->
+<div class="modal fade" id="bulkDeleteRatersModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Raters</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="bulkDeleteSelectAll">
+                    <label class="form-check-label" for="bulkDeleteSelectAll">Select all</label>
+                </div>
+                <div id="bulkDeleteRatersList" class="list-group">
+                    <!-- dynamic checkboxes injected here -->
+                </div>
+            <div class="form-text mt-2">You can delete all raters. The table will be read-only until you add a rater.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmBulkDeleteRaters">Delete Selected</button>
+            </div>
+        </div>
+    </div>
+    </div>
 <style>
     #item-rating-table {
         background-color: var(--bs-dark) !important;
         border: 1px solid var(--bs-border-color);
-        border-radius: 5px;
+        border-top: 0px !important;
+        border-radius: 0px 5px;
     }
 
     /* Dark zebra stripes matching Bootstrap dark */
@@ -69,5 +106,9 @@
 
     .tabulator-frozen-left {
         cursor: default;
+    }
+
+    li button {
+        height: 101%;
     }
 </style>
