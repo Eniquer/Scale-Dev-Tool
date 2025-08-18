@@ -25,6 +25,9 @@ async function init(){
     // Inject analysis panel UI and wire actions
     wireAnalysisUI();
 
+    // Auto-load saved ANOVA results if present
+    loadSavedAnovaResults();
+
 
 }
 
@@ -741,6 +744,12 @@ function wireAnalysisUI() {
             lastAnovaResults = records;
             renderAnovaResults(records);
             document.getElementById('exportAnovaBtn').disabled = (records.length === 0);
+            // Persist analysis results for auto-load on next visit
+            try {
+                await window.dataStorage.storeData('anova_results_step3', { rows: records, ts: new Date().toISOString() }, false);
+            } catch (e) {
+                console.warn('Failed to persist ANOVA results', e);
+            }
             window.displayInfo && window.displayInfo('success', `Analysis complete (${records.length} item(s)).`);
         } catch (err) {
             console.error('ANOVA failed', err);
@@ -751,6 +760,22 @@ function wireAnalysisUI() {
     };
 
     document.getElementById('exportAnovaBtn').onclick = () => exportAnovaCSV(lastAnovaResults);
+}
+
+// Load saved ANOVA results (if any) and render on page load
+async function loadSavedAnovaResults() {
+    try {
+        const saved = await window.dataStorage.getData('anova_results_step3');
+        const rows = Array.isArray(saved?.rows) ? saved.rows : [];
+        if (rows.length > 0) {
+            lastAnovaResults = rows;
+            renderAnovaResults(rows);
+            const btn = document.getElementById('exportAnovaBtn');
+            if (btn) btn.disabled = false;
+        }
+    } catch (e) {
+        console.warn('No saved ANOVA results to load or failed to load.', e);
+    }
 }
 
 function renderAnovaResults(rows) {
