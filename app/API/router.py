@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import os, base64, openai
-from API.functions import get_chatgpt_response
+import os, base64, openai, json
+import numpy as np
+from API.functions import *
 from openai._exceptions import (
     AuthenticationError,
     PermissionDeniedError,
@@ -40,6 +41,7 @@ def simple_decrypt(cipher: str) -> str:
 class EncryptKey(BaseModel):
     key: str
 
+searchModel = "gpt-4o-search-preview"
 class ChatRequest(BaseModel):
     prompt: str
     model: str = "gpt-4o"
@@ -54,6 +56,47 @@ async def encrypt_key(req: EncryptKey):
     print(f"Encrypting key: {req.key[-3:]}")
     cipher = simple_encrypt(req.key)
     return {"cipher": cipher}
+
+@router.post("/analyze-anova")
+async def analyze_endpoint(data: dict):
+    try:
+        intended_map = data.get('intendedMap', {})
+        options = data.get('options', {}) or {}
+        drop_incomplete = bool(options.get('dropIncomplete', True))
+
+        # Align payload field names to analyzer expectations
+        table_data = pd.DataFrame(data.get('data', []))
+        if not table_data.empty:
+            table_data = table_data.rename(columns={
+                'itemId': 'item',
+                'subdimension': 'facet',
+            })
+            # Ensure item keys match intended_map keys (frontend sends string ids)
+            if 'item' in table_data.columns:
+                table_data['item'] = table_data['item'].astype(str)
+            # Coerce rating to numeric
+            if 'rating' in table_data.columns:
+                table_data['rating'] = pd.to_numeric(table_data['rating'], errors='coerce')
+
+        res = analyze_content_adequacy(
+            table_data,
+            intended_map,
+            alpha=0.05,
+            decision_mode="ternary",     # or "binary"
+            sphericity="GG",             # GG per MacKenzie/Winer; use "HF" if you prefer
+            require_target_highest=True,  # typical rule
+            drop_incomplete=drop_incomplete
+        )
+        print(res)
+        # Serialize DataFrame to JSON-friendly list
+        # Convert NaN to None for strict JSON compatibility
+        records = res.replace({np.nan: None}).to_dict(orient='records')
+        return {"result": records}
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Surface errors to client for debugging
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/chat")
 async def chat_endpoint(chat_req: ChatRequest):

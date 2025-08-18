@@ -78,26 +78,15 @@ def analyze_content_adequacy(
     sphericity="GG",          # "GG", "HF", or "none"
 ):
     """
-    Content-adequacy per MacKenzie, Podsakoff & Podsakoff (2011) / Hinkin & Tracey (1999).
-
-    For each item:
-      1) One-way repeated-measures ANOVA (within = facet, subject = rater) with GG/HF correction
-      2) Planned contrast: intended facet > mean(other facets), one-sided
-      3) Decision:
-         - binary: keep if omnibus sig AND contrast sig (and optionally target highest), else revise/delete
-         - ternary:
-             delete if omnibus non-sig OR target not highest
-             revise if omnibus sig AND contrast non-sig
-             keep if omnibus sig AND contrast sig AND target highest (if required)
-
-    Input df columns: [item, rater, facet, rating]
-    intended_map: dict {item -> intended facet}
+    MacKenzie, Podsakoff & Podsakoff (2011) / Hinkin & Tracey (1999)
+    One-way RM-ANOVA per item (facet within rater) + planned contrast
+    (intended facet > mean of others, one-sided). Uses GG/HF correction
+    to the error term as recommended.
     """
     required = {item_col, rater_col, facet_col, rating_col}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Missing required column(s): {sorted(missing)}")
-
     if sphericity not in {"GG", "HF", "none"}:
         raise ValueError("sphericity must be 'GG', 'HF', or 'none'")
 
@@ -105,7 +94,6 @@ def analyze_content_adequacy(
     for it in sorted(df[item_col].unique(), key=lambda x: str(x)):
         target = intended_map.get(it, None)
         d = df[df[item_col] == it].copy()
-        print(f"Analyzing item: {it}, intended facet: {target}")
 
         facets = sorted(d[facet_col].unique(), key=lambda x: str(x))
         k = len(facets)
@@ -124,7 +112,7 @@ def analyze_content_adequacy(
                                   notes=f"Intended facet '{target}' not in observed facets"))
             continue
 
-        # Drop raters without a full facet set (balanced within-subject)
+        # Ensure each rater contributed a complete within-subject profile (MacKenzie/Hinkin–Tracey design)
         if drop_incomplete:
             counts = d.groupby(rater_col)[facet_col].nunique()
             keep_ids = counts[counts == k].index
@@ -139,42 +127,42 @@ def analyze_content_adequacy(
                                   notes="Fewer than 2 raters after filtering"))
             continue
 
-        # try:
-        # Omnibus RM-ANOVA via pingouin (with GG/HF correction)
-        aov = pg.rm_anova(dv=rating_col, within=facet_col, subject=rater_col,
-                            data=d, detailed=True, correction=True)
-        arow = aov.loc[aov["Source"] == facet_col].iloc[0]
-        print(arow)
-        # Robustly extract ANOVA fields across pingouin versions
-        # Some versions use ddof1/ddof2, others have DF and no ddof2-GG/HF.
-        F = float(arow.get("F", np.nan))
-        # df1: prefer ddof1, else DF, else theoretical (k-1)
-        df1 = float(arow.get("ddof1", arow.get("DF", (k - 1))))
-        # Uncorrected df2: prefer ddof2, else compute (k-1)*(n_raters-1)
-        df2_unc = float(arow.get("ddof2", (k - 1) * max(n_raters - 1, 0)))
-        eps = arow.get("eps", np.nan)
+        # 1) Omnibus RM-ANOVA with GG/HF correction per MacKenzie/Winer
         try:
-            eps = float(eps)
-        except Exception:
-            eps = np.nan
+            aov = pg.rm_anova(dv=rating_col,within=facet_col,subject=rater_col,data=d,detailed=True,correction=True,effsize="np2",  # ask pingouin for partial eta-squared
+            )
+            row = aov.loc[aov["Source"] == facet_col].iloc[0]
 
-        if sphericity == "GG":
-            # Prefer ddof2-GG if present, else GG-corrected df2 using epsilon
-            df2 = float(arow.get("ddof2-GG", (eps * df2_unc) if np.isfinite(eps) else df2_unc))
-            p_omnibus = float(arow.get("p-GG-corr", arow.get("p-unc", np.nan)))
-        elif sphericity == "HF":
-            # If ddof2-HF not present, fall back to uncorrected df2
-            df2 = float(arow.get("ddof2-HF", df2_unc))
-            p_omnibus = float(arow.get("p-HF-corr", arow.get("p-unc", np.nan)))
-        else:
-            df2 = float(df2_unc)
-            p_omnibus = float(arow.get("p-unc", np.nan))
-        eta_p2 = (F * df1) / (F * df1 + df2) if np.isfinite(F) else np.nan
-        # except Exception as e:
-        #     rows.append(_empty_row(it, target, n_raters, k, notes=f"ANOVA error: {e}"))
-        #     continue
+            # Numerator df: 'DF' (pingouin); fallback to 'ddof1' if present
+            df1 = float(row["DF"] if "DF" in row else row.get("ddof1", np.nan))
 
-        # Planned contrast: target vs average(other facets), one-sided (greater)
+            # Uncorrected denominator df for within-subject one-way: (k-1)*(n-1)
+            df2_unc = (k - 1) * (n_raters - 1)
+
+            # Epsilon and corrected p-values
+            eps = float(row.get("eps", np.nan))
+            if sphericity == "GG":
+                p_omnibus = float(row.get("p-GG-corr", row["p-unc"]))
+                df2_corr = eps * df2_unc if np.isfinite(eps) else np.nan
+            elif sphericity == "HF":
+                p_omnibus = float(row.get("p-HF-corr", row["p-unc"]))
+                # HF-corrected df is approximately eps_HF * df2_unc; pingouin doesn’t return eps_HF,
+                # so report uncorrected df2 and note HF p used.
+                df2_corr = np.nan
+            else:
+                p_omnibus = float(row["p-unc"])
+                df2_corr = np.nan
+
+            F = float(row["F"])
+            # Prefer pingouin's np2; fallback to formula with uncorrected df if needed
+            eta_p2 = float(row["np2"]) if "np2" in row else (
+                (F * df1) / (F * df1 + df2_unc) if np.isfinite(F) else np.nan
+            )
+        except Exception as e:
+            rows.append(_empty_row(it, target, n_raters, k, notes=f"ANOVA error: {e}"))
+            continue
+
+        # 2) Planned contrast: intended facet vs mean(other facets), one-sided (greater)
         pivot = d.pivot_table(index=rater_col, columns=facet_col, values=rating_col)
         pivot = pivot[facets]
         weights = np.array([1.0 if f == target else -1.0/(k-1) for f in facets])
@@ -185,19 +173,18 @@ def analyze_content_adequacy(
         if np.isnan(t_stat):
             p_one = np.nan
         else:
-            # convert two-sided to one-sided (greater)
             p_one = (p_two / 2.0) if mean_c > 0 else (1.0 - p_two / 2.0)
         df_t = contrast_scores.size - 1
         dz = mean_c / contrast_scores.std(ddof=1) if contrast_scores.size > 1 else np.nan
 
-        # Means and highest facet check
+        # Descriptives + highest facet check
         facet_means = d.groupby(facet_col)[rating_col].mean()
-        intended_mean = facet_means.loc[target]
-        others_mean = facet_means.drop(labels=[target]).mean()
+        intended_mean = float(facet_means.loc[target])
+        others_mean = float(facet_means.drop(labels=[target]).mean())
         mean_diff = intended_mean - others_mean
         target_is_highest = facet_means.idxmax() == target
 
-        # Decisions
+        # 3) Decision per MacKenzie/Hinkin–Tracey
         omnibus_sig = (p_omnibus < alpha)
         contrast_sig = (p_one < alpha)
         keep = omnibus_sig and contrast_sig and (target_is_highest if require_target_highest else True)
@@ -219,10 +206,13 @@ def analyze_content_adequacy(
             "intended_facet": target,
             "n_raters": n_raters,
             "k_facets": k,
+            "alpha": alpha,
             "F": F,
             "df1": df1,
-            "df2": df2,
-            "p_omnibus": p_omnibus,
+            "df2_uncorr": df2_unc,
+            "df2_corr": df2_corr,    # GG-corrected df2 if available; else NaN
+            "epsilon": eps,          # GG epsilon (if estimated)
+            "p_omnibus": p_omnibus,  # GG/HF/uncorrected p as requested
             "eta_p2": eta_p2,
             "intended_mean": intended_mean,
             "others_mean": others_mean,
@@ -234,7 +224,7 @@ def analyze_content_adequacy(
             "target_is_highest": target_is_highest,
             "keep": keep,
             "action": action,
-            "notes": "; ".join(note_msgs)
+            "notes": "; ".join(note_msgs + [f"sphericity={sphericity}"])
         })
 
     return pd.DataFrame(rows).sort_values(by="item").reset_index(drop=True)
@@ -246,9 +236,12 @@ def _empty_row(it, target, n_raters, k, notes):
         "intended_facet": target,
         "n_raters": n_raters,
         "k_facets": k,
+        "alpha": np.nan,
         "F": np.nan,
         "df1": np.nan,
-        "df2": np.nan,
+        "df2_uncorr": np.nan,
+        "df2_corr": np.nan,
+        "epsilon": np.nan,
         "p_omnibus": np.nan,
         "eta_p2": np.nan,
         "intended_mean": np.nan,

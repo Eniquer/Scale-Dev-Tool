@@ -15,21 +15,24 @@
         <div class="card mb-4" id="itemPanel">
             <div class="card-body">
                 <h4 class="card-title mb-3">Content</h4>
-                <div class="d-flex align-items-center">
+                <div class="d-flex align-items-center no-wrap">
                     <div class="flex-grow-1 overflow-auto">
                         <ul class="nav nav-tabs flex-nowrap" id="raterTabs" role="tablist"><!-- dynamic --></ul>
                     </div>
-                    <button class="btn btn-sm btn-outline-primary" id="addRaterBtn" type="button">
-                        <i class="bi bi-person-plus"></i> Add Rater
+                    <button class="btn btn-sm btn-outline-primary" id="addRaterBtn" type="button" title="Add Rater" data-bs-toggle="tooltip" data-bs-placement="top">
+                        <i class="bi bi-person-plus"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger ms-2" id="deleteRatersBtn" type="button">
-                        <i class="bi bi-person-dash"></i> Delete Raters
+                    <button class="btn btn-sm btn-outline-danger ms-2" id="deleteRatersBtn" type="button" title="Delete Rater" data-bs-toggle="tooltip" data-bs-placement="top">
+                        <i class="bi bi-person-dash"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-secondary ms-2" id="importRatersBtn" type="button">
-                        <i class="bi bi-upload"></i> Import Raters
+                    <button class="btn btn-sm btn-outline-secondary ms-2" id="importRatersBtn" type="button" title="Import Raters" data-bs-toggle="tooltip" data-bs-placement="top">
+                        <i class="bi bi-upload"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-secondary ms-2" id="exportRatersBtn" type="button">
-                        <i class="bi bi-download"></i> Export Raters
+                    <button class="btn btn-sm btn-outline-secondary ms-2" id="exportRatersBtn" type="button" title="Export Raters" data-bs-toggle="tooltip" data-bs-placement="top">
+                        <i class="bi bi-download"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-info ms-2" id="generateAIRatersBtn" type="button">
+                        <i class="bi bi-robot"></i> Generate 
                     </button>
                     <input type="file" id="importRatersFile" accept="application/json,.json" class="d-none" />
                 </div>
@@ -97,13 +100,16 @@
         background-color: #20c9975c !important;
     }
 
+    #anova-results-table .tabulator-cell:last-of-type,
+    #anova-results-table .tabulator-col:last-of-type,
     #item-rating-table .tabulator-cell:last-of-type,
     #item-rating-table .tabulator-col:last-of-type {
         border-right: 0px !important;
     }
 
     /* Header styling */
-    #item-rating-table .tabulator-header .tabulator-col {
+    #item-rating-table .tabulator-header .tabulator-col,
+    #anova-results-table .tabulator-header .tabulator-col {
         background-color: var(--bs-dark) !important;
         border-bottom: 1px solid var(--bs-border-color) !important;
         padding: 10px 0px;
@@ -117,5 +123,16 @@
 
     li button {
         height: 101%;
+    }
+    /* Make the rater tabs a single horizontal line with horizontal scroll when needed */
+
+
+    .no-wrap {
+        white-space: nowrap; /* prevent label wrapping */
+    }
+
+    #anova-results-table{
+        font-size: 1rem;
+        border-radius: 0.5rem;
     }
 </style>
