@@ -725,6 +725,9 @@ function wireAnalysisUI() {
                 <button type="button" id="exportAnovaBtn" class="btn btn-sm btn-outline-secondary" disabled>
                     <i class="bi bi-download"></i> Export CSV
                 </button>
+                <button type="button" id="bulkDeleteItemsBtn" class="btn btn-sm btn-danger ms-2">
+                    <i class="bi bi-trash"></i> Delete Items
+                </button>
             </div>
         </div>
         <div class="d-flex justify-content-center">
@@ -735,6 +738,9 @@ function wireAnalysisUI() {
         </div>
     `;
     container.appendChild(panel);
+
+    // Ensure bulk delete modal exists in DOM
+    setupBulkDeleteItemsModal();
 
     document.getElementById('runAnovaBtn').onclick = async () => {
         try {
@@ -760,6 +766,19 @@ function wireAnalysisUI() {
     };
 
     document.getElementById('exportAnovaBtn').onclick = () => exportAnovaCSV(lastAnovaResults);
+
+    // Open modal with items flagged as delete
+    const bulkBtn = document.getElementById('bulkDeleteItemsBtn');
+    bulkBtn.onclick = () => {
+        if (!Array.isArray(lastAnovaResults) || lastAnovaResults.length === 0) {
+            window.displayInfo && window.displayInfo('warning', 'Run analysis first to identify deletable items.');
+            return;
+        }
+        populateBulkDeleteItemsList();
+        const modalEl = document.getElementById('bulkDeleteItemsModal');
+        const bsModal = new bootstrap.Modal(modalEl);
+        bsModal.show();
+    };
 }
 
 // Load saved ANOVA results (if any) and render on page load
@@ -778,6 +797,164 @@ async function loadSavedAnovaResults() {
     }
 }
 
+// Create (if needed) the modal for bulk deleting items
+function setupBulkDeleteItemsModal() {
+    if (document.getElementById('bulkDeleteItemsModal')) return;
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'bulkDeleteItemsModal';
+    modal.tabIndex = -1;
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Delete Items</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" id="bulkDeleteItemsSelectAll">
+              <label class="form-check-label" for="bulkDeleteItemsSelectAll">Select all</label>
+            </div>
+            <div id="bulkDeleteItemsList" class="list-group"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-danger" id="confirmBulkDeleteItems">Delete selected</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    // Wire select all toggle
+    modal.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'bulkDeleteItemsSelectAll') {
+            const checked = e.target.checked;
+            const list = document.getElementById('bulkDeleteItemsList');
+            list.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = checked);
+        }
+    });
+
+    // Wire confirm deletion
+    modal.querySelector('#confirmBulkDeleteItems').onclick = handleConfirmBulkDeleteItems;
+}
+
+// Populate the modal list with items whose action suggests deletion
+function populateBulkDeleteItemsList() {
+    const list = document.getElementById('bulkDeleteItemsList');
+    const selectAll = document.getElementById('bulkDeleteItemsSelectAll');
+    if (!list) return;
+    list.innerHTML = '';
+    selectAll.checked = false;
+
+    const deletable = (lastAnovaResults || []).filter(r => {
+        const a = String(r.action || '').toLowerCase();
+        return a.includes('delete');
+    });
+
+    if (deletable.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'text-secondary small';
+        empty.textContent = 'No items are currently flagged as delete.';
+        list.appendChild(empty);
+        return;
+    }
+
+    const idToName = new Map(items.map(it => [String(it.id), it.text]));
+    // De-duplicate by item id
+    const seen = new Set();
+    for (const r of deletable) {
+        const id = String(r.item);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const label = document.createElement('label');
+        label.className = 'list-group-item d-flex align-items-center justify-content-between';
+        const name = idToName.get(id) || id;
+        label.innerHTML = `
+          <div class="d-flex align-items-center">
+            <input class="form-check-input me-2" type="checkbox" value="${id}">
+            <span>${name}</span>
+          </div>
+          <span class="badge bg-danger-subtle text-danger">${r.action}</span>
+        `;
+        list.appendChild(label);
+    }
+}
+
+async function handleConfirmBulkDeleteItems() {
+    const modalEl = document.getElementById('bulkDeleteItemsModal');
+    const list = document.getElementById('bulkDeleteItemsList');
+    if (!list) return;
+    const selected = [...list.querySelectorAll('input[type="checkbox"]:checked')].map(cb => String(cb.value));
+    if (selected.length === 0) {
+        window.displayInfo && window.displayInfo('warning', 'Select at least one item to delete.');
+        return;
+    }
+
+    const confirmed = await (window.customConfirm ? window.customConfirm({
+        title: 'Delete Items?',
+        message: `Delete ${selected.length} selected item(s)? This will remove them from the dataset and ratings.`,
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+    }) : Promise.resolve(confirm(`Delete ${selected.length} item(s)?`)));
+    if (!confirmed) return;
+
+    const selSet = new Set(selected.map(String));
+
+    // Remove from items list
+    items = items.filter(it => !selSet.has(String(it.id)));
+    // Persist to step2 data storage
+    try {
+        const stored = await window.dataStorage.getData('data_step_2') || {};
+        stored.items = items;
+        await window.dataStorage.storeData('data_step_2', stored, false);
+    } catch (e) {
+        console.warn('Failed to persist updated items to data_step_2', e);
+    }
+
+    // Remove ratings for deleted items for all raters (handle string/number keys)
+    for (const r of raters) {
+        const rr = r.ratings || {};
+        for (const id of selected) {
+            const numId = Number(id);
+            if (rr[id] !== undefined) delete rr[id];
+            if (!Number.isNaN(numId) && rr[numId] !== undefined) delete rr[numId];
+        }
+        r.ratings = rr;
+    }
+    // Update current ratings snapshot
+    for (const id of selected) {
+        const numId = Number(id);
+        if (ratings) {
+            if (ratings[id] !== undefined) delete ratings[id];
+            if (!Number.isNaN(numId) && ratings[numId] !== undefined) delete ratings[numId];
+        }
+    }
+    await saveStep3Data();
+
+    // Filter last analysis results and persist
+    if (Array.isArray(lastAnovaResults) && lastAnovaResults.length > 0) {
+        lastAnovaResults = lastAnovaResults.filter(r => !selSet.has(String(r.item)));
+        renderAnovaResults(lastAnovaResults);
+        try {
+            await window.dataStorage.storeData('anova_results_step3', { rows: lastAnovaResults, ts: new Date().toISOString() }, false);
+        } catch (e) {
+            console.warn('Failed to persist updated ANOVA results', e);
+        }
+    }
+
+    // Refresh rating table
+    renderRatingTable();
+
+    // Close modal
+    try {
+        const bsModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        bsModal.hide();
+    } catch {}
+
+    window.displayInfo && window.displayInfo('success', `Deleted ${selected.length} item(s).`);
+}
 function renderAnovaResults(rows) {
     const summaryEl = document.getElementById('anova-summary');
     if (summaryEl) {
