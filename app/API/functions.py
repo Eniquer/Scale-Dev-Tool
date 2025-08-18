@@ -122,9 +122,9 @@ def analyze_content_adequacy(
             d = d[d[rater_col].isin(keep_ids)]
 
         n_raters = d[rater_col].nunique()
-        if n_raters < 2:
+        if n_raters <= 2:
             rows.append(_empty_row(it, target, n_raters, k,
-                                  notes="Fewer than 2 raters after filtering"))
+                                  notes="Fewer than 3 raters after filtering"))
             continue
 
         # 1) Omnibus RM-ANOVA with GG/HF correction per MacKenzie/Winer
@@ -175,7 +175,12 @@ def analyze_content_adequacy(
         else:
             p_one = (p_two / 2.0) if mean_c > 0 else (1.0 - p_two / 2.0)
         df_t = contrast_scores.size - 1
-        dz = mean_c / contrast_scores.std(ddof=1) if contrast_scores.size > 1 else np.nan
+        # Hedge against division by zero or non-finite std
+        if contrast_scores.size > 1:
+            denom = contrast_scores.std(ddof=1)
+            dz = mean_c / denom if np.isfinite(denom) and denom != 0 else np.nan
+        else:
+            dz = np.nan
 
         # Descriptives + highest facet check
         facet_means = d.groupby(facet_col)[rating_col].mean()

@@ -87,9 +87,9 @@ async def analyze_endpoint(data: dict):
             require_target_highest=True,  # typical rule
             drop_incomplete=drop_incomplete
         )
-        print(res)
         # Serialize DataFrame to JSON-friendly list
-        # Convert NaN to None for strict JSON compatibility
+        # Replace +/-inf with NaN, then convert NaN to None for strict JSON compliance
+        res = res.replace([np.inf, -np.inf], np.nan)
         records = res.replace({np.nan: None}).to_dict(orient='records')
         return {"result": records}
     except HTTPException:

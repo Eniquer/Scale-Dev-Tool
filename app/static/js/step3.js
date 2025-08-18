@@ -814,7 +814,13 @@ function renderAnovaResults(rows) {
     if (anovaTable) {
         anovaTable.setColumns(columns);
         anovaTable.replaceData(displayRows);
-        anovaTable.setRowFormatter(rowFormatter);
+        // Update rowFormatter on existing instance and force redraw
+        if (anovaTable && anovaTable.options) {
+            anovaTable.options.rowFormatter = rowFormatter;
+        }
+        if (typeof anovaTable.redraw === 'function') {
+            anovaTable.redraw(true);
+        }
     } else {
         anovaTable = new Tabulator('#anova-results-table', {
             data: displayRows,
@@ -822,6 +828,8 @@ function renderAnovaResults(rows) {
             layout: 'fitDataTable',
             placeholder: 'Run analysis to see results',
             rowFormatter,
+            resizableColumns: true,
+            movableColumns: true,
             reactiveData: true,
             rowHeight: 40,
 
