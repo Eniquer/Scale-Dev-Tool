@@ -180,6 +180,125 @@ function wireRaterUI() {
     };
 })();
 
+// Import raters from JSON
+(function wireImportRaters() {
+    const importBtn = document.getElementById('importRatersBtn');
+    const fileInput = document.getElementById('importRatersFile');
+    if (!importBtn || !fileInput) return;
+
+    importBtn.onclick = () => fileInput.click();
+
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const json = JSON.parse(text);
+            // Accept either { raters, activeRaterId } or a plain array of raters
+            const incomingRaters = Array.isArray(json) ? json : (Array.isArray(json.raters) ? json.raters : []);
+            if (!Array.isArray(incomingRaters) || incomingRaters.length === 0) {
+                window.displayInfo && window.displayInfo('warning', 'No raters found in file.');
+                fileInput.value = '';
+                return;
+            }
+
+            // Normalize and validate
+            const toId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
+            const cleaned = incomingRaters.map(r => {
+                const id = (typeof r.id === 'string' && r.id.trim()) ? r.id : toId();
+                const name = (typeof r.name === 'string' && r.name.trim()) ? r.name.trim() : 'Rater';
+                const rat = (r && typeof r.ratings === 'object' && r.ratings) ? r.ratings : {};
+                return { id, name, ratings: rat };
+            });
+
+            // Merge: keep existing raters, add new ones; avoid id collisions by remapping duplicates
+            const existingIds = new Set(raters.map(r => r.id));
+            const merged = [...raters];
+            for (const r of cleaned) {
+                let newId = r.id;
+                if (existingIds.has(newId)) {
+                    newId = toId();
+                }
+                existingIds.add(newId);
+                merged.push({ ...r, id: newId });
+            }
+
+            raters = merged;
+            // Keep current active if still present; else set to first imported or null
+            if (!raters.find(r => r.id === activeRaterId)) {
+                activeRaterId = raters[0]?.id ?? null;
+                ratings = activeRaterId ? (raters.find(r => r.id === activeRaterId)?.ratings || {}) : {};
+            }
+
+            await saveStep3Data();
+            wireRaterUI();
+            renderRatingTable();
+            window.displayInfo && window.displayInfo('success', `Imported ${cleaned.length} rater(s).`);
+        } catch (err) {
+            console.error('Import raters failed', err);
+            window.displayInfo && window.displayInfo('danger', 'Failed to import raters. Ensure it is valid JSON.');
+        } finally {
+            // reset input so same file can be re-imported if needed
+            fileInput.value = '';
+        }
+    });
+})();
+
+// Export raters to JSON
+(function wireExportRaters() {
+    const btn = document.getElementById('exportRatersBtn');
+    if (!btn) return;
+    btn.onclick = async () => {
+        try {
+            // Ensure current state is saved
+            const currentIdx = raters.findIndex(rr => rr.id === activeRaterId);
+            if (currentIdx !== -1) {
+                raters[currentIdx].ratings = ratings;
+            }
+            await saveStep3Data();
+
+            // Load current items from storage to determine valid IDs
+            const step2Data = await window.dataStorage.getData('data_step_2') || {};
+            const currentItems = Array.isArray(step2Data.items) ? step2Data.items : [];
+            const allowedIds = new Set(currentItems.map(it => String(it.id)));
+
+            // Filter each rater's ratings to only include current item IDs
+            const filteredRaters = raters.map(r => {
+                const rr = r.ratings || {};
+                const filtered = {};
+                for (const [itemId, val] of Object.entries(rr)) {
+                    if (allowedIds.has(String(itemId))) {
+                        filtered[itemId] = val;
+                    }
+                }
+                return { ...r, ratings: filtered };
+            });
+
+            const exportItems = currentItems.map(it => ({
+                id: it.id,
+                text: it.text,
+                subdimension: it.subdimension ?? null,
+            }));
+            const payload = { items: exportItems, raters: filteredRaters, activeRaterId };
+            const json = JSON.stringify(payload, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const ts = new Date().toISOString().replace(/[:.]/g, '-');
+            a.download = `raters-export-${ts}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            window.displayInfo && window.displayInfo('success', 'Raters exported.');
+        } catch (err) {
+            console.error('Export raters failed', err);
+            window.displayInfo && window.displayInfo('danger', 'Failed to export raters.');
+        }
+    };
+})();
+
 function renderRatingTable() {
     const container = document.getElementById('item-rating-table');
     if (!container) return;

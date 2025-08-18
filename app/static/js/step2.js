@@ -7,6 +7,7 @@ let items = [];
 let aiItems = {};
 let subdimensions = [];
 let dimensionality = "";
+let nextItemId = 1; // monotonically increasing id to avoid reuse
 
 // todo add Json input to add multiple Items
 
@@ -59,6 +60,13 @@ async function init(){
 "focusGroup":[],
 "existing":[]
 }
+    // initialize nextItemId from storage or compute from existing items
+    if (typeof step2Data.nextItemId === 'number' && step2Data.nextItemId > 0) {
+        nextItemId = step2Data.nextItemId;
+    } else {
+        const maxId = items.length ? Math.max(...items.map(i => Number(i.id) || 0)) : 0;
+        nextItemId = maxId + 1;
+    }
 
     if (dimensionality != "Multidimensional") {
         // Hide subdimension selector when not multidimensional
@@ -149,12 +157,12 @@ function renderSubdimensionPanels() {
              console.warn(`Item with ID ${id} not found in storage`);
          }
      } else {
-         // No ID => create a new item with fresh ID
-         const nextId = items.length ? Math.max(...items.map(i => i.id)) + 1 : 1;
-         items.push({ id: nextId, text: text, subdimension: subdimension });
+         // No ID => create a new item with fresh, persistent ID
+         const newId = nextItemId++;
+         items.push({ id: newId, text: text, subdimension: subdimension });
      }
      // Persist updated list to IndexedDB
-    window.dataStorage.storeData('data_step_2', { items, aiItems }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
          console.log('Data saved successfully');
      });
      // Refresh UI to reflect changes
@@ -209,7 +217,7 @@ function renderSubdimensionPanels() {
      // Remove handler: delete from array, persist, and refresh
      row.querySelector('.remove-item').addEventListener('click', () => {
          items = items.filter(i => i.id !== parseInt(row.dataset.id));
-    window.dataStorage.storeData('data_step_2', { items, aiItems }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
              console.log('Data saved successfully');
          });
          syncData();
@@ -277,16 +285,13 @@ if (addItemButton) {
         // Clear input after adding
         addItemText.value = "";
         // add item to storage
-        const nextId = items.length
-            ? Math.max(...items.map(item => item.id)) + 1
-            : 1;
-        const item = {
-            id: nextId,
+    const item = {
+        id: nextItemId++,
             text: itemText,
             subdimension: subdimension || null
         };
         items.push(item);
-    window.dataStorage.storeData('data_step_2', { items, aiItems }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
             console.log('Data saved successfully');
         });
         syncData()
@@ -448,7 +453,7 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
     }
     itemHistory.push(...AIResponse);
     aiItems[indicator] = itemHistory; // Update the aiItems object with new items
-    window.dataStorage.storeData('data_step_2', { items, aiItems }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
         console.log('aiItems saved successfully');
     });
 
@@ -534,14 +539,14 @@ function chooseSelectItems(indicator) {
         )) {
             return;
         }
-        items.push({
-            id: items.length ? Math.max(...items.map(i => i.id)) + 1 : 1,
+    items.push({
+        id: nextItemId++,
             text: item.item,
             subdimension: item.subdimension || null
         });
     });
 
-    window.dataStorage.storeData('data_step_2', { items, aiItems }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
          console.log('Data saved successfully');
      });
 
@@ -566,7 +571,7 @@ async function deleteItems(indicator) {
         return; // User cancelled
     }
     aiItems[indicator] = []
-    window.dataStorage.storeData('data_step_2', { items, aiItems }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
          console.log('Data saved successfully');
      });
 
