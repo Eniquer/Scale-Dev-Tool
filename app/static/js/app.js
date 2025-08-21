@@ -109,7 +109,12 @@ function makeHxPostRequest(url, data) {
 }
 
 
-async function sendChat(input, history = []) {
+async function sendChat(input, history = [], model="gpt-4.1") {
+    if (model === "search") {
+        // If model is search, modify the input for search context
+        input = `Search for: ${input}`;
+        model = "gpt-4o-search-preview"
+    }
     const cipher = window.currentAPIKey_enc;
     if (!cipher) {
         alert('API key is not set. Please enter your OpenAI API key first.');
@@ -124,7 +129,7 @@ async function sendChat(input, history = []) {
     const resp = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: promptText, keyCipher: cipher, history: history })
+        body: JSON.stringify({ prompt: promptText, keyCipher: cipher, history: history, model: model })
     });
     if (resp.ok) {
         const { reply, history: updatedHistory } = await resp.json();
@@ -144,7 +149,7 @@ async function sendChat(input, history = []) {
             const newKey = prompt('Your API key appears invalid or unauthorized. Please re-enter your key.');
             // Re-init API key and retry storing cipher
             window.currentAPIKey_enc = await storeAPIKey(newKey, false);
-            return await sendChat(input, history); // Retry with new key
+            return await sendChat(input, history, model); // Retry with new key
         }
     }
 }

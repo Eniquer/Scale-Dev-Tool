@@ -23,10 +23,9 @@ def load_questions(file_path):
 # questions_file = "questions.json"
 # questions = load_questions(questions_file)
 
-
 # Removed specific OpenAI exception imports (not available in this environment)
 
-def get_chatgpt_response(user_input, messages, temperature=0.7, model="gpt-4o", api_key=None):
+def get_chatgpt_response(user_input, messages, temperature=0.7, model="gpt-4.1", api_key=None):
     """
     Sends a prompt to ChatGPT and retrieves the response, handling errors and retries.
     """
@@ -55,13 +54,35 @@ def get_chatgpt_response(user_input, messages, temperature=0.7, model="gpt-4o", 
     messages.append({"role": "assistant", "content": assistant_reply})
     return assistant_reply, messages
 
-def analyze_anova(data):
-    """
-    Analyzes data using ANOVA and returns the results.
-    """
-    print(data)
-    return
 
+def get_chatgpt_search(user_input, messages, model="gpt-4o-search-preview", api_key=None):
+    """
+    Sends a prompt to ChatGPT and retrieves the response, handling errors and retries.
+    """
+    client = openai.OpenAI(api_key=api_key)
+
+    # Append user's input to the conversation history
+    messages.append({"role": "user", "content": user_input})
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+        )
+    except Exception as e:
+        err_msg = str(e).lower()
+        # Retry on rate-limiting errors
+        if 'rate limit' in err_msg:
+            print("Rate limit exceeded. Retrying in 5 seconds...", e)
+            time.sleep(5)
+            return get_chatgpt_response(user_input, messages, model, api_key)
+        # Log other API errors and propagate
+        print("OpenAI API error:", e)
+        raise
+    # Extract assistant's reply
+    assistant_reply = response.choices[0].message.content
+    # Append assistant's reply to history
+    messages.append({"role": "assistant", "content": assistant_reply})
+    return assistant_reply, messages
 
 
 def analyze_content_adequacy(

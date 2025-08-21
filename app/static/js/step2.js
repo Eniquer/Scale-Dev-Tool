@@ -393,6 +393,10 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
         itemHistory = [];
         
     }
+    model = undefined
+    if (indicator == "literature" || indicator == "existing") {
+        model = "search";
+    }
     
     // Send prompt to chat API and retrieve JSON text
     try {
@@ -413,9 +417,9 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
                     "role": "system"
                 }
             ]
-            response = await window.sendChat("Generate again 5 - 10 more items", fakeHistory);
+            response = await window.sendChat("Generate again 5 - 10 more items", fakeHistory, model);
         }else{ // If no history, use default system prompt
-            response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
+            response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}], model);
         }
         AIResponse = window.cleanAIRespond(response[0]); // Get the reply text from the response
     } catch (err) {

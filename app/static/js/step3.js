@@ -9,6 +9,8 @@ let step2Data = null;
 
 init()
 
+// todo handle unidimensional
+
 async function init(){
     step1Data = await window.dataStorage.getData('data_step_1');
     step2Data = await window.dataStorage.getData('data_step_2');

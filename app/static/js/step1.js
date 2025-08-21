@@ -256,9 +256,9 @@ async function getDefinitions(forceNewDefs = false) {
                     "role": "system"
                 }
             ]
-            response = await window.sendChat(" Generate 2 or 3 different definitions: ", fakeHistory);
+            response = await window.sendChat(" Generate 2 or 3 different definitions: ", fakeHistory, "search");
         }else{ // If no history, use default system prompt
-            response = await window.sendChat(getDefinitionsPrompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
+            response = await window.sendChat(getDefinitionsPrompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}],"search");
         }
         responseText = response[0]; // Get the reply text from the response
     } catch (err) {

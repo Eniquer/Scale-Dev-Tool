@@ -105,11 +105,19 @@ async def chat_endpoint(chat_req: ChatRequest):
     print(f"Using API key: {api_key[-3:]}")  # Log last 3 chars for debugging  //TODO remove in production
     # call ChatGPT via functions
     try:
-        reply = get_chatgpt_response(
-            chat_req.prompt,
-            chat_req.history,
-            temperature=chat_req.temperature,
-            model=chat_req.model,
+        if chat_req.model == "gpt-4o-search-preview":
+            reply = get_chatgpt_search(
+                chat_req.prompt,
+                chat_req.history,
+                model=chat_req.model,
+                api_key=api_key
+            )
+        else:
+            reply = get_chatgpt_response(
+                chat_req.prompt,
+                chat_req.history,
+                temperature=chat_req.temperature,
+                model=chat_req.model,
             api_key=api_key
         )
     except AuthenticationError:
