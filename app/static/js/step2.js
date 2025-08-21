@@ -468,6 +468,12 @@ function createAiItemRows(indicator){
     
     document.getElementById(`selectAll${indicator}`).checked = false; // Reset select all checkbox
     const itemList = aiItems[indicator] || [];
+    if (itemList.length > 0) {
+        const genMoreBtn = document.getElementById(`generateMore${indicator}`);        
+        if (genMoreBtn) {
+            genMoreBtn.classList.remove('d-none');
+        }
+    }
     const itemContainer = document.getElementById(`${indicator}-item-container`);
     if (!itemContainer) {
         console.info(`Container for ${indicator} items not found`);
