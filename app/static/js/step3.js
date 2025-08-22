@@ -10,6 +10,7 @@ let step2Data = null;
 init()
 
 // todo handle unidimensional
+// (done) store ANOVA results inside data_step_3 instead of separate key
 
 async function init(){
     step1Data = await window.dataStorage.getData('data_step_1');
@@ -359,90 +360,78 @@ function wireRaterUI() {
                 try {
 
 
+                    // Build prompt history with items & subdimensions in random order (user request: "in random order")
+                    function shuffle(arr){
+                        for(let i = arr.length - 1; i > 0; i--){
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [arr[i], arr[j]] = [arr[j], arr[i]];
+                        }
+                        return arr;
+                    }
+
+                    // Shuffled copies (do not mutate originals)
+                    const shuffledSubdimensions = shuffle([...subdimensions]);
+                    const shuffledItems = shuffle([...items]);
+
+                    // Simple escaper for double quotes inside item text
+                    const esc = s => String(s).replace(/"/g, '\\"');
+
                     let history = [
-                {
-                    "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers.",
-                    "role": "system"
-                },
-                {
-                    "content": `
+                        {
+                            role: "system",
+                            content: "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."
+                        },
+                        {
+                            role: "system",
+                            content: `
         You are generating synthetic expert ratings for content validation following MacKenzie et al. (2011) Step 3 logic (content adequacy).
 
-Inputs:
+Inputs (randomized order):
 
     Subdimensions (with concise descriptions):
-    ${subdimensions.map(sd => `Dimensionname: ${sd.name}, Definition: ${sd.definition}`).join('; \n ')}
+    ${shuffledSubdimensions.map(sd => `Dimensionname: ${sd.name}, Definition: ${sd.definition}`).join(';\n ')}
 
-    Items (array of objects with id and name):
-    ${items.map(it => `{"id": ${it.id}, "text": "${it.text}"}`).join(',\n')}
-
-   
-
+    Items (array of objects with id and text):
+    ${shuffledItems.map(it => `{"id": "${it.id}", "text": "${esc(it.text)}"}`).join(',\n')}
 
 Output schema (JSON only, no extra text, no markdown):
 {
-"ratings": {
-"ITEM-ID": {
-"SUBDIMENSION_NAME_1": ITEMRATING_NUMBER,
-"SUBDIMENSION_NAME_2": ITEMRATING_NUMBER,
-...
-},
-...
-}
+  "ratings": {
+    "ITEM-ID": {
+      "SUBDIMENSION_NAME_1": ITEMRATING_NUMBER,
+      "SUBDIMENSION_NAME_2": ITEMRATING_NUMBER
+    }
+  }
 }
 
-Rating scale:
-
-    Use integers from 1–5.
-
-    Semantics (for 1–5):
-    1 = not representative / off‑target
-    2 = weak representation
-    3 = moderate/ambiguous
-    4 = strong representation
-    5 = very strong/essential
+Rating scale (integers 1–5):
+1 = not representative / off‑target
+2 = weak representation
+3 = moderate / ambiguous
+4 = strong representation
+5 = very strong / essential
 
 Generation rules:
+- Rate each item against every subdimension definition.
+- Discriminate: avoid uniformly high scores unless clearly warranted.
+- Penalize vague / broad wording (1–2). Reward precise alignment (4–5).
+- If item is clearly specific to one subdimension, keep others near midpoint or below unless justified.
+- No missing keys: every item must include every subdimension as a key.
 
-    Content adequacy focus: Rate each item separately against every subdimension’s definition.
+Persona influence (apply consistently):
+- Strict/skeptical → slight downward shift, tighter variance.
+- Enthusiastic/lenient → slight upward shift, occasional 5s.
+- High domain expertise → more extremes (1–2 & 4–5), fewer 3s.
+- Values clarity → penalize vague items further.
 
-    Within an item, you may give high scores to more than one subdimension if warranted, but be discriminating: avoid giving all high scores unless the wording clearly spans multiple subdimensions.
-
-    Penalize off‑construct or overly broad language (likely 1–2).
-
-    Reward precise, essential attributes of the subdimension (likely 4–5).
-
-    If an item is clearly specific to one subdimension, keep others near the midpoint or below unless justified by wording.
-
-    No missing keys: every item must include every subdimension as a key.
-
-
-Persona influence (apply consistently across all ratings):
-
-    Interpret item wording through the Persona’s lens.
-
-    If the Persona is strict/skeptical → slight downward shift and lower variance.
-
-    If the Persona is enthusiastic/lenient → slight upward shift and occasional 5s.
-
-    Domain familiarity → sharper discrimination (more 1–2 and 4–5; fewer 3s).
-
-    If the Persona values clarity/behavioral specificity, penalize vague items harder.
-
-Quality checks (must pass):
-
-    Return valid JSON only.
-
-    Include every item id from the input.
-
-    Include every subdimension name as keys under each item.
-
-    Ratings are integers in the specified range
-    
-    `,
-                    "role": "system"
-                }
-            ]
+Quality checks (MUST PASS):
+- Return valid JSON only.
+- Include every item id from input (even though randomized in prompt).
+- Include every subdimension name under each item.
+- All ratings are integers 1–5.
+                            `
+                        }
+                    ];
 
                     let prompt = `You will role‑play a single expert rater (the Persona) and rate how well each item reflects each subdimension of the construct. First answer in Sentences like the persona would and after that put your output into the requested format.
  Persona (short description):
@@ -733,7 +722,7 @@ function wireAnalysisUI() {
             </div>
         </div>
         <div class="d-flex justify-content-center">
-        <div>
+        <div  style="max-width:100%">
         <div id="anova-summary" class="small text-secondary mb-2"></div>
         <div id="anova-results-table"></div>
         </div>
@@ -752,12 +741,8 @@ function wireAnalysisUI() {
             lastAnovaResults = records;
             renderAnovaResults(records);
             document.getElementById('exportAnovaBtn').disabled = (records.length === 0);
-            // Persist analysis results for auto-load on next visit
-            try {
-                await window.dataStorage.storeData('anova_results_step3', { rows: records, ts: new Date().toISOString() }, false);
-            } catch (e) {
-                console.warn('Failed to persist ANOVA results', e);
-            }
+            // Persist analysis results within data_step_3 for auto-load on next visit
+            persistAnovaResults(records);
             window.displayInfo && window.displayInfo('success', `Analysis complete (${records.length} item(s)).`);
         } catch (err) {
             console.error('ANOVA failed', err);
@@ -786,16 +771,38 @@ function wireAnalysisUI() {
 // Load saved ANOVA results (if any) and render on page load
 async function loadSavedAnovaResults() {
     try {
-        const saved = await window.dataStorage.getData('anova_results_step3');
-        const rows = Array.isArray(saved?.rows) ? saved.rows : [];
-        if (rows.length > 0) {
+        const step3 = await window.dataStorage.getData('data_step_3');
+        let rows = Array.isArray(step3?.anovaResults?.rows) ? step3.anovaResults.rows : [];
+        console.log(rows);
+        const noItems = !Array.isArray(items) || items.length === 0;
+        if (rows.length > 0 && !noItems) {
             lastAnovaResults = rows;
             renderAnovaResults(rows);
             const btn = document.getElementById('exportAnovaBtn');
             if (btn) btn.disabled = false;
+        } else {
+             lastAnovaResults = [];
+            if (anovaTable) {
+                try { anovaTable.destroy(); } catch {}
+            }
+            const btn = document.getElementById('exportAnovaBtn');
+            if (btn) btn.disabled = true;
+            const summaryEl = document.getElementById('anova-summary');
+            if (summaryEl) summaryEl.textContent = '';
         }
     } catch (e) {
         console.warn('No saved ANOVA results to load or failed to load.', e);
+    }
+}
+
+// Helper: persist ANOVA results inside data_step_3 while preserving other fields
+async function persistAnovaResults(records) {
+    try {
+        const step3 = await window.dataStorage.getData('data_step_3') || {};
+        step3.anovaResults = { rows: Array.isArray(records) ? records : [], ts: new Date().toISOString() };
+        await window.dataStorage.storeData('data_step_3', step3, false);
+    } catch (e) {
+        console.warn('Failed to persist ANOVA results inside data_step_3', e);
     }
 }
 
@@ -939,11 +946,7 @@ async function handleConfirmBulkDeleteItems() {
     if (Array.isArray(lastAnovaResults) && lastAnovaResults.length > 0) {
         lastAnovaResults = lastAnovaResults.filter(r => !selSet.has(String(r.item)));
         renderAnovaResults(lastAnovaResults);
-        try {
-            await window.dataStorage.storeData('anova_results_step3', { rows: lastAnovaResults, ts: new Date().toISOString() }, false);
-        } catch (e) {
-            console.warn('Failed to persist updated ANOVA results', e);
-        }
+    persistAnovaResults(lastAnovaResults);
     }
 
     // Refresh rating table
@@ -1088,3 +1091,16 @@ function exportAnovaCSV(rows) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
