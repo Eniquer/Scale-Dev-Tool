@@ -163,7 +163,7 @@ async function saveConstructData(dontSave = false) {
 
     
     if (!constructName) {
-        window.displayInfo('warning', 'Please fill in both the construct name and initial definition before saving.');
+        window.displayInfo('warning', 'Please fill in the construct name before saving.');
         emitDataChanged()
         return false;
     }
@@ -180,9 +180,9 @@ async function saveConstructData(dontSave = false) {
                 cancelText: 'No, keep it'
             });
             if (!userConfirmed) {
-            console.log('User cancelled data storage — existing data preserved');
-            emitDataChanged()
-            return;
+                console.log('User cancelled data storage — existing data preserved');
+                emitDataChanged()
+                return;
             }
         }
         await window.dataStorage.storeData('data_step_1', step1Data, false);
@@ -459,8 +459,6 @@ async function saveDefinition(dontSave = false) {
         emitDataChanged()
         return
     }
-    
-    if (currentDefinition !== resultingDefinition) {
         const userConfirmed = await customConfirm({
             title: '⚠️ Restart from here?',
             message: `Do you want to restart and delete all further edits?`,
@@ -489,8 +487,6 @@ async function saveDefinition(dontSave = false) {
         window.displayInfo('success', "New Definition saved successfully.");
         emitDataChanged()
         return;
-    }
-    window.displayInfo('info', "No new changes found.");
 }
 
 
@@ -1591,7 +1587,6 @@ async function checkIfSaved(panelId){
 
         
         // todo available data returns something. check if its really empty. by their methods?
-        console.log(savedData,availableData.data);
 
         
         if (JSON.stringify(savedData) !== JSON.stringify(availableData.data)) {
