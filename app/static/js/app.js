@@ -389,10 +389,10 @@ function customConfirm({
     confirmText = 'OK',
     cancelText = 'Cancel'
 }) {
-    // If a customConfirm is already active, ignore and resolve false
+    // Prevent overlapping modals; wait until prior fully closes
     if (customConfirmActive) return Promise.resolve(false);
     customConfirmActive = true;
-     return new Promise(resolve => {
+    return new Promise(resolve => {
         // 1) Create a unique container for this modal
         const container = document.createElement('div');
         const modalId = `dynamicModal_${Date.now()}`;
@@ -433,23 +433,25 @@ function customConfirm({
         const modalEl = document.getElementById(modalId);
         const bsModal = new bootstrap.Modal(modalEl);
 
-        // 3) Handle button clicks
+        // 3) Handle button clicks but defer resolve until modal fully hidden
+        let choice = false;
         modalEl.querySelector(`#${modalId}_confirm`).onclick = () => {
-            resolve(true);
+            choice = true;
             bsModal.hide();
         };
-        modalEl.querySelector(`#${modalId}_cancel`).onclick =
-            modalEl.querySelector('.btn-close').onclick = () => {
-                resolve(false);
-                bsModal.hide();
-            };
+        const cancelHandler = () => {
+            choice = false;
+            bsModal.hide();
+        };
+        modalEl.querySelector(`#${modalId}_cancel`).onclick = cancelHandler;
+        modalEl.querySelector('.btn-close').onclick = cancelHandler;
 
-        // 4) Cleanup after hide
+        // 4) Cleanup after hide (ensures sequential confirms work)
         modalEl.addEventListener('hidden.bs.modal', () => {
-            // Reset active flag when closed
-            customConfirmActive = false;
+            customConfirmActive = false; // allow next confirm immediately after hide
             bsModal.dispose();
             container.remove();
+            resolve(choice); // resolve only now so callers can safely chain awaits
         });
 
         // 5) Show it
