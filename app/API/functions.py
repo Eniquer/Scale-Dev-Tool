@@ -203,12 +203,17 @@ def analyze_content_adequacy(
         else:
             dz = np.nan
 
-        # Descriptives + highest facet check
+        # Descriptives and highest facet identification
         facet_means = d.groupby(facet_col)[rating_col].mean()
         intended_mean = float(facet_means.loc[target])
         others_mean = float(facet_means.drop(labels=[target]).mean())
         mean_diff = intended_mean - others_mean
-        target_is_highest = facet_means.idxmax() == target
+        highest_facet_name = facet_means.idxmax()
+        highest_facet_mean = float(facet_means.loc[highest_facet_name])
+        target_is_highest = highest_facet_name == target
+        item_mean = float(facet_means.mean())
+        other_facet_means = {f: float(facet_means.loc[f]) for f in facet_means.index if f != target}
+        all_facet_means = {f: float(facet_means.loc[f]) for f in facet_means.index}
 
         # 3) Decision per MacKenzie/Hinkin–Tracey
         omnibus_sig = (p_omnibus < alpha)
@@ -243,6 +248,11 @@ def analyze_content_adequacy(
             "intended_mean": intended_mean,
             "others_mean": others_mean,
             "mean_diff": mean_diff,
+            "item_mean": item_mean,
+            "highest_facet": highest_facet_name,
+            "highest_facet_mean": highest_facet_mean,
+            "other_facet_means": other_facet_means,
+            "all_facet_means": all_facet_means,
             "t_contrast": t_stat,
             "df_t": df_t,
             "p_contrast_one_sided": p_one,
@@ -273,6 +283,11 @@ def _empty_row(it, target, n_raters, k, notes):
         "intended_mean": np.nan,
         "others_mean": np.nan,
         "mean_diff": np.nan,
+        "item_mean": np.nan,
+        "highest_facet": None,
+        "highest_facet_mean": np.nan,
+    "other_facet_means": {},
+    "all_facet_means": {},
         "t_contrast": np.nan,
         "df_t": np.nan,
         "p_contrast_one_sided": np.nan,
