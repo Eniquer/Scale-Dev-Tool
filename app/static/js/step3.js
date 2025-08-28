@@ -389,7 +389,7 @@ function wireRaterUI() {
 
                     // Simple escaper for double quotes inside item text
                     const esc = s => String(s).replace(/"/g, '\\"');
-
+                    // todo add optional prompt input from the user
                     let history = [
                         {
                             role: "system",
