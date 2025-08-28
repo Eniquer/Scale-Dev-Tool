@@ -30,7 +30,7 @@ function syncData() {
     allItemRows.forEach(row => row.remove());
     // Populate with current items
     items.forEach(item => {
-        createItemRow(item.text, item.subdimension, item.id);
+        createItemRow(item.text, item.subdimensionId, item.id);
     });
     revealNextStepButton();
 
@@ -49,7 +49,7 @@ async function init(){
     const step1Data = await window.dataStorage.getData('data_step_1');
     const step2Data = await window.dataStorage.getData('data_step_2') || {};
     dimensionality = step1Data?.panel4?.dimensionality || "";
-    // Load full subdimension objects (with name, definition, attributes)
+
     subdimensions = step1Data?.panel5?.subdimensions || [];
     items = step2Data?.items || [];
     aiItems = step2Data?.aiItems || {
@@ -75,11 +75,7 @@ async function init(){
         // add items input
         addItemSubdimension.innerHTML = 
         `<option value="" disabled selected>Select subdimension</option>
-        ${
-            subdimensions.map(sd =>
-                `<option value="${sd.name}">${sd.name}</option>`
-            ).join('')
-        }
+    ${subdimensions.map(sd => `<option value="${sd.id}">${sd.name}</option>`).join('')}
         <option value="">No Subdimension</option>`;
     }
 
@@ -140,16 +136,16 @@ function renderSubdimensionPanels() {
  * @param {string} subdimension - Target subdimension name or empty for none
  * @param {number|null} id - Unique item identifier, or null for new item
  */
- function changeSubdimension(text = '', subdimension = '', id = null) {
+function changeSubdimension(text = '', subdimensionId = '', id = null) {
      // Log the intended change for debugging
-     console.log(`Changing subdimension for item ID ${id} to "${subdimension}" with text "${text}"`);
+         console.log(`Changing subdimension for item ID ${id} to id "${subdimensionId}" with text "${text}"`);
 
      // If item exists (id provided), update existing entry
      if (id !== null) {
          const itemIndex = items.findIndex(i => i.id === id);
          if (itemIndex !== -1) {
              // Assign new subdimension and update text if non-empty
-             items[itemIndex].subdimension = subdimension;
+             items[itemIndex].subdimensionId = subdimensionId || null;
              if (text) {
                  items[itemIndex].text = text;
              }
@@ -159,7 +155,7 @@ function renderSubdimensionPanels() {
      } else {
          // No ID => create a new item with fresh, persistent ID
          const newId = nextItemId++;
-         items.push({ id: newId, text: text, subdimension: subdimension });
+         items.push({ id: newId, text: text, subdimensionId });
      }
      // Persist updated list to IndexedDB
     window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
@@ -176,9 +172,9 @@ function renderSubdimensionPanels() {
  * @param {string} subdimension - Current subdimension of the item
  * @param {number|null} id - Unique identifier of the item
  */
- function createItemRow(itemText = '', subdimension = '', id = null) {
+function createItemRow(itemText = '', subdimensionId = '', id = null) {
      // Determine which panel to append this row into
-     const subdimensionIndex = subdimensions.findIndex(sd => sd.name === subdimension);
+    const subdimensionIndex = subdimensions.findIndex(sd => sd.id === subdimensionId);
      const subdimensionPanel = document.getElementById(`items-${subdimensionIndex}`);
 
      // Container for the row and its controls
@@ -191,8 +187,8 @@ function renderSubdimensionPanels() {
      if (dimensionality === 'Multidimensional') {
          // List all other subdimensions as options
          const opts = subdimensions
-             .filter(sd => sd.name !== subdimension)
-             .map(sd => `<option value="${sd.name}" onclick="changeSubdimension('', '${sd.name}', ${id})">${sd.name}</option>`)
+             .filter(sd => sd.id !== subdimensionId)
+             .map(sd => `<option value="${sd.id}" onclick="changeSubdimension('', '${sd.id}', ${id})">${sd.name}</option>`)
              .join('');
          // Option to clear subdimension
          const noSubOpt = subdimensionIndex !== -1
@@ -249,7 +245,7 @@ function renderSubdimensionPanels() {
              saveBtn.style.display = 'none';
              return;
          }
-         changeSubdimension(newText, subdimension, id);
+         changeSubdimension(newText, subdimensionId, id);
          saveBtn.style.display = 'none';
          itemTextInput.blur();
      });
@@ -270,7 +266,7 @@ document.addEventListener('input', event => {
 if (addItemButton) {
     addItemButton.addEventListener('click', async() => {
         // Read inputs, validate, add to `items`, persist, then refresh UI
-        const subdimension = addItemSubdimension.value || '';
+    const subdimensionId = addItemSubdimension.value || '';
         const itemText = addItemText.value.trim();
         if (!itemText) {
             await customConfirm({
@@ -287,9 +283,9 @@ if (addItemButton) {
         // add item to storage
     const item = {
         id: nextItemId++,
-            text: itemText,
-            subdimension: subdimension || null
-        };
+        text: itemText,
+        subdimensionId: subdimensionId || null
+    };
         items.push(item);
     window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
             console.log('Data saved successfully');
@@ -492,10 +488,10 @@ function createAiItemRows(indicator){
         const itemDiv = document.createElement('div');
         itemDiv.className = 'col form-check';
         const checkbox = document.createElement('input')
-        if (items.some(i =>
-            i.text === item.item &&
-            (i.subdimension || '') === (item.subdimension || '')
-        )) {
+        if (items.some(i => {
+            const existingName = getSubdimensionNameById(i.subdimensionId);
+            return i.text === item.item && existingName === (item.subdimension || '');
+        })) {
             checkbox.disabled = true; // Disable checkbox if item already exists in items
         }
         checkbox.className = `form-check-input ${indicator}-checkbox`
@@ -543,16 +539,17 @@ function chooseSelectItems(indicator) {
     
 
     selectedItems.forEach(item => {
-        if (items.some(existing =>
-            existing.text === item.item &&
-            (existing.subdimension || '') === (item.subdimension || '')
-        )) {
+        if (items.some(existing => {
+            const existingName = getSubdimensionNameById(existing.subdimensionId);
+            return existing.text === item.item && existingName === (item.subdimension || '');
+        })) {
             return;
         }
-    items.push({
-        id: nextItemId++,
+        const matched = subdimensions.find(sd => sd.name === item.subdimension);
+        items.push({
+            id: nextItemId++,
             text: item.item,
-            subdimension: item.subdimension || null
+            subdimensionId: matched ? matched.id : null
         });
     });
 
@@ -582,9 +579,9 @@ async function deleteItems(indicator) {
     }
     aiItems[indicator] = []
     window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
-         console.log('Data saved successfully');
-     });
-
+        console.log('Data saved successfully');
+    });
+    document.getElementById(`generateMore${indicator}`).classList.add('d-none');        
     // Refresh the UI to reflect changes
     syncData();
 }

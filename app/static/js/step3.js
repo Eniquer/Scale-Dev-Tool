@@ -16,6 +16,7 @@ async function init(){
     step1Data = await window.dataStorage.getData('data_step_1');
     step2Data = await window.dataStorage.getData('data_step_2');
     const step3Data = await window.dataStorage.getData('data_step_3') || {};
+
     subdimensions = step1Data?.panel5?.subdimensions || [];
     items = step2Data.items || [];
     raters = step3Data.raters || [];
@@ -48,7 +49,7 @@ function buildRows() {
     return items.map(it => {
         const row = { id: it.id, Item: it.text };
         subdimensions.forEach(sd => {
-            const key = sd.name; // use subdimension name as column key
+            const key = sd.id; // internal key is id
             const raw = (ratings[it.id] && ratings[it.id][key] !== undefined) ? ratings[it.id][key] : null;
             row[key] = (raw === '' || raw === null || raw === undefined) ? null : Number(raw);
         });
@@ -235,7 +236,20 @@ function wireRaterUI() {
                 merged.push({ ...r, id: newId });
             }
 
-            raters = merged;
+            // Migrate any name-keyed ratings to id-keyed ratings on import
+            const nameToId = Object.fromEntries(subdimensions.map(sd => [sd.name, sd.id]));
+            raters = merged.map(r => {
+                const newRatings = {};
+                for (const [itemId, perItem] of Object.entries(r.ratings || {})) {
+                    if (!perItem || typeof perItem !== 'object') continue;
+                    newRatings[itemId] = {};
+                    for (const [k, v] of Object.entries(perItem)) {
+                        const sid = nameToId[k] || k;
+                        newRatings[itemId][sid] = v;
+                    }
+                }
+                return { ...r, ratings: newRatings };
+            });
             // Keep current active if still present; else set to first imported or null
             if (!raters.find(r => r.id === activeRaterId)) {
                 activeRaterId = raters[0]?.id ?? null;
@@ -289,7 +303,7 @@ function wireRaterUI() {
             const exportItems = currentItems.map(it => ({
                 id: it.id,
                 text: it.text,
-                subdimension: it.subdimension ?? null,
+                subdimensionId: it.subdimensionId || null
             }));
             const payload = { items: exportItems, raters: filteredRaters, activeRaterId };
             const json = JSON.stringify(payload, null, 2);
@@ -453,8 +467,19 @@ Quality checks (MUST PASS):
                     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                         const id = newId();
                         const name = `AI Rater ${seqNum}`;
-                        const rat = (parsed.ratings && typeof parsed.ratings === 'object') ? parsed.ratings : {};
-                        rater = { id, name, ratings: rat };
+                        const rawRatings = (parsed.ratings && typeof parsed.ratings === 'object') ? parsed.ratings : {};
+                        // Transform name-keyed ratings => id-keyed ratings
+                        const nameToId = Object.fromEntries(subdimensions.map(sd => [sd.name, sd.id]));
+                        const transformed = {};
+                        for (const [itemId, subObj] of Object.entries(rawRatings)) {
+                            if (!subObj || typeof subObj !== 'object') continue;
+                            transformed[itemId] = {};
+                            for (const [subName, val] of Object.entries(subObj)) {
+                                const sid = nameToId[subName] || subName; // fallback keep original key
+                                transformed[itemId][sid] = val;
+                            }
+                        }
+                        rater = { id, name, ratings: transformed };
                     } else if (Array.isArray(parsed) && parsed.length) {
                         const first = parsed[0];
                         const name = (first && typeof first.name === 'string' && first.name.trim()) ? first.name.trim() : `AI Rater ${seqNum}`;
@@ -504,7 +529,7 @@ function renderRatingTable() {
         },
         ...subdimensions.map(sd => ({
             title: sd.name,
-            field: sd.name,
+            field: sd.id,
             headerTooltip: sd.definition || sd.name,
             hozAlign: 'center', headerSort: false,
             editor: (activeRaterId ? 'select' : false),
@@ -539,12 +564,12 @@ function renderRatingTable() {
 
     ratingTable.on('cellEdited', async (cell) => {
         if (!activeRaterId) return; // no raters -> ignore edits
-        const field = cell.getField();
-        if (field === 'Item') return; // do not edit item text here
+    const field = cell.getField(); // this is subdimension id now
+    if (field === 'Item') return; // do not edit item text here
         const row = cell.getRow().getData();
     const value = cell.getValue();
         if (!ratings[row.id]) ratings[row.id] = {};
-        // Normalize empty selection to null (allow clearing)
+    // Normalize empty selection to null (allow clearing)
     ratings[row.id][field] = (value === '' || value === undefined || value === null) ? null : Number(value);
         try {
             await saveStep3Data();
@@ -594,14 +619,14 @@ function buildAnovaLongDataset() {
   for (const r of ratersSnapshot) {
     const rId = r.id;
     const rRatings = r.ratings || {};
-    for (const it of items) {
-      const perItem = rRatings[it.id] || {};
-      for (const sd of subdimensions) {
-        const v = perItem[sd.name];
+            for (const it of items) {
+                const perItem = rRatings[it.id] || {};
+                for (const sd of subdimensions) {
+                const v = perItem[sd.id];
         rows.push({
             item: String(it.id),
             rater: String(rId),
-            facet: sd.name,
+                        facet: sd.name, // keep human-readable name for analysis export
             rating: v === '' || v === undefined || v === null ? null : Number(v)
         });
       }
@@ -625,9 +650,17 @@ async function analyzeAnova(extraParams = {}) {
   await saveStep3Data();
 
   const longData = buildAnovaLongDataset();
-  const intendedMap = Object.fromEntries(
-    items.map(it => [String(it.id), it.subdimension ?? null])
-  );
+    // intendedMap must use the same facet identifiers as the long dataset.
+    // longData rows currently use human-readable facet names (sd.name) in the 'facet' field,
+    // so we translate each item's subdimensionId to its name here. This keeps the backend
+    // analyzer happy (it matches intended_facet against observed facet values).
+    // If we later switch longData facets to use sd.id instead, also switch this to ids
+    // (and adapt display mapping after analysis).
+    const subdimensionNameById = new Map(subdimensions.map(sd => [sd.id, sd.name]));
+    const intendedMap = Object.fromEntries(
+        items.map(it => [String(it.id), (subdimensionNameById.get(it.subdimensionId) || null)])
+    );
+
 
   const payload = {
     data: longData.rows,           // [{rater, subdimension, itemId, rating}]
@@ -638,6 +671,8 @@ async function analyzeAnova(extraParams = {}) {
       dropIncomplete: extraParams.dropIncomplete ?? true
     }
   };
+  console.log(payload);
+  
 
   const resp = await fetch('/api/analyze-anova', {
     method: 'POST',
@@ -674,10 +709,10 @@ function buildMackenzieTableJSON() {
   const rows = [];
   for (const r of ratersSnapshot) {
     const rRatings = r.ratings || {};
-    subdimensions.forEach((sd) => {
-      const row = { rater: r.name || r.id, subdimension: sd.name };
+        subdimensions.forEach((sd) => {
+            const row = { rater: r.name || r.id, subdimension: sd.name };
       for (const it of items) {
-        const v = ((rRatings[it.id] || {})[sd.name]);
+                const v = ((rRatings[it.id] || {})[sd.id]);
         row[`item_${it.id}`] = v === '' || v === undefined || v === null ? null : Number(v);
       }
       rows.push(row);
@@ -773,7 +808,6 @@ async function loadSavedAnovaResults() {
     try {
         const step3 = await window.dataStorage.getData('data_step_3');
         let rows = Array.isArray(step3?.anovaResults?.rows) ? step3.anovaResults.rows : [];
-        console.log(rows);
         const noItems = !Array.isArray(items) || items.length === 0;
         if (rows.length > 0 && !noItems) {
             lastAnovaResults = rows;
@@ -971,37 +1005,68 @@ function renderAnovaResults(rows) {
 
     // Build item id -> item name map and project display rows with item_name
     const idToName = new Map(items.map(it => [String(it.id), it.text]));
-    const displayRows = (rows || []).map(r => ({
-        ...r,
-        item_name: idToName.get(String(r.item)) || String(r.item),
-        // Display df2 prefers corrected if available, else uncorrected
-        df2_disp: (Number.isFinite(r.df2_corr) && r.df2_corr !== null) ? r.df2_corr : r.df2_uncorr,
-        // Fallback note so the column isn't empty in UI
-        notes: (r.notes && String(r.notes).trim()) ? r.notes : 'sphericity=GG'
-    }));
+    const displayRows = (rows || []).map(r => {
+        let second_highest_facet = '';
+        let second_highest_facet_mean = null;
+        if (r && r.all_facet_means && typeof r.all_facet_means === 'object') {
+            const entries = Object.entries(r.all_facet_means)
+                .filter(([, v]) => Number.isFinite(v))
+                .sort((a, b) => b[1] - a[1]);
+            if (entries.length >= 2) {
+                second_highest_facet = entries[1][0];
+                second_highest_facet_mean = entries[1][1];
+            }
+        }
+        return {
+            ...r,
+            second_highest_facet,
+            second_highest_facet_mean,
+            second_highest_display: (second_highest_facet && Number.isFinite(second_highest_facet_mean)) ? `${second_highest_facet}:${fmtNum(second_highest_facet_mean,2)}` : '',
+            highest_display: (r.highest_facet && Number.isFinite(r.highest_facet_mean)) ? `${r.highest_facet}:${fmtNum(r.highest_facet_mean,2)}` : (r.highest_facet || ''),
+            item_name: idToName.get(String(r.item)) || String(r.item),
+            df2_disp: (Number.isFinite(r.df2_corr) && r.df2_corr !== null) ? r.df2_corr : r.df2_uncorr,
+            notes: (r.notes && String(r.notes).trim()) ? r.notes : 'sphericity=GG'
+        };
+    });
 
     const columns = [
-        { title: 'Item', field: 'item', headerSort: true, tooltip: function(cell){
+    { title: 'Item', field: 'item', headerSort: true, headerTooltip: 'Item ID (cell shows item text; native tooltip shows ID).', tooltip: function(cell){
             const id = cell.getValue();
             return id ? `ID: ${id}` : '';
         }, formatter: cell => {
             const id = cell.getValue();
             return (new Map(items.map(it => [String(it.id), it.text]))).get(String(id)) || String(id || '');
         } },
-        { title: 'Intended', field: 'intended_facet', headerSort: true },
-        { title: 'n_raters', field: 'n_raters', hozAlign: 'right' },
-        { title: 'k_facets', field: 'k_facets', hozAlign: 'right' },
-        { title: 'Intended mean', field: 'intended_mean', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right' },
-        { title: 'Others mean', field: 'others_mean', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right' },
-        { title: 'Mean diff', field: 'mean_diff', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right' },
-        { title: 'p(RM-ANOVA, GG)', field: 'p_omnibus', formatter: cell => fmtP(cell.getValue()), hozAlign: 'right' },
-        { title: 'p(>0)', field: 'p_contrast_one_sided', formatter: cell => fmtP(cell.getValue()), hozAlign: 'right' },
-        { title: 'Highest?', field: 'target_is_highest', formatter: 'tickCross', hozAlign: 'center' },
-        { title: 'ηp²', field: 'eta_p2', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right' },
-        { title: 'd_z', field: 'dz', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right' },
-        { title: 'epsilon', field: 'epsilon', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right' },
-        { title: 'Action', field: 'action', headerSort: true },
-        { title: 'Notes', field: 'notes', widthGrow: 2 }
+    { title: 'Intended', field: 'intended_facet', headerSort: true, headerTooltip: 'Facet the item was designed/intended to represent.' },
+    { title: 'n_raters', field: 'n_raters', hozAlign: 'right', headerTooltip: 'Number of raters with a non-missing rating for this item.' },
+    { title: 'k_facets', field: 'k_facets', hozAlign: 'right', headerTooltip: 'Total number of facets (subdimensions) rated.' },
+    { title: 'Intended mean', field: 'intended_mean', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Mean rating on the intended facet for this item.' },
+    { title: 'Others mean', field: 'others_mean', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Average of the means of all non-intended facets.' },
+    { title: 'Mean diff', field: 'mean_diff', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Intended mean minus Others mean (discriminant strength).' },
+    { title: 'Item mean', field: 'item_mean', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Average rating across all facets (overall representativeness).' },
+    // Highest facet with its mean value (facet:mean)
+    { title: 'Highest facet', field: 'highest_display', hozAlign: 'center', headerTooltip: 'Facet with the highest mean rating (facet:mean).', sorter: (a,b,aRow,bRow) => {
+            const av = aRow.getData().highest_facet_mean;
+            const bv = bRow.getData().highest_facet_mean;
+            const aNum = Number.isFinite(av) ? av : -Infinity;
+            const bNum = Number.isFinite(bv) ? bv : -Infinity;
+            return aNum - bNum;
+        } },
+    { title: '2nd highest', field: 'second_highest_display', sorter: (a,b,aRow,bRow) => {
+            const av = aRow.getData().second_highest_facet_mean;
+            const bv = bRow.getData().second_highest_facet_mean;
+            const aNum = Number.isFinite(av) ? av : -Infinity;
+            const bNum = Number.isFinite(bv) ? bv : -Infinity;
+            return aNum - bNum;
+    }, widthGrow: 1, headerTooltip: 'Second highest facet and its mean value.' },
+    { title: 'p(RM-ANOVA, GG)', field: 'p_omnibus', formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'Greenhouse–Geisser corrected omnibus repeated-measures ANOVA p-value.' },
+    { title: 'p(>0)', field: 'p_contrast_one_sided', formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'One-sided contrast p-value testing intended facet > average of others.' },
+    { title: 'Highest?', field: 'target_is_highest', formatter: 'tickCross', hozAlign: 'center', headerTooltip: 'Tick if intended facet has the highest mean among all facets.' },
+    { title: 'ηp²', field: 'eta_p2', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Partial eta squared (effect size for facet differences).' },
+    { title: 'd_z', field: 'dz', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Within-subject standardized mean difference (Cohen\'s d_z) for planned contrast.' },
+    { title: 'epsilon', field: 'epsilon', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Greenhouse–Geisser epsilon (sphericity estimate).' },
+    { title: 'Action', field: 'action', headerSort: true, headerTooltip: 'Suggested decision: keep / revise / delete (heuristic rules).' },
+    { title: 'Notes', field: 'notes', widthGrow: 2, headerTooltip: 'Additional notes; default indicates GG correction was applied.' }
     ];
 
     // Apply row coloring based on action
@@ -1063,7 +1128,9 @@ function exportAnovaCSV(rows) {
     if (!Array.isArray(rows) || rows.length === 0) return;
     const idToName = new Map(items.map(it => [String(it.id), it.text]));
     const headers = [
-    'item_name','item','intended_facet','n_raters','k_facets','F','df1','df2_uncorr','df2_corr','epsilon','p_omnibus','eta_p2','intended_mean','others_mean','mean_diff','t_contrast','df_t','p_contrast_one_sided','dz','target_is_highest','keep','action','notes'
+        'item_name','item','intended_facet','n_raters','k_facets','F','df1','df2_uncorr','df2_corr','epsilon','p_omnibus','eta_p2',
+        'intended_mean','others_mean','mean_diff','item_mean','highest_facet','highest_facet_mean','t_contrast','df_t','p_contrast_one_sided','dz',
+        'target_is_highest','keep','action','all_facet_means','other_facet_means','notes'
     ];
     const csv = [headers.join(',')];
     for (const r of rows) {
@@ -1072,7 +1139,10 @@ function exportAnovaCSV(rows) {
             notes: (r.notes && String(r.notes).trim()) ? r.notes : 'sphericity=GG'
         };
         const line = headers.map(h => {
-            const val = aug[h];
+            let val = aug[h];
+            if ((h === 'all_facet_means' || h === 'other_facet_means') && val && typeof val === 'object') {
+                try { val = JSON.stringify(val); } catch { val = ''; }
+            }
             if (val === null || val === undefined) return '';
             if (typeof val === 'number') return String(val);
             const s = String(val).replaceAll('"', '""');

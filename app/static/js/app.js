@@ -613,3 +613,21 @@ function cleanAIRespond(input) {
     return responseJson;
 }
 window.cleanAIRespond = cleanAIRespond;
+
+
+// ***************************************   Subdim***********************
+// Generate a stable id for subdimensions (fallback if crypto.randomUUID not available)
+function genSubdimensionId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'sd_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+window.genSubdimensionId = genSubdimensionId;
+window.getSubdimensionNameById = getSubdimensionNameById;
+
+// Helper: resolve a subdimensionId to its current display name
+function getSubdimensionNameById(id){
+    if(!id) return '';
+    const sd = subdimensions.find(s => s.id === id);
+    return sd ? sd.name : '';
+}

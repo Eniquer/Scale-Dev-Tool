@@ -25,6 +25,7 @@ const addSubdimensionButton = document.getElementById('addSubdimensionButton');
 
 
 
+
 // ***********************************    Auto-load Data    ***********************************************
 
 document.addEventListener("DOMContentLoaded", () => syncData());
@@ -63,7 +64,7 @@ syncData = async function () {
                     resultingDefinitionContainer.classList.remove('d-none'); // Ensure the textarea is visible  
                 } else {
                     resultingDefinitionTextarea.value = "";
-                    resultingDefinitionContainer.classList.add('d-none'); // Ensure the textarea is visible  
+                    resultingDefinitionContainer.classList.add('d-none'); // Ensure the textarea isn't visible
                 }
             }
             // handle panel 3
@@ -98,7 +99,8 @@ syncData = async function () {
             // handle panel 5 (only if multidimensional)
             if (panel4 && panel4.dimensionality === "Multidimensional") {
                 domPanel5.classList.remove('d-none');
-                subdimensions = panel5?.subdimensions || [{ name: '', definition: '', attributes: [] }];
+                // Load stored subdimensions 
+                subdimensions = panel5?.subdimensions || [{id:genSubdimensionId(), name: '', definition: '', attributes: [] }];
                 renderSubdimensions();
                 if (panel5?.subdimensions && panel5.subdimensions.length > 0 && panel3) {
                     // If subdimensions exist
@@ -442,9 +444,6 @@ async function saveDefinition(dontSave = false) {
         step1Data.panel2.savedSelectedDefinitions = step1Data.panel2.selectedDefinitions;
     }
 
-    if (step1Data?.panel3) {
-        delete step1Data.panel3; // Remove panel 3 data if it exists
-    }
 
     if(dontSave) {
         return {"data":{...step1Data.panel2}, "empty": !resultingDefinition}; // Return data without saving
@@ -460,38 +459,38 @@ async function saveDefinition(dontSave = false) {
         emitDataChanged()
         return
     }
+    
     if (currentDefinition !== resultingDefinition) {
         const userConfirmed = await customConfirm({
-            title: '⚠️ Overwrite Definition?',
-            message: `This will overwrite the previously stored definition and any further edits.<br/>
-                        Do you want to continue and replace the current one?`,
-            confirmText: 'Yes, overwrite',
-            cancelText: 'No, keep it'
+            title: '⚠️ Restart from here?',
+            message: `Do you want to restart and delete all further edits?`,
+            confirmText: 'Yes, restart from here',
+            cancelText: 'No, just change definition'
         });
-        if (!userConfirmed) {
-        console.log('User cancelled data storage — existing data preserved');
+        if (userConfirmed) {
+            if (step1Data?.panel3) {
+                delete step1Data.panel3; // Remove panel 3 data if it exists
+            }
+            await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+            await resetPanel4(); // Reset panel 4 data
+            await resetPanel5(); // Reset panel 5 data
+            console.log('User decided to delete and restart from here');
+            setTimeout(() => {
+                scrollToElement(document.getElementById("step1panel3"));
+            }, 400);
+        }
+        await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+        emitDataChanged()
+        console.log('Definition saved');
+    
+        syncData();
+    
+        // Display success message
+        window.displayInfo('success', "New Definition saved successfully.");
         emitDataChanged()
         return;
-        }
     }
-
-
-    
-    
-    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
-    await resetPanel4(); // Reset panel 4 data
-    await resetPanel5(); // Reset panel 5 data
-    console.log('Definition saved');
-    
-
-    syncData();
-
-    // Display success message
-    window.displayInfo('success', "Definition saved successfully.");
-    setTimeout(() => {
-        scrollToElement(document.getElementById("step1panel3"));
-    }, 400);
-    emitDataChanged()
+    window.displayInfo('info', "No new changes found.");
 }
 
 
@@ -722,7 +721,8 @@ async function showAISuggestion() {
         return;
     }
     const panel3 = step1Data.panel3;
-
+    console.log(step1Data);
+    
     if (!panel3 || !panel3.aiProperty || !panel3.aiEntity || !panel3.aiJustification) {
         console.warn('No AI suggestion available. Please generate one first.');
         document.getElementById("aiSuggestion").classList.add("d-none");
@@ -965,6 +965,8 @@ async function saveTheme(dontSave = false) {
     emitDataChanged();
 }
 async function resetPanel4() {
+    console.log('Resetting Panel 4 data');
+    
     // Clear all attributes
     attributesContainer.innerHTML = '';
     // Reset other fields
@@ -1254,7 +1256,7 @@ async function renderSubdimensions() {
 }
 
 function addSubdimension() {
-  subdimensions.push({ name: '', definition: '', attributes: [] });
+  subdimensions.push({ id: genSubdimensionId(), name: '', definition: '', attributes: [] });
   renderSubdimensions();
 }
 
@@ -1310,6 +1312,8 @@ async function saveSubdimensions(dontSave=false) {
 }
 
 async function resetPanel5() {
+    console.log('Resetting Panel 5 data');
+
     const step1Data = await window.dataStorage.getData('data_step_1');
 
     if (step1Data?.panel5) {
@@ -1400,9 +1404,15 @@ Return your answer in **strict JSON format**:
         if (!diagnostic || !subdimensions || !justification) {
             throw new Error('Incomplete AI response');
         }
+        let subdimensionsWithId = subdimensions.filter(sd => (sd.name || sd.definition || sd.attributes.length > 0)).map(sd => ({
+            id: sd.id || genSubdimensionId(), // keep existing id or assign
+            name: sd.name,
+            definition: sd.definition,
+            attributes: sd.attributes
+        }));
         if(!step1Data.aiPanel5) step1Data.aiPanel5 = {};
         step1Data.aiPanel5.diagnostic = diagnostic;
-        step1Data.aiPanel5.subdimensions = subdimensions;
+        step1Data.aiPanel5.subdimensions = subdimensionsWithId;
         step1Data.aiPanel5.justification = justification;
         
         await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
@@ -1581,7 +1591,9 @@ async function checkIfSaved(panelId){
 
         
         // todo available data returns something. check if its really empty. by their methods?
+        console.log(savedData,availableData.data);
 
+        
         if (JSON.stringify(savedData) !== JSON.stringify(availableData.data)) {
             return false;
         }
