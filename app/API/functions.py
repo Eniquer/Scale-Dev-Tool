@@ -133,14 +133,27 @@ def analyze_content_adequacy(
                                   notes=f"Intended facet '{target}' not in observed facets"))
             continue
 
-        # Ensure each rater contributed a complete within-subject profile (MacKenzie/Hinkin–Tracey design)
+        # Remove rows with missing ratings BEFORE completeness check (treat missing as not provided)
+        # This prevents placeholder null rows from inflating n_raters.
+        d_nonmissing = d.dropna(subset=[rating_col])
+
+        # Track raters that had zero non-missing ratings (will be excluded silently)
+        initial_raters = d[rater_col].nunique()
+        raters_with_any = d_nonmissing[rater_col].nunique()
+        dropped_empty = initial_raters - raters_with_any
+        if dropped_empty > 0:
+            note_msgs.append(f"dropped {dropped_empty} empty rater(s)")
+
+        # Ensure each remaining rater contributed a complete within-subject profile (MacKenzie / Hinkin–Tracey design)
         if drop_incomplete:
-            counts = d.groupby(rater_col)[facet_col].nunique()
+            counts = d_nonmissing.groupby(rater_col)[facet_col].nunique()
             keep_ids = counts[counts == k].index
-            dropped = counts.size - keep_ids.size
-            if dropped > 0:
-                note_msgs.append(f"dropped {dropped} incomplete rater(s)")
-            d = d[d[rater_col].isin(keep_ids)]
+            dropped_incomplete = counts.size - keep_ids.size
+            if dropped_incomplete > 0:
+                note_msgs.append(f"dropped {dropped_incomplete} incomplete rater(s)")
+            d = d_nonmissing[d_nonmissing[rater_col].isin(keep_ids)]
+        else:
+            d = d_nonmissing
 
         n_raters = d[rater_col].nunique()
         if n_raters <= 2:
