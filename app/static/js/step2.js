@@ -390,7 +390,7 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
         
     }
     model = undefined
-    if (indicator == "literature" || indicator == "existing") {
+    if (indicator == "literature" || indicator == "existing" || indicator == "summary") {
         model = "search";
     }
     
