@@ -8,80 +8,42 @@ let dimensionality = '';
 let items = [];
 // Stored facet measurement modes and indicator directions
 let facetModes = {}; // { facetId: 'reflective' | 'formative' }
-// indicators: [{facetId, itemId, direction}] direction: 'out' (reflective) or 'in' (formative)
+// indicators: [{facetId, itemId, direction, global?}] direction: 'out' (reflective) or 'in' (formative)
 let indicators = [];
 // Scaling rules per facet: { facetId: { method: 'fix_loading', refItemId } | { method: 'fix_variance' } }
 let facetScaling = {}; 
 // Second-order (overall) construct configuration
 let secondOrder = { type: null, scaling: { method: 'fix_loading', refFacetId: null } }; // type: 'reflective' | 'formative' | null
+// Global reflective items (two optional) per formative facet: { facetId: [ { id, text }, { id, text } ] }
+let globalReflective = {};
 
 // Raw source objects (optional for debugging / further use)
 let step1Raw = null;
 let step2Raw = null;
 
-/**
- * init (Step 4)
- * Fetches prior step data from IndexedDB via dataStorage and populates
- * module-level variables for use by subsequent Step 4 UI logic.
- * - Construct name: Step 1 panel1.constructName
- * - Saved definition: Step 1 panel2.savedDefinition (fallback: resultingDefinition)
- * - Subdimensions: Step 1 panel5.subdimensions (empty array if unidimensional)
- * - Items: Step 2 items array
- * Returns an object snapshot of loaded values for convenience.
- */
 async function init() {
 	try {
-		// Load stored data for steps 1 & 2
 		step1Raw = await window.dataStorage.getData('data_step_1') || {};
 		step2Raw = await window.dataStorage.getData('data_step_2') || {};
-
-		// Extract construct name
 		constructName = step1Raw?.panel1?.constructName || '';
-
-		// Extract saved (or resulting) definition
-		savedDefinition = step1Raw?.panel2?.savedDefinition
-			|| step1Raw?.panel2?.resultingDefinition
-			|| '';
-
-        // Extract dimensionality (fallback: infer from presence of subdimensions)
-        dimensionality = step1Raw?.panel4?.dimensionality;
-		
-        // Extract subdimensions (only present if multidimensional)
+		savedDefinition = step1Raw?.panel2?.savedDefinition || step1Raw?.panel2?.resultingDefinition || '';
+		dimensionality = step1Raw?.panel4?.dimensionality;
 		subdimensions = step1Raw?.panel5?.subdimensions || [];
-
-		// Extract items from Step 2
 		items = step2Raw?.items || [];
-
-		// Optional: expose a consolidated object for debugging/inspection
-		window.step4Data = {
-			constructName: constructName,
-			savedDefinition: savedDefinition,
-			subdimensions: subdimensions,
-            dimensionality: dimensionality,
-			items: items
-		};
-
-		// Load any stored measurement model specifics (Step 4 data)
+		window.step4Data = { constructName, savedDefinition, subdimensions, dimensionality, items };
 		await loadStep4Model();
-		// Render first-order facets panel
 		renderFirstOrderFacets();
-		// Render/initialize second-order panel if needed
 		initSecondOrderPanel();
-		// Wire auto-save after initial render
 		attachAutoSaveHandlers();
-
-		return window.step4Data; // snapshot
+		return window.step4Data;
 	} catch (err) {
 		console.error('[Step4:init] Failed to load prior step data:', err);
 		window.displayInfo?.('error', 'Failed to load Step 4 data.');
 		return null;
 	}
 }
-
-// Auto-run when DOM is ready (mirrors earlier step files pattern)
 document.addEventListener('DOMContentLoaded', () => { init(); });
 
-// Render subdimensions (first-order facets) in the panel
 function renderFirstOrderFacets() {
 	const list = document.getElementById('firstOrderFacetsList');
 	const help = document.getElementById('firstOrderFacetsHelp');
@@ -89,23 +51,22 @@ function renderFirstOrderFacets() {
 	list.innerHTML = '';
 
 	if (!dimensionality || dimensionality === 'Unidimensional') {
-		// Show a single aggregated card with all items
 		const panel = document.getElementById('firstOrderFacetsPanel');
 		if (panel) panel.classList.remove('d-none');
 		const allItems = (items || []).slice().sort((a,b)=>a.id-b.id);
 		const pseudoId = 'unidim';
 		ensureScalingDefaults(pseudoId, allItems);
 		const itemsHtml = allItems.length
-			? `<div class="mm-item-grid">${allItems.map(it => { const t = escapeHtml(it.text); const cls = t.length>80? 'mm-item-tag long' : 'mm-item-tag'; return `<span class=\"${cls}\" title=\"${t}\">${t}</span>`; }).join('')}</div>`
+			? `<div class="mm-item-grid">${allItems.map(it => { const t = escapeHtml(it.text); const cls = t.length>80? 'mm-item-tag long' : 'mm-item-tag'; return `<span class="${cls}" title="${t}">${t}</span>`; }).join('')}</div>`
 			: '<div class="text-muted small mb-2">No items added in Step 2.</div>';
-		const col = document.createElement('div');
-		col.className = 'col-12';
 		const scale = facetScaling[pseudoId] || {};
 		const method = scale.method || 'fix_loading';
 		const refItemId = scale.refItemId;
-		const refSelect = allItems.length ? `<select class=\"form-select form-select-sm mt-1 facet-ref-item\" data-facet=\"${pseudoId}\">${allItems.map(it=>`<option value=\"${it.id}\" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` : '<div class=\"small text-muted mt-1\">No items to reference</div>';
+		const refSelect = allItems.length ? `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${pseudoId}">${allItems.map(it=>`<option value="${it.id}" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` : '<div class="small text-muted mt-1">No items to reference</div>';
+		const col = document.createElement('div');
+		col.className = 'col-12';
 		col.innerHTML = `
-			<div class="facet-card h-100 d-flex flex-column">
+			<div class="facet-card h-100 d-flex flex-column" data-facet="${pseudoId}">
 				<h5 class="mb-1">All Items</h5>
 				<p class="small text-muted mb-2">Unidimensional construct (no first-order facets defined).</p>
 				<div class="mb-2">
@@ -138,8 +99,9 @@ function renderFirstOrderFacets() {
 	subdimensions.forEach(sd => {
 		const col = document.createElement('div');
 		col.className = 'col-12 col-md-6 col-lg-4';
-		// Items belonging to this subdimension (IDs kept internally, not shown)
 		const facetItems = (items || []).filter(it => it.subdimensionId === sd.id).sort((a,b)=>a.id-b.id);
+		const currentMode = facetModes[sd.id] || '';
+		if (currentMode === 'formative') ensureGlobalReflectiveDefaults(sd.id);
 		ensureScalingDefaults(sd.id, facetItems);
 		const itemsHtml = facetItems.length
 			? `<div class="mm-item-grid">${facetItems.map(it => { const t = escapeHtml(it.text); const cls = t.length>80? 'mm-item-tag long' : 'mm-item-tag'; return `<span class="${cls}" title="${t}">${t}</span>`; }).join('')}</div>`
@@ -147,11 +109,18 @@ function renderFirstOrderFacets() {
 		const scale = facetScaling[sd.id] || {};
 		const method = scale.method || 'fix_loading';
 		const refItemId = scale.refItemId;
-		const refSelect = facetItems.length ? `<select class=\"form-select form-select-sm mt-1 facet-ref-item\" data-facet=\"${sd.id}\">${facetItems.map(it=>`<option value=\"${it.id}\" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` : '<div class=\"small text-muted mt-1\">No items to reference</div>';
-
-		const currentMode = facetModes[sd.id] || '';
+		const reflectiveCandidates = currentMode === 'formative'
+			? (globalReflective[sd.id]||[]).filter(g => (g.text||'').trim())
+			: facetItems;
+		let refSelect;
+		if (currentMode === 'formative') {
+			// Always render a select so it can be dynamically populated when user types globals
+			refSelect = `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${sd.id}" ${reflectiveCandidates.length? '' : ''}>${reflectiveCandidates.map(it=>`<option value="${it.id}" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` + (reflectiveCandidates.length? '' : '<div class="small text-muted mt-1">Add a global reflective item above to enable fixing a loading.</div>');
+		} else {
+			refSelect = reflectiveCandidates.length ? `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${sd.id}">${reflectiveCandidates.map(it=>`<option value="${it.id}" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` : '<div class="small text-muted mt-1">No items to reference</div>';
+		}
 		col.innerHTML = `
-			<div class="facet-card h-100 d-flex flex-column">
+			<div class="facet-card h-100 d-flex flex-column" data-facet="${sd.id}">
 				<h5 class="mb-1">${escapeHtml(sd.name || '(Unnamed)')}</h5>
 				<p class="small text-muted mb-2" style="white-space:pre-wrap;">${escapeHtml(sd.definition || '')}</p>
 				<div class="mb-2">
@@ -163,10 +132,16 @@ function renderFirstOrderFacets() {
 						<label class="btn btn-outline-info" for="facet-${sd.id}-form" title="Items are causes (non-interchangeable)">Formative</label>
 					</div>
 				</div>
+				${currentMode==='formative' ? `
+				<div class="mb-2 formative-globals" data-facet="${sd.id}">
+					<div class="small fw-bold mb-1">Global Reflective Items (for identification)</div>
+					<div class="form-text small mb-1">Provide up to two global reflective items (leave blank if not used).</div>
+					${(globalReflective[sd.id]||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 global-reflective-input" data-facet="${sd.id}" data-idx="${i}" placeholder="Global reflective item ${i+1}" value="${escapeHtml(g.text)}">`).join('')}
+				</div>` : ''}
 				<div class="mb-2">
 					<div class="small fw-bold mb-1">Scaling Rule</div>
 					<div class="form-check form-check-inline small">
-						<input class="form-check-input facet-scale-radio" type="radio" name="facet-scale-${sd.id}" id="scale-${sd.id}-fixload" value="fix_loading" ${method==='fix_loading'?'checked':''} data-facet="${sd.id}" ${facetItems.length? '' : 'disabled'}>
+						<input class="form-check-input facet-scale-radio" type="radio" name="facet-scale-${sd.id}" id="scale-${sd.id}-fixload" value="fix_loading" ${method==='fix_loading'?'checked':''} data-facet="${sd.id}" ${(currentMode==='formative'? reflectiveCandidates.length : facetItems.length)? '' : 'disabled'}>
 						<label class="form-check-label" for="scale-${sd.id}-fixload">Fix one loading</label>
 					</div>
 					<div class="form-check form-check-inline small">
@@ -178,45 +153,49 @@ function renderFirstOrderFacets() {
 						${refSelect}
 					</div>
 				</div>
-                
-				
-                <button class="btn me-3 collapse-btn collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#collapse-${sd.id}"
-                    aria-expanded="true" aria-controls="collapse-${sd.id}">
-                    <div class="mb-1 small fw-bold">
-                    <i class="bi bi-chevron-up"></i>
-                    Items (${facetItems.length})</div>
-                    </button>
-                <div class="collapse" id="collapse-${sd.id}">
-				<div class="flex-grow-1 d-flex flex-column mb-1" style="max-height:160px; overflow:auto;">${itemsHtml}</div>
-                </div>
+				<hr>
+				<button class="btn mb-1 collapse-btn collapsed" type="button" style="width:fit-content" data-bs-toggle="collapse" data-bs-target="#collapse-${sd.id}" aria-expanded="true" aria-controls="collapse-${sd.id}">
+					<div class="small fw-bold"><i class="bi bi-chevron-up"></i> Items (${facetItems.length})</div>
+				</button>
+				<div class="collapse" id="collapse-${sd.id}">
+					<div class="flex-grow-1 d-flex flex-column mb-1" style="max-height:160px; overflow:auto;">${itemsHtml}</div>
+				</div>
 			</div>`;
 		list.appendChild(col);
 	});
 }
 
-// Load existing step4 measurement model if present
 async function loadStep4Model(){
 	const stored = await window.dataStorage.getData('data_step_4') || {};
 	facetModes = stored.facetModes || {};
 	indicators = stored.indicators || [];
 	facetScaling = stored.facetScaling || {};
+	globalReflective = stored.globalReflective || {};
 	secondOrder = stored.secondOrder || secondOrder;
-	// If legacy facets array exists from earlier implementation, drop it (subdimensions live only in Step 1)
+	// Backward compatibility: ensure scaling object shape and global reflective defaults for second-order
+	if (!secondOrder.scaling) secondOrder.scaling = { method: 'fix_loading', refFacetId: null };
+	if (secondOrder.type === 'formative' && !secondOrder.globalReflective) {
+		secondOrder.globalReflective = [
+			{ id: 'g_second_1', text: '' },
+			{ id: 'g_second_2', text: '' }
+		];
+	}
 	if (stored.facets) {
-		delete stored.facets; // remove redundant source
+		delete stored.facets;
 		await window.dataStorage.storeData('data_step_4', stored, false);
 	}
-	// Rebuild indicators from facetModes + items if missing
 	if (!indicators.length && Object.keys(facetModes).length){
 		indicators = buildIndicatorsFromModes();
 	}
 }
 
 function attachAutoSaveHandlers(){
-	// Delegate: listen for changes on any facet mode radio
 	document.addEventListener('change', e => {
 		if (e.target && e.target.matches('input[type="radio"][name^="facet-mode-"]')) {
+			const facetId = e.target.name.replace('facet-mode-','');
+			facetModes[facetId] = e.target.value;
+			if (e.target.value === 'formative') ensureGlobalReflectiveDefaults(facetId);
+			renderFirstOrderFacets();
 			scheduleAutoSave();
 		}
 		if (e.target && e.target.matches('input.facet-scale-radio')) {
@@ -225,32 +204,51 @@ function attachAutoSaveHandlers(){
 		}
 		if (e.target && e.target.matches('select.facet-ref-item')) {
 			const facetId = e.target.getAttribute('data-facet');
-			if (facetScaling[facetId]) {
-				facetScaling[facetId].refItemId = Number(e.target.value);
-			}
+			if (facetScaling[facetId]) facetScaling[facetId].refItemId = e.target.value;
 			scheduleAutoSave();
 		}
-		// Second-order type change
 		if (e.target && e.target.matches('input.second-order-type')) {
-			secondOrder.type = e.target.value; // reflective | formative
+			secondOrder.type = e.target.value;
+			// Initialize global reflective placeholders if formative
+			if (secondOrder.type === 'formative' && !secondOrder.globalReflective) {
+				secondOrder.globalReflective = [
+					{ id: 'g_second_1', text: '' },
+					{ id: 'g_second_2', text: '' }
+				];
+			}
 			ensureSecondOrderScalingDefaults();
 			updateSecondOrderUI();
 			scheduleAutoSave();
 		}
-		// Second-order scaling method
 		if (e.target && e.target.matches('input.second-order-scale')) {
 			secondOrder.scaling.method = e.target.value;
-			if (secondOrder.scaling.method === 'fix_loading') {
-				ensureSecondOrderScalingDefaults();
-			} else {
-				secondOrder.scaling.refFacetId = null;
-			}
+			if (secondOrder.scaling.method === 'fix_loading') ensureSecondOrderScalingDefaults(); else { secondOrder.scaling.refFacetId = null; secondOrder.scaling.refItemId = null; }
 			updateSecondOrderUI();
 			scheduleAutoSave();
 		}
-		// Second-order reference facet selection
 		if (e.target && e.target.id === 'secondOrderRefFacet') {
 			secondOrder.scaling.refFacetId = e.target.value || null;
+			scheduleAutoSave();
+		}
+		if (e.target && e.target.id === 'secondOrderRefItem') {
+			secondOrder.scaling.refItemId = e.target.value || null;
+			scheduleAutoSave();
+		}
+		if (e.target && e.target.matches('input.second-order-global-reflective')) {
+			const idx = Number(e.target.getAttribute('data-idx'));
+			if (!secondOrder.globalReflective) return;
+			secondOrder.globalReflective[idx].text = e.target.value;
+			refreshSecondOrderFormativeScalingUI();
+			scheduleAutoSave();
+		}
+	});
+	document.addEventListener('input', e => {
+		if (e.target && e.target.matches('input.global-reflective-input')) {
+			const facetId = e.target.getAttribute('data-facet');
+			const idx = Number(e.target.getAttribute('data-idx'));
+			ensureGlobalReflectiveDefaults(facetId);
+			globalReflective[facetId][idx].text = e.target.value;
+			refreshFormativeScalingUI(facetId);
 			scheduleAutoSave();
 		}
 	});
@@ -259,30 +257,15 @@ function attachAutoSaveHandlers(){
 let autoSaveTimer = null;
 function scheduleAutoSave(){
 	if (autoSaveTimer) clearTimeout(autoSaveTimer);
-	autoSaveTimer = setTimeout(() => {
-		saveFacetModes(true);
-	}, 400); // debounce 400ms
+	autoSaveTimer = setTimeout(() => { saveFacetModes(true); }, 400);
 }
 
 function saveFacetModes(isAuto=false){
-	// Collect current selections
-	if (subdimensions.length){
-		subdimensions.forEach(sd => {
-			const refl = document.getElementById(`facet-${sd.id}-refl`);
-			const form = document.getElementById(`facet-${sd.id}-form`);
-			if (refl?.checked) facetModes[sd.id] = 'reflective';
-			else if (form?.checked) facetModes[sd.id] = 'formative';
-		});
-	}
-	// Collect scaling selections (including unidim pseudo facet if present)
 	collectScalingSelections();
-	// Rebuild indicators array
+	ensureSecondOrderScalingDefaults();
 	indicators = buildIndicatorsFromModes();
-	// No second-order indicators yet (kept conceptual)
 	persistStep4();
-	if (!isAuto) {
-		window.displayInfo?.('success', 'Facet measurement types saved.');
-	}
+	if (!isAuto) window.displayInfo?.('success', 'Facet measurement types saved.');
 }
 
 function buildIndicatorsFromModes(){
@@ -290,40 +273,95 @@ function buildIndicatorsFromModes(){
 	subdimensions.forEach(sd => {
 		const mode = facetModes[sd.id];
 		if (!mode) return;
-		const dir = mode === 'reflective' ? 'out' : 'in';
-		// items belonging to facet
 		const facetItems = (items || []).filter(it => it.subdimensionId === sd.id);
-		facetItems.forEach(it => {
-			result.push({ facetId: sd.id, itemId: it.id, direction: dir });
-		});
+		if (mode === 'reflective') {
+			facetItems.forEach(it => result.push({ facetId: sd.id, itemId: it.id, direction: 'out' }));
+		} else {
+			facetItems.forEach(it => result.push({ facetId: sd.id, itemId: it.id, direction: 'in' }));
+			(globalReflective[sd.id]||[]).filter(g => (g.text||'').trim()).forEach(g => result.push({ facetId: sd.id, itemId: g.id, direction: 'out', global: true }));
+		}
 	});
+	// Second-order formative: treat first-order facets as causal 'in' indicators, globals as 'out'
+	if (secondOrder.type === 'formative') {
+		// Represent facets as indicators (by facet id). Use a synthetic itemId pattern.
+		subdimensions.forEach(sd => result.push({ facetId: 'secondOrder', itemId: 'facet_'+sd.id, direction: 'in', secondOrder: true }));
+		(secondOrder.globalReflective||[]).filter(g => (g.text||'').trim()).forEach(g => result.push({ facetId: 'secondOrder', itemId: g.id, direction: 'out', global: true, secondOrder: true }));
+	}
 	return result;
 }
 
 async function persistStep4(){
 	const existing = await window.dataStorage.getData('data_step_4') || {};
-	// Remove any legacy facets key to avoid duplicate truth
 	if (existing.facets) delete existing.facets;
-	const payload = { facetModes, indicators, facetScaling, secondOrder, updatedAt: new Date().toISOString() };
+	const payload = { facetModes, indicators, facetScaling, globalReflective, secondOrder, updatedAt: new Date().toISOString() };
 	await window.dataStorage.storeData('data_step_4', payload, false);
 }
 
 function ensureScalingDefaults(facetId, facetItems){
+	const mode = facetModes[facetId];
+	let candidateRefItems = facetItems;
+	if (mode === 'formative') {
+		ensureGlobalReflectiveDefaults(facetId);
+		candidateRefItems = (globalReflective[facetId]||[]).filter(g => (g.text||'').trim());
+	}
 	if (!facetScaling[facetId]) {
-		if (facetItems.length) {
-			// choose clearest item: shortest text length
-			const ref = facetItems.slice().sort((a,b)=>a.text.length - b.text.length)[0];
+		if (candidateRefItems.length) {
+			const ref = candidateRefItems.slice().sort((a,b)=>a.text.length - b.text.length)[0];
 			facetScaling[facetId] = { method: 'fix_loading', refItemId: ref.id };
 		} else {
 			facetScaling[facetId] = { method: 'fix_variance' };
 		}
 	} else if (facetScaling[facetId].method === 'fix_loading') {
-		// Ensure reference item still exists
-		if (!facetItems.find(it => it.id === facetScaling[facetId].refItemId)) {
-			if (facetItems.length) {
-				facetScaling[facetId].refItemId = facetItems[0].id;
-			} else {
+		if (!candidateRefItems.find(it => it.id === facetScaling[facetId].refItemId)) {
+			if (candidateRefItems.length) facetScaling[facetId].refItemId = candidateRefItems[0].id; else facetScaling[facetId] = { method: 'fix_variance' };
+		}
+	}
+}
+
+function ensureGlobalReflectiveDefaults(facetId){
+	if (!globalReflective[facetId]) {
+		globalReflective[facetId] = [
+			{ id: 'g_'+facetId+'_1', text: '' },
+			{ id: 'g_'+facetId+'_2', text: '' }
+		];
+	}
+}
+
+function refreshFormativeScalingUI(facetId){
+	const card = document.querySelector(`.facet-card[data-facet="${facetId}"]`);
+	if (!card) return;
+	if (facetModes[facetId] !== 'formative') return;
+	const reflectiveItems = (globalReflective[facetId]||[]).filter(g => (g.text||'').trim());
+	const select = card.querySelector('select.facet-ref-item');
+	if (select) {
+		select.innerHTML = reflectiveItems.map(g => `<option value="${g.id}" ${facetScaling[facetId]?.refItemId===g.id?'selected':''}>${escapeHtml(shorten(g.text,40))}</option>`).join('');
+		// Enable select if items now exist
+		select.disabled = !reflectiveItems.length;
+		if (facetScaling[facetId]?.method === 'fix_loading') {
+			if (!reflectiveItems.find(r => r.id === facetScaling[facetId].refItemId)) {
+				if (reflectiveItems.length) facetScaling[facetId].refItemId = reflectiveItems[0].id; else facetScaling[facetId] = { method: 'fix_variance' };
+			}
+		}
+	}
+	const fixLoadRadio = card.querySelector(`input.facet-scale-radio[value="fix_loading"][data-facet="${facetId}"]`);
+	const fixVarRadio = card.querySelector(`input.facet-scale-radio[value="fix_variance"][data-facet="${facetId}"]`);
+	const refWrapper = card.querySelector(`.facet-ref-wrapper[data-facet="${facetId}"]`);
+	if (fixLoadRadio) {
+		if (!reflectiveItems.length) {
+			fixLoadRadio.disabled = true;
+			if (fixLoadRadio.checked) {
+				if (fixVarRadio) { fixVarRadio.checked = true; }
 				facetScaling[facetId] = { method: 'fix_variance' };
+			}
+			// Hide reference wrapper when no reflective items
+			if (refWrapper) refWrapper.classList.add('d-none');
+		} else {
+			fixLoadRadio.disabled = false;
+			// Show wrapper only if method is fix_loading
+			if (facetScaling[facetId]?.method === 'fix_loading') {
+				if (refWrapper) refWrapper.classList.remove('d-none');
+			} else if (refWrapper) {
+				refWrapper.classList.add('d-none');
 			}
 		}
 	}
@@ -333,23 +371,18 @@ function ensureScalingDefaults(facetId, facetItems){
 function initSecondOrderPanel(){
 	const panel = document.getElementById('secondOrderPanel');
 	if (!panel) return;
-	if (!subdimensions.length || dimensionality === 'Unidimensional') {
-		// keep hidden
-		panel.classList.add('d-none');
-		return;
-	}
-	// Show panel
+	if (!subdimensions.length || dimensionality === 'Unidimensional') { panel.classList.add('d-none'); return; }
 	panel.classList.remove('d-none');
-	// Populate title & definition
 	document.getElementById('secondOrderTitle').textContent = constructName || 'Overall Construct';
 	document.getElementById('secondOrderDefinition').textContent = savedDefinition || '';
-	// Restore radio selection
-	if (secondOrder.type === 'reflective') {
-		const r = document.getElementById('secondOrderTypeReflective'); if (r) r.checked = true;
-	} else if (secondOrder.type === 'formative') {
-		const r = document.getElementById('secondOrderTypeFormative'); if (r) r.checked = true;
-	} else {
-		// default none (keep both unchecked)
+	if (secondOrder.type === 'reflective') { const r = document.getElementById('secondOrderTypeReflective'); if (r) r.checked = true; }
+	else if (secondOrder.type === 'formative') { const r = document.getElementById('secondOrderTypeFormative'); if (r) r.checked = true; }
+	// Ensure global reflective placeholders if formative
+	if (secondOrder.type === 'formative' && !secondOrder.globalReflective) {
+		secondOrder.globalReflective = [
+			{ id: 'g_second_1', text: '' },
+			{ id: 'g_second_2', text: '' }
+		];
 	}
 	ensureSecondOrderScalingDefaults();
 	updateSecondOrderUI();
@@ -358,33 +391,97 @@ function initSecondOrderPanel(){
 function ensureSecondOrderScalingDefaults(){
 	if (!secondOrder.type) return;
 	if (!secondOrder.scaling) secondOrder.scaling = { method: 'fix_loading', refFacetId: null };
-	if (secondOrder.scaling.method === 'fix_loading') {
-		if (!secondOrder.scaling.refFacetId && subdimensions.length) {
-			// Prefer a reflective first-order facet if overall type is reflective; else first facet
-			const pref = subdimensions.find(sd => facetModes[sd.id] === 'reflective') || subdimensions[0];
-			secondOrder.scaling.refFacetId = pref?.id || null;
+	if (secondOrder.type === 'reflective') {
+		// facet-based scaling
+		if (secondOrder.scaling.method === 'fix_loading') {
+			if (!secondOrder.scaling.refFacetId && subdimensions.length) {
+				const pref = subdimensions.find(sd => facetModes[sd.id] === 'reflective') || subdimensions[0];
+				secondOrder.scaling.refFacetId = pref?.id || null;
+			}
+		} else secondOrder.scaling.refFacetId = null;
+		secondOrder.scaling.refItemId = null; // not used
+	} else if (secondOrder.type === 'formative') {
+		// item-based scaling using global reflective items
+		if (!secondOrder.globalReflective) secondOrder.globalReflective = [ { id: 'g_second_1', text: '' }, { id: 'g_second_2', text: '' } ];
+		const globals = (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim());
+		if (secondOrder.scaling.method === 'fix_loading') {
+			if (!globals.length) {
+				secondOrder.scaling.method = 'fix_variance';
+				secondOrder.scaling.refItemId = null;
+			} else {
+				if (!globals.find(g => g.id === secondOrder.scaling.refItemId)) {
+					secondOrder.scaling.refItemId = globals[0].id;
+				}
+			}
+		} else {
+			secondOrder.scaling.refItemId = null;
 		}
-	} else {
-		secondOrder.scaling.refFacetId = null;
+		secondOrder.scaling.refFacetId = null; // not used here
 	}
 }
 
 function updateSecondOrderUI(){
 	const scalingWrapper = document.getElementById('secondOrderScalingWrapper');
 	if (!scalingWrapper) return;
-	if (!secondOrder.type) {
-		scalingWrapper.classList.add('d-none');
-		return;
+	// Ensure placeholder elements exist INSIDE scaling box (idempotent)
+	if (!document.getElementById('secondOrderFormativeGlobals')) {
+		const container = document.createElement('div');
+		container.id = 'secondOrderFormativeGlobals';
+		container.className = 'mt-3 d-none';
+		container.innerHTML = `
+			<div class="small fw-bold mb-1">Global Reflective Items (for identification)</div>
+			<div class="form-text small mb-1">Provide up to two global reflective items (leave blank if not used).</div>
+			<div id="secondOrderGlobalsInputs"></div>`;
+		scalingWrapper.appendChild(container);
 	}
+	if (!document.getElementById('secondOrderRefItemWrapper')) {
+		const refDiv = document.createElement('div');
+		refDiv.id = 'secondOrderRefItemWrapper';
+		refDiv.className = 'mt-3 d-none';
+		refDiv.innerHTML = `
+			<label class="small mb-1">Reference Global Item</label>
+			<select id="secondOrderRefItem" class="form-select form-select-sm"></select>`;
+		scalingWrapper.appendChild(refDiv);
+	}
+	if (!secondOrder.type) { scalingWrapper.classList.add('d-none'); return; }
 	scalingWrapper.classList.remove('d-none');
-	// Set method radios
 	const fixLoad = document.getElementById('secondOrderScaleFixLoad');
 	const fixVar = document.getElementById('secondOrderScaleFixVar');
 	if (secondOrder.scaling.method === 'fix_loading') { if (fixLoad) fixLoad.checked = true; }
 	else if (secondOrder.scaling.method === 'fix_variance') { if (fixVar) fixVar.checked = true; }
 	const refWrapper = document.getElementById('secondOrderRefFacetWrapper');
-	if (secondOrder.scaling.method === 'fix_loading') refWrapper.classList.remove('d-none'); else refWrapper.classList.add('d-none');
-	populateSecondOrderRefSelect();
+	const globalWrapper = document.getElementById('secondOrderFormativeGlobals');
+	const refItemWrapper = document.getElementById('secondOrderRefItemWrapper');
+	if (secondOrder.type === 'reflective') {
+		// facet-based scaling UI (show only if fixing loading)
+		if (secondOrder.scaling.method === 'fix_loading') {
+			refWrapper.classList.remove('d-none');
+			populateSecondOrderRefSelect();
+		} else {
+			refWrapper.classList.add('d-none');
+		}
+		if (globalWrapper) globalWrapper.classList.add('d-none');
+		if (refItemWrapper) refItemWrapper.classList.add('d-none');
+	} else if (secondOrder.type === 'formative') {
+		// item-based scaling UI
+		refWrapper.classList.add('d-none');
+		if (globalWrapper) globalWrapper.classList.remove('d-none');
+		// Render inputs for globals
+		const inputsHost = document.getElementById('secondOrderGlobalsInputs');
+		if (inputsHost) {
+			inputsHost.innerHTML = (secondOrder.globalReflective||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 second-order-global-reflective" data-idx="${i}" placeholder="Global reflective item ${i+1}" value="${escapeHtml(g.text)}">`).join('');
+		}
+		if (refItemWrapper) {
+			const globals = (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim());
+			if (secondOrder.scaling.method === 'fix_loading' && globals.length) {
+				refItemWrapper.classList.remove('d-none');
+				populateSecondOrderRefItemSelect();
+			} else {
+				refItemWrapper.classList.add('d-none');
+			}
+		}
+	}
+	refreshSecondOrderFormativeScalingUI();
 }
 
 function populateSecondOrderRefSelect(){
@@ -405,8 +502,47 @@ function populateSecondOrderRefSelect(){
 	}
 }
 
+function populateSecondOrderRefItemSelect(){
+	const sel = document.getElementById('secondOrderRefItem');
+	if (!sel) return;
+	sel.innerHTML = '';
+	if (secondOrder.type !== 'formative' || secondOrder.scaling.method !== 'fix_loading') return;
+	const globals = (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim());
+	globals.forEach(g => {
+		const opt = document.createElement('option');
+		opt.value = g.id;
+		opt.textContent = shorten(g.text,40);
+		if (g.id === secondOrder.scaling.refItemId) opt.selected = true;
+		sel.appendChild(opt);
+	});
+	if (!secondOrder.scaling.refItemId && globals.length) {
+		secondOrder.scaling.refItemId = globals[0].id;
+		sel.value = globals[0].id;
+	}
+}
+
+function refreshSecondOrderFormativeScalingUI(){
+	if (secondOrder.type !== 'formative') return;
+	const globals = (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim());
+	const fixLoad = document.getElementById('secondOrderScaleFixLoad');
+	const fixVar = document.getElementById('secondOrderScaleFixVar');
+	if (fixLoad) {
+		if (!globals.length) {
+			fixLoad.disabled = true;
+			if (fixLoad.checked) {
+				if (fixVar) fixVar.checked = true;
+				secondOrder.scaling.method = 'fix_variance';
+			}
+		} else {
+			fixLoad.disabled = false;
+		}
+	}
+	if (secondOrder.scaling.method === 'fix_loading') {
+		populateSecondOrderRefItemSelect();
+	}
+}
+
 function collectScalingSelections(){
-	// For each facet scaling radios
 	const radios = document.querySelectorAll('input.facet-scale-radio');
 	radios.forEach(r => {
 		if (r.checked) {
@@ -414,7 +550,7 @@ function collectScalingSelections(){
 			const method = r.value;
 			if (method === 'fix_loading') {
 				const sel = document.querySelector(`select.facet-ref-item[data-facet="${facetId}"]`);
-				const refItemId = sel ? Number(sel.value) : null;
+				const refItemId = sel ? sel.value : null;
 				facetScaling[facetId] = { method, refItemId };
 			} else {
 				facetScaling[facetId] = { method: 'fix_variance' };
@@ -429,30 +565,16 @@ function handleScaleRadioChange(radio){
 	const wrapper = document.querySelector(`.facet-ref-wrapper[data-facet="${facetId}"]`);
 	if (method === 'fix_loading') {
 		if (wrapper) wrapper.classList.remove('d-none');
-		// If switching to fix_loading and no ref yet, pick first option
 		if (!facetScaling[facetId] || facetScaling[facetId].method !== 'fix_loading') {
 			const sel = wrapper?.querySelector('select.facet-ref-item');
-			const refItemId = sel ? Number(sel.value) : null;
+			const refItemId = sel ? sel.value : null;
 			facetScaling[facetId] = { method: 'fix_loading', refItemId };
 		}
-	} else { // fix_variance
+	} else {
 		if (wrapper) wrapper.classList.add('d-none');
 		facetScaling[facetId] = { method: 'fix_variance' };
 	}
 }
 
-function shorten(str,len){
-	if (!str) return '';
-	return str.length > len ? str.slice(0,len-1)+'…' : str;
-}
-
-function escapeHtml(str){
-	if (str == null) return '';
-	return String(str)
-		.replace(/&/g,'&amp;')
-		.replace(/</g,'&lt;')
-		.replace(/>/g,'&gt;')
-		.replace(/"/g,'&quot;')
-		.replace(/'/g,'&#39;');
-}
-
+function shorten(str,len){ return !str ? '' : (str.length > len ? str.slice(0,len-1)+'…' : str); }
+function escapeHtml(str){ if (str == null) return ''; return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
