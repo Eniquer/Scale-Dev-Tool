@@ -459,6 +459,7 @@ async function saveDefinition(dontSave = false) {
         emitDataChanged()
         return
     }
+    if(step1Data.panel2.savedDefinition){
         const userConfirmed = await customConfirm({
             title: '⚠️ Restart from here?',
             message: `Do you want to restart and delete all further edits?`,
@@ -477,16 +478,17 @@ async function saveDefinition(dontSave = false) {
                 scrollToElement(document.getElementById("step1panel3"));
             }, 400);
         }
-        await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
-        emitDataChanged()
-        console.log('Definition saved');
-    
-        syncData();
-    
-        // Display success message
-        window.displayInfo('success', "New Definition saved successfully.");
-        emitDataChanged()
-        return;
+    }
+    await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
+    emitDataChanged()
+    console.log('Definition saved');
+
+    syncData();
+
+    // Display success message
+    window.displayInfo('success', "New Definition saved successfully.");
+    emitDataChanged()
+    return;
 }
 
 
