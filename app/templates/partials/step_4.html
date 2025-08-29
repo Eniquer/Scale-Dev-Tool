@@ -1,9 +1,74 @@
-<div class="container-fluid">
-    <h2 class="h3 mb-4 text-light">Step 4: Exploratory Factor Analysis (EFA)</h2>
-    <div class="card bg-secondary border-secondary">
-        <div class="card-body">
-            <p class="card-text text-light">Perform exploratory factor analysis on your scale items.</p>
-            <button class="btn btn-primary">Run EFA</button>
-        </div>
+<div id="loadingOverlay"
+    class="visually-hidden position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 d-flex align-items-center justify-content-center"
+    style="z-index:1050">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Loading…</span>
     </div>
 </div>
+
+<div id="step2-content" data-get-sync-function="init"></div>
+<div id="area1">
+    <div class="container-fluid">
+        <h2 class="h3 mb-4">Step 4: formally specify the measurement model</h2>
+                <!-- Second-Order (Overall Construct) Panel (shown only if multidimensional) -->
+                <div class="card mb-4 d-none" id="secondOrderPanel">
+                    <div class="card-body">
+                        <h4 class="card-title mb-3" id="secondOrderTitle">Overall Construct</h4>
+                        <p class="small mb-3" id="secondOrderDefinition"></p>
+                        <div class="mb-3">
+                            <div class="small fw-bold mb-1">Relationship Direction</div>
+                            <div class="form-check form-check-inline small">
+                                <input class="form-check-input second-order-type" type="radio" name="secondOrderType" id="secondOrderTypeReflective" value="reflective">
+                                <label class="form-check-label" for="secondOrderTypeReflective">Reflective (Overall → Facets)</label>
+                            </div>
+                            <div class="form-check form-check-inline small">
+                                <input class="form-check-input second-order-type" type="radio" name="secondOrderType" id="secondOrderTypeFormative" value="formative">
+                                <label class="form-check-label" for="secondOrderTypeFormative">Formative (Facets → Overall)</label>
+                            </div>
+                        </div>
+                        <div id="secondOrderScalingWrapper" class="border rounded p-3 bg-body-secondary d-none">
+                            <div class="small fw-bold mb-2">Scaling the Higher-Order Latent</div>
+                            <div class="form-check form-check-inline small">
+                                <input class="form-check-input second-order-scale" type="radio" name="secondOrderScale" id="secondOrderScaleFixLoad" value="fix_loading" checked>
+                                <label class="form-check-label" for="secondOrderScaleFixLoad">Fix one facet loading</label>
+                            </div>
+                            <div class="form-check form-check-inline small">
+                                <input class="form-check-input second-order-scale" type="radio" name="secondOrderScale" id="secondOrderScaleFixVar" value="fix_variance">
+                                <label class="form-check-label" for="secondOrderScaleFixVar">Fix overall variance</label>
+                            </div>
+                            <div class="mt-2 second-order-ref-wrapper" id="secondOrderRefFacetWrapper">
+                                <label class="small mb-1">Reference Facet</label>
+                                <select id="secondOrderRefFacet" class="form-select form-select-sm"></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- First-Order Facets Panel -->
+                <div class="card mb-4" id="firstOrderFacetsPanel">
+                        <div class="card-body">
+                                <h4 class="card-title mb-3">First-Order Facets</h4>
+                                <p class="text-muted small mb-3" id="firstOrderFacetsHelp">Listing subdimensions defined in Step 1. For each facet, specify whether items <strong>reflect</strong> (reflective) or <strong>form</strong> (formative) the facet.</p>
+                                <div class="alert alert-secondary py-2 px-3 small mb-3" id="facetModeHelp">
+                                    <strong>Reflective:</strong> items are effects; interchangeable; internal consistency (e.g., Cronbach's alpha) is meaningful.<br/>
+                                    <strong>Formative:</strong> items are causes; non-interchangeable; internal consistency is not required nor expected.
+                                </div>
+                                <div id="firstOrderFacetsList" class="row g-3"></div>
+                        </div>
+                </div>
+    </div>
+</div>
+
+<style>
+    #firstOrderFacetsList .facet-card {background: var(--bs-secondary-bg); border:1px solid var(--bs-border-color); border-radius:.5rem; padding:1rem;}
+    #firstOrderFacetsList .facet-card h5 {font-size:1rem; margin-bottom:.25rem;}
+    #firstOrderFacetsList .badge {font-weight:400;}
+    #firstOrderFacetsList .attr-badge {background: var(--bs-dark); border:1px solid var(--bs-border-color); font-size:.7rem;}
+    /* Step 4 item styling */
+        .mm-item-grid {display:flex; flex-wrap:wrap; gap:.4rem;}
+        /* Tag design */
+        .mm-item-tag {background: linear-gradient(145deg, var(--bs-dark) 0%, var(--bs-secondary-bg) 100%); border:1px solid var(--bs-border-color); padding:.35rem .6rem; border-radius:1.1rem; font-size:.7rem; line-height:1.1rem; max-width:100%; cursor:default; position:relative; display:inline-flex; align-items:center; gap:.35rem;}
+        .mm-item-tag::before {content:""; display:inline-block; width:.55rem; height:.55rem; border-radius:50%; background: var(--bs-info); box-shadow:0 0 4px rgba(0,0,0,.4);}
+        .mm-item-tag:hover {background: var(--bs-tertiary-bg); border-color: var(--bs-info);}
+        /* .mm-item-tag:active {transform:scale(.96);}  */
+        .mm-item-tag.long {font-size:.65rem;}
+</style>

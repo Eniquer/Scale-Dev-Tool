@@ -114,13 +114,18 @@ html[data-bs-theme="dark"] body {
 
 
 /*  Rotate chevron using Bootstrap's .collapsed class on the toggle button --> */
+.collapse-btn i:before,
   #toggleAIItemsBtn i:before {
     transition: all 0.3s ease;
   }
+
   /* When target is collapsed, Bootstrap adds .collapsed to the trigger */
+  .collapse-btn.collapsed i:before,
   #toggleAIItemsBtn.collapsed i:before {
     rotate: 180deg; 
   }
+
+  
 
 /*******************************      Split Screen     **********************************+ */
 
