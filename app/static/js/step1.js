@@ -430,6 +430,8 @@ async function saveDefinition(dontSave = false) {
 
     
     const step1Data = await window.dataStorage.getData('data_step_1');
+    const isSavedDefinition = !!step1Data.panel2.savedDefinition;
+
 
     // Check for conflicting definitions
     // console.log(step1Data.panel2.savedDefinition && (step1Data.panel2.savedDefinition !== resultingDefinition));
@@ -459,7 +461,7 @@ async function saveDefinition(dontSave = false) {
         emitDataChanged()
         return
     }
-    if(step1Data.panel2.savedDefinition){
+    if(isSavedDefinition){
         const userConfirmed = await customConfirm({
             title: '⚠️ Restart from here?',
             message: `Do you want to restart and delete all further edits?`,
@@ -478,6 +480,11 @@ async function saveDefinition(dontSave = false) {
                 scrollToElement(document.getElementById("step1panel3"));
             }, 400);
         }
+    }else{
+        console.log("no previous definition, creating new one");
+        setTimeout(() => {
+            scrollToElement(document.getElementById("step1panel3"));
+        }, 400);
     }
     await window.dataStorage.storeData('data_step_1', { ...step1Data }, false);
     emitDataChanged()
@@ -1199,6 +1206,30 @@ async function takeThemeAISuggestion(fill= false, onlyAttributes = false) {
 let subdimensions = [];
 let allAttrs = [];
 
+// Helper: derive a short human-friendly code from a subdimension name
+function deriveSubdimensionCode(name) {
+    if (!name) return '';
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return '';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+// Ensure a code is unique among current subdimensions (case-insensitive); if not, append number suffix
+function ensureUniqueSubdimCode(baseCode, ignoreIndex = -1) {
+    if (!baseCode) baseCode = 'SD';
+    const existing = new Set();
+    subdimensions.forEach((sd, i) => {
+        if (i === ignoreIndex) return;
+        if (sd.code) existing.add(sd.code.toUpperCase());
+    });
+    let candidate = baseCode.toUpperCase();
+    if (!existing.has(candidate)) return candidate;
+    let n = 2;
+    while (existing.has((baseCode + n).toUpperCase())) n++;
+    return (baseCode + n).toUpperCase();
+}
+
 
 addSubdimensionButton.addEventListener('click', addSubdimension);
 
@@ -1219,6 +1250,7 @@ async function renderSubdimensions() {
           <button class="btn btn-outline-danger btn-sm" type="button" onclick="deleteSubdimension(${idx})">&times;</button>
         </div>
         <input type="text" class="form-control mb-2" placeholder="Name" id="subdim-name-${idx}" value="${sd.name || ''}" />
+        <input type="text" class="form-control mb-2" placeholder="Short ID" id="subdim-code-${idx}" value="${sd.code || ''}" maxlength="10" />
         <textarea class="form-control mb-2" placeholder="Definition" id="subdim-def-${idx}" rows="3">${sd.definition || ''}</textarea>
         <div id="subattrs-${idx}" class="mb-2"></div>
         <div class="input-group mb-2">
@@ -1249,12 +1281,34 @@ async function renderSubdimensions() {
         badgeWrapper.appendChild(removeBtn);
         attrsDiv.appendChild(badgeWrapper);
         });
+        // Auto-generate code if empty and name exists
+        const nameInput = document.getElementById(`subdim-name-${idx}`);
+        const codeInput = document.getElementById(`subdim-code-${idx}`);
+        nameInput.addEventListener('blur', () => {
+            if (!codeInput.value.trim() && nameInput.value.trim()) {
+                let base = deriveSubdimensionCode(nameInput.value.trim());
+                const unique = ensureUniqueSubdimCode(base, idx);
+                codeInput.value = unique;
+                subdimensions[idx].code = unique; // sync model
+            }
+        });
+        codeInput.addEventListener('blur', () => {
+            let val = codeInput.value.trim().toUpperCase();
+            if (!val && nameInput.value.trim()) {
+                val = deriveSubdimensionCode(nameInput.value.trim());
+            }
+            if (val) {
+                val = ensureUniqueSubdimCode(val, idx);
+                codeInput.value = val;
+            }
+            subdimensions[idx].code = val; // sync model
+        });
     });
     showSubdimAISuggestion()
 }
 
 function addSubdimension() {
-  subdimensions.push({ id: genSubdimensionId(), name: '', definition: '', attributes: [] });
+  subdimensions.push({ id: genSubdimensionId(), code: '', name: '', definition: '', attributes: [] });
   renderSubdimensions();
 }
 
@@ -1278,10 +1332,28 @@ async function saveSubdimensions(dontSave=false) {
   subdimensions.forEach((sd, idx) => {
       sd.name = document.getElementById(`subdim-name-${idx}`).value.trim();
       sd.definition = document.getElementById(`subdim-def-${idx}`).value.trim();
+      sd.code = document.getElementById(`subdim-code-${idx}`).value.trim().toUpperCase();
       const inputs = Array.from(document.querySelectorAll(`#subattrs-${idx} .badge`));
       sd.attributes = inputs.map(i => i.textContent.trim()).filter(v => v);
+      // If code missing but name present, derive it now
+      if (!sd.code && sd.name) {
+          let base = deriveSubdimensionCode(sd.name);
+          sd.code = ensureUniqueSubdimCode(base, idx);
+      }
   });
   resultSubdimensions = subdimensions.filter(sd => sd.name || sd.definition || sd.attributes.length > 0);
+  // Validate unique codes (ignore blanks on empty rows not saved)
+  const codes = {};
+  let duplicateCodes = new Set();
+  resultSubdimensions.forEach((sd) => {
+      if (!sd.code) return; // allow empty until derived
+      const key = sd.code.toUpperCase();
+      if (codes[key]) duplicateCodes.add(key); else codes[key] = 1;
+  });
+  if (duplicateCodes.size > 0 && !dontSave) {
+      window.displayInfo('warning', `Duplicate Subdimension IDs found: ${Array.from(duplicateCodes).join(', ')}. Please make them unique.`);
+      return;
+  }
   // save to IndexedDB
   if (dontSave) {
     return {"data":{"subdimensions": [...resultSubdimensions]}, "empty": resultSubdimensions.length === 0}; // Return data without saving
@@ -1402,12 +1474,24 @@ Return your answer in **strict JSON format**:
         if (!diagnostic || !subdimensions || !justification) {
             throw new Error('Incomplete AI response');
         }
-        let subdimensionsWithId = subdimensions.filter(sd => (sd.name || sd.definition || sd.attributes.length > 0)).map(sd => ({
-            id: sd.id || genSubdimensionId(), // keep existing id or assign
-            name: sd.name,
-            definition: sd.definition,
-            attributes: sd.attributes
-        }));
+        // Map and assign short codes (unique) for AI-suggested subdimensions
+        const seenCodes = new Set();
+        let subdimensionsWithId = subdimensions.filter(sd => (sd.name || sd.definition || sd.attributes.length > 0)).map((sd, idx) => {
+            const name = sd.name || '';
+            let base = deriveSubdimensionCode(name);
+            if (!base) base = 'SD';
+            let code = base.toUpperCase();
+            let cIdx = 2;
+            while (seenCodes.has(code)) { code = (base + cIdx).toUpperCase(); cIdx++; }
+            seenCodes.add(code);
+            return {
+                id: sd.id || genSubdimensionId(),
+                code,
+                name: sd.name,
+                definition: sd.definition,
+                attributes: sd.attributes
+            };
+        });
         if(!step1Data.aiPanel5) step1Data.aiPanel5 = {};
         step1Data.aiPanel5.diagnostic = diagnostic;
         step1Data.aiPanel5.subdimensions = subdimensionsWithId;
