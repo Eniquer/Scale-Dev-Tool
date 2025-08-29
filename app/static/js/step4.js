@@ -114,8 +114,8 @@ function renderFirstOrderFacets() {
 			: facetItems;
 		let refSelect;
 		if (currentMode === 'formative') {
-			// Always render a select so it can be dynamically populated when user types globals
-			refSelect = `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${sd.id}" ${reflectiveCandidates.length? '' : ''}>${reflectiveCandidates.map(it=>`<option value="${it.id}" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` + (reflectiveCandidates.length? '' : '<div class="small text-muted mt-1">Add a global reflective item above to enable fixing a loading.</div>');
+			// Always render a select so it can be dynamically populated when user types globals (needs 2 globals)
+			refSelect = `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${sd.id}" ${reflectiveCandidates.length>=2? '' : ''}>${reflectiveCandidates.map(it=>`<option value="${it.id}" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` + (reflectiveCandidates.length>=2? '' : '<div class="small text-muted mt-1">Add two global reflective items above to enable fixing a loading.</div>');
 		} else {
 			refSelect = reflectiveCandidates.length ? `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${sd.id}">${reflectiveCandidates.map(it=>`<option value="${it.id}" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` : '<div class="small text-muted mt-1">No items to reference</div>';
 		}
@@ -141,7 +141,7 @@ function renderFirstOrderFacets() {
 				<div class="mb-2">
 					<div class="small fw-bold mb-1">Scaling Rule</div>
 					<div class="form-check form-check-inline small">
-						<input class="form-check-input facet-scale-radio" type="radio" name="facet-scale-${sd.id}" id="scale-${sd.id}-fixload" value="fix_loading" ${method==='fix_loading'?'checked':''} data-facet="${sd.id}" ${(currentMode==='formative'? reflectiveCandidates.length : facetItems.length)? '' : 'disabled'}>
+						<input class="form-check-input facet-scale-radio" type="radio" name="facet-scale-${sd.id}" id="scale-${sd.id}-fixload" value="fix_loading" ${method==='fix_loading'?'checked':''} data-facet="${sd.id}" ${(currentMode==='formative'? (reflectiveCandidates.length>=2) : facetItems.length)? '' : 'disabled'}>
 						<label class="form-check-label" for="scale-${sd.id}-fixload">Fix one loading</label>
 					</div>
 					<div class="form-check form-check-inline small">
@@ -163,6 +163,7 @@ function renderFirstOrderFacets() {
 			</div>`;
 		list.appendChild(col);
 	});
+		updateValidationMessages();
 }
 
 async function loadStep4Model(){
@@ -208,13 +209,17 @@ function attachAutoSaveHandlers(){
 			scheduleAutoSave();
 		}
 		if (e.target && e.target.matches('input.second-order-type')) {
-			secondOrder.type = e.target.value;
+			secondOrder.type = (e.target.value === 'none') ? null : e.target.value;
 			// Initialize global reflective placeholders if formative
 			if (secondOrder.type === 'formative' && !secondOrder.globalReflective) {
 				secondOrder.globalReflective = [
 					{ id: 'g_second_1', text: '' },
 					{ id: 'g_second_2', text: '' }
 				];
+			}
+			if (!secondOrder.type) {
+				secondOrder.scaling = { method: 'fix_loading', refFacetId: null };
+				secondOrder.globalReflective = null;
 			}
 			ensureSecondOrderScalingDefaults();
 			updateSecondOrderUI();
@@ -265,6 +270,7 @@ function saveFacetModes(isAuto=false){
 	ensureSecondOrderScalingDefaults();
 	indicators = buildIndicatorsFromModes();
 	persistStep4();
+	updateValidationMessages();
 	if (!isAuto) window.displayInfo?.('success', 'Facet measurement types saved.');
 }
 
@@ -305,14 +311,16 @@ function ensureScalingDefaults(facetId, facetItems){
 		candidateRefItems = (globalReflective[facetId]||[]).filter(g => (g.text||'').trim());
 	}
 	if (!facetScaling[facetId]) {
-		if (candidateRefItems.length) {
+		if (candidateRefItems.length >= 2) {
 			const ref = candidateRefItems.slice().sort((a,b)=>a.text.length - b.text.length)[0];
 			facetScaling[facetId] = { method: 'fix_loading', refItemId: ref.id };
 		} else {
 			facetScaling[facetId] = { method: 'fix_variance' };
 		}
 	} else if (facetScaling[facetId].method === 'fix_loading') {
-		if (!candidateRefItems.find(it => it.id === facetScaling[facetId].refItemId)) {
+		if (mode === 'formative' && candidateRefItems.length < 2) {
+			facetScaling[facetId] = { method: 'fix_variance' };
+		} else if (!candidateRefItems.find(it => it.id === facetScaling[facetId].refItemId)) {
 			if (candidateRefItems.length) facetScaling[facetId].refItemId = candidateRefItems[0].id; else facetScaling[facetId] = { method: 'fix_variance' };
 		}
 	}
@@ -347,7 +355,7 @@ function refreshFormativeScalingUI(facetId){
 	const fixVarRadio = card.querySelector(`input.facet-scale-radio[value="fix_variance"][data-facet="${facetId}"]`);
 	const refWrapper = card.querySelector(`.facet-ref-wrapper[data-facet="${facetId}"]`);
 	if (fixLoadRadio) {
-		if (!reflectiveItems.length) {
+		if (reflectiveItems.length < 2) {
 			fixLoadRadio.disabled = true;
 			if (fixLoadRadio.checked) {
 				if (fixVarRadio) { fixVarRadio.checked = true; }
@@ -377,6 +385,7 @@ function initSecondOrderPanel(){
 	document.getElementById('secondOrderDefinition').textContent = savedDefinition || '';
 	if (secondOrder.type === 'reflective') { const r = document.getElementById('secondOrderTypeReflective'); if (r) r.checked = true; }
 	else if (secondOrder.type === 'formative') { const r = document.getElementById('secondOrderTypeFormative'); if (r) r.checked = true; }
+	else { const n = document.getElementById('secondOrderTypeNone'); if (n) n.checked = true; }
 	// Ensure global reflective placeholders if formative
 	if (secondOrder.type === 'formative' && !secondOrder.globalReflective) {
 		secondOrder.globalReflective = [
@@ -405,7 +414,7 @@ function ensureSecondOrderScalingDefaults(){
 		if (!secondOrder.globalReflective) secondOrder.globalReflective = [ { id: 'g_second_1', text: '' }, { id: 'g_second_2', text: '' } ];
 		const globals = (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim());
 		if (secondOrder.scaling.method === 'fix_loading') {
-			if (!globals.length) {
+			if (globals.length < 2) {
 				secondOrder.scaling.method = 'fix_variance';
 				secondOrder.scaling.refItemId = null;
 			} else {
@@ -482,6 +491,7 @@ function updateSecondOrderUI(){
 		}
 	}
 	refreshSecondOrderFormativeScalingUI();
+	updateValidationMessages();
 }
 
 function populateSecondOrderRefSelect(){
@@ -526,8 +536,9 @@ function refreshSecondOrderFormativeScalingUI(){
 	const globals = (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim());
 	const fixLoad = document.getElementById('secondOrderScaleFixLoad');
 	const fixVar = document.getElementById('secondOrderScaleFixVar');
+	const refItemWrapper = document.getElementById('secondOrderRefItemWrapper');
 	if (fixLoad) {
-		if (!globals.length) {
+		if (globals.length < 2) {
 			fixLoad.disabled = true;
 			if (fixLoad.checked) {
 				if (fixVar) fixVar.checked = true;
@@ -537,8 +548,11 @@ function refreshSecondOrderFormativeScalingUI(){
 			fixLoad.disabled = false;
 		}
 	}
-	if (secondOrder.scaling.method === 'fix_loading') {
+	if (secondOrder.scaling.method === 'fix_loading' && globals.length >=2) {
 		populateSecondOrderRefItemSelect();
+		if (refItemWrapper) refItemWrapper.classList.remove('d-none');
+	} else {
+		if (refItemWrapper) refItemWrapper.classList.add('d-none');
 	}
 }
 
@@ -578,3 +592,59 @@ function handleScaleRadioChange(radio){
 
 function shorten(str,len){ return !str ? '' : (str.length > len ? str.slice(0,len-1)+'…' : str); }
 function escapeHtml(str){ if (str == null) return ''; return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+// -------- Validation ---------
+function computeValidation(){
+	const errors = [];
+	const warnings = [];
+	const itemsByFacet = {};
+	subdimensions.forEach(sd => { itemsByFacet[sd.id] = (items||[]).filter(it => it.subdimensionId === sd.id); });
+	subdimensions.forEach(sd => {
+		if (!facetScaling[sd.id]) {
+			errors.push(`Facet "${sd.name || sd.id}" has no scaling rule selected.`);
+			return;
+		}
+		const sc = facetScaling[sd.id];
+		if (sc.method === 'fix_loading' && !sc.refItemId) errors.push(`Facet "${sd.name || sd.id}" set to fix a loading but no reference item chosen.`);
+	});
+	if (secondOrder.type) {
+		if (!secondOrder.scaling) errors.push('Higher-order latent has no scaling configuration.');
+		else if (secondOrder.type === 'reflective') {
+			if (secondOrder.scaling.method === 'fix_loading' && !secondOrder.scaling.refFacetId) errors.push('Higher-order reflective latent requires a reference facet for fixed loading scaling.');
+		} else if (secondOrder.type === 'formative') {
+			if (secondOrder.scaling.method === 'fix_loading' && !secondOrder.scaling.refItemId) errors.push('Higher-order formative latent requires a reference global item when fixing a loading.');
+		}
+	}
+	subdimensions.forEach(sd => {
+		if (facetModes[sd.id] === 'reflective') {
+			const count = itemsByFacet[sd.id].length;
+			if (count < 2) errors.push(`Reflective facet "${sd.name || sd.id}" must have at least 2 items (has ${count}).`);
+			else if (count === 2) warnings.push(`Reflective facet "${sd.name || sd.id}" has only 2 items.`);
+		}
+	});
+	subdimensions.forEach(sd => {
+		if (facetModes[sd.id] === 'formative') {
+			const globals = (globalReflective[sd.id]||[]).filter(g => (g.text||'').trim());
+			if (globals.length < 2) errors.push(`Formative facet "${sd.name || sd.id}" requires two global reflective items (has ${globals.length}).`);
+		}
+	});
+	if (secondOrder.type === 'formative') {
+		const globals = (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim());
+		if (globals.length < 2) errors.push(`Higher-order formative latent requires two global reflective items (has ${globals.length}).`);
+	}
+	if (secondOrder.type && (!subdimensions.length || dimensionality === 'Unidimensional')) {
+		errors.push('Higher-order latent specified but there are no first-order facets.');
+	}
+	return { errors, warnings };
+}
+
+function updateValidationMessages(){
+	const host = document.getElementById('validationMessages');
+	if (!host) return;
+	const { errors, warnings } = computeValidation();
+	if (!errors.length && !warnings.length) { host.innerHTML = '<div class="alert alert-success py-2 px-3 small mb-0">No validation issues detected.</div>'; return; }
+	let html = '';
+	if (errors.length) html += `<div class=\"alert alert-danger py-2 px-3 small mb-2\"><strong>Blocking Errors:</strong><ul class=\"mb-0 small\">${errors.map(e=>`<li>${escapeHtml(e)}</li>`).join('')}</ul></div>`;
+	if (warnings.length) html += `<div class=\"alert alert-warning py-2 px-3 small mb-0\"><strong>Warnings:</strong><ul class=\"mb-0 small\">${warnings.map(w=>`<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`;
+	host.innerHTML = html;
+}

@@ -9,14 +9,19 @@
 <div id="step2-content" data-get-sync-function="init"></div>
 <div id="area1">
     <div class="container-fluid">
-        <h2 class="h3 mb-4">Step 4: formally specify the measurement model</h2>
+    <h2 class="h3 mb-3">Step 4: formally specify the measurement model</h2>
+    <div id="validationMessages" class="mb-4"></div>
                 <!-- Second-Order (Overall Construct) Panel (shown only if multidimensional) -->
                 <div class="card mb-4 d-none" id="secondOrderPanel">
                     <div class="card-body">
                         <h4 class="card-title mb-3" id="secondOrderTitle">Overall Construct</h4>
                         <p class="small mb-3" id="secondOrderDefinition"></p>
                         <div class="mb-3">
-                            <div class="small fw-bold mb-1">Relationship Direction</div>
+                            <div class="small fw-bold mb-1">Higher-Order Construct</div>
+                            <div class="form-check form-check-inline small">
+                                <input class="form-check-input second-order-type" type="radio" name="secondOrderType" id="secondOrderTypeNone" value="none">
+                                <label class="form-check-label" for="secondOrderTypeNone">Do not model</label>
+                            </div>
                             <div class="form-check form-check-inline small">
                                 <input class="form-check-input second-order-type" type="radio" name="secondOrderType" id="secondOrderTypeReflective" value="reflective">
                                 <label class="form-check-label" for="secondOrderTypeReflective">Reflective (Overall → Facets)</label>
