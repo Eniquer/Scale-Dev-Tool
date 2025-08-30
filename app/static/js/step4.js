@@ -9,6 +9,8 @@ let items = [];
 let overallCode = '';
 // Track disabled (excluded) items per facet id (including 'unidim')
 let facetDisabledItems = {};
+// Auto-generated custom per-item identifiers { itemId: customId }
+let itemCustomIds = {};
 // Stored facet measurement modes and indicator directions
 let facetModes = {}; // { facetId: 'reflective' | 'formative' }
 // indicators: [{facetId, itemId, direction, global?}] direction: 'out' (reflective) or 'in' (formative)
@@ -36,6 +38,8 @@ async function init() {
 		overallCode = overallCode || deriveShortCode(constructName);
 		window.step4Data = { constructName, savedDefinition, subdimensions, dimensionality, items };
 		await loadStep4Model();
+		// Generate / refresh custom item IDs (depends on loaded subdimensions & items)
+		generateItemCustomIds();
 		if (!overallCode) overallCode = deriveShortCode(constructName);
 		renderFirstOrderFacets();
 		initSecondOrderPanel();
@@ -66,7 +70,7 @@ function renderFirstOrderFacets() {
 		const pseudoId = 'unidim';
 		ensureScalingDefaults(pseudoId, activeItems);
 		const itemsHtml = allItems.length
-			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${allItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; return `<span class="mm-item-tag${long}${inactive}" data-facet="${pseudoId}" data-item-id="${it.id}" title="${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${t}</span>`; }).join('')}</div>`
+			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${allItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(itemCustomIds[it.id] || ''); return `<span class="mm-item-tag${long}${inactive}" data-facet="${pseudoId}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class="badge bg-secondary me-1">${cid}</span>`:''}${t}</span>`; }).join('')}</div>`
 			: '<div class="text-muted small mb-2">No items added in Step 2.</div>';
 		const scale = facetScaling[pseudoId] || {};
 		const method = scale.method || 'fix_loading';
@@ -116,7 +120,7 @@ function renderFirstOrderFacets() {
 		if (currentMode === 'formative') ensureGlobalReflectiveDefaults(sd.id);
 		ensureScalingDefaults(sd.id, activeFacetItems);
 		const itemsHtml = facetItems.length
-			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${facetItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; return `<span class="mm-item-tag${long}${inactive}" data-facet="${sd.id}" data-item-id="${it.id}" title="${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${t}</span>`; }).join('')}</div>`
+			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${facetItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(itemCustomIds[it.id] || ''); return `<span class="mm-item-tag${long}${inactive}" data-facet="${sd.id}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class="badge bg-secondary me-1">${cid}</span>`:''}${t}</span>`; }).join('')}</div>`
 			: '<div class="text-muted small mb-2">No items assigned</div>';
 		const scale = facetScaling[sd.id] || {};
 		const method = scale.method || 'fix_loading';
@@ -186,6 +190,7 @@ async function loadStep4Model(){
 	globalReflective = stored.globalReflective || {};
 	secondOrder = stored.secondOrder || secondOrder;
 	facetDisabledItems = stored.facetDisabledItems || {};
+	itemCustomIds = stored.itemCustomIds || {};
 	overallCode = stored.overallCode || overallCode || deriveShortCode(constructName);
 	// Backward compatibility: ensure scaling object shape and global reflective defaults for second-order
 	if (!secondOrder.scaling) secondOrder.scaling = { method: 'fix_loading', refFacetId: null };
@@ -315,6 +320,8 @@ function scheduleAutoSave(){
 function saveFacetModes(isAuto=false){
 	collectScalingSelections();
 	ensureSecondOrderScalingDefaults();
+	// Regenerate custom IDs in case facet codes or overall code changed
+	generateItemCustomIds();
 	indicators = buildIndicatorsFromModes();
 	persistStep4();
 	updateValidationMessages();
@@ -347,7 +354,7 @@ async function persistStep4(){
 	const existing = await window.dataStorage.getData('data_step_4') || {};
 	if (existing.facets) delete existing.facets;
 	const lavaanSpec = generateLavaanSpec();
-	const payload = { facetModes, indicators, facetScaling, globalReflective, secondOrder, lavaanSpec, overallCode, facetDisabledItems, updatedAt: new Date().toISOString() };
+	const payload = { facetModes, indicators, facetScaling, globalReflective, secondOrder, lavaanSpec, overallCode, facetDisabledItems, itemCustomIds, updatedAt: new Date().toISOString() };
 	await window.dataStorage.storeData('data_step_4', payload, false);
 }
 
@@ -388,7 +395,10 @@ function generateLavaanSpec(){
 	try {
 		// Helper sanitizers
 		const sanitize = (name) => String(name || '').replace(/[^A-Za-z0-9_]/g,'_').replace(/^([0-9])/, '_$1') || 'X';
-		const itemVar = (itemId) => sanitize('i'+itemId); // prefix to avoid clashes
+		const itemVar = (itemId) => {
+			const cid = itemCustomIds[itemId];
+			return cid ? sanitize(cid) : sanitize('i'+itemId);
+		};
 		const facetVar = (sd) => sanitize(sd.code || sd.name || ('F_'+sd.id));
 		const overallVar = sanitize(overallCode || constructName || 'Overall');
 		const globalItemVar = (facetId, idx) => {
@@ -406,6 +416,7 @@ function generateLavaanSpec(){
 		(items||[]).forEach(it => {
 			const facetId = (!subdimensions.length || dimensionality==='Unidimensional') ? 'unidim' : (it.subdimensionId || '');
 			const disabled = (facetDisabledItems[facetId]||[]).map(String).includes(String(it.id));
+			const cid = itemCustomIds[it.id];
 			mapping.push(`# ${disabled? '(excluded) ':''}${itemVar(it.id)} = item ${it.id}: ${shorten(it.text||'',70)}`);
 		});
 		Object.keys(globalReflective||{}).forEach(fid => {
@@ -793,6 +804,29 @@ function handleScaleRadioChange(radio){
 	}
 }
 
+// ---- Custom Item Identifier Generation ----
+function generateItemCustomIds(){
+	if (!items || !items.length) { itemCustomIds = {}; return; }
+	const byFacet = {};
+	const isUnidim = !subdimensions.length || dimensionality === 'Unidimensional';
+	// Build lookup for facet codes
+	const facetCodeMap = {};
+	subdimensions.forEach(sd => { facetCodeMap[sd.id] = (sd.code || deriveShortCode(sd.name || 'F')).toUpperCase(); });
+	const overall = (overallCode || deriveShortCode(constructName) || 'IT').toUpperCase();
+	items.sort((a,b)=>a.id-b.id).forEach(it => {
+		const facetId = isUnidim ? 'unidim' : it.subdimensionId;
+		if (!byFacet[facetId]) byFacet[facetId] = 0;
+		byFacet[facetId] += 1;
+		const seq = byFacet[facetId];
+		let prefix;
+		if (isUnidim) prefix = overall;
+		else prefix = (facetCodeMap[facetId] || overall);
+		// Lowercase per request but keep consistent a-z0-9 only
+		const base = (prefix || 'IT').toLowerCase();
+		itemCustomIds[it.id] = base + seq; // e.g., ab1
+	});
+}
+
 function shorten(str,len){ return !str ? '' : (str.length > len ? str.slice(0,len-1)+'…' : str); }
 function escapeHtml(str){ if (str == null) return ''; return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
@@ -806,6 +840,11 @@ function computeValidation(){
 		itemsByFacet[sd.id] = (items||[]).filter(it => it.subdimensionId === sd.id && !disabledSet.has(String(it.id)));
 	});
 	subdimensions.forEach(sd => {
+		// Measurement type must be chosen
+		if (!facetModes[sd.id]) {
+			errors.push(`Facet "${sd.name || sd.id}" has no measurement type selected (choose Reflective or Formative).`);
+			return; // Skip further checks for this facet until selected
+		}
 		if (!facetScaling[sd.id]) {
 			errors.push(`Facet "${sd.name || sd.id}" has no scaling rule selected.`);
 			return;
@@ -855,7 +894,13 @@ function updateValidationMessages(){
 	const host = document.getElementById('validationMessages');
 	if (!host) return;
 	const { errors, warnings } = computeValidation();
-	if (!errors.length && !warnings.length) { host.innerHTML = '<div class="alert alert-success py-2 px-3 small mb-0">No validation issues detected.</div>'; return; }
+	const continueBtn = document.getElementById('continueStep4Btn');
+	if (!errors.length && !warnings.length) {
+		host.innerHTML = '<div class="alert alert-success py-2 px-3 small mb-0">No validation issues detected.</div>';
+		if (continueBtn) continueBtn.classList.remove('d-none');
+		return;
+	}
+	if (continueBtn) continueBtn.classList.add('d-none');
 	let html = '';
 	if (errors.length) html += `<div class=\"alert alert-danger py-2 px-3 small mb-2\"><strong>Blocking Errors:</strong><ul class=\"mb-0 small\">${errors.map(e=>`<li>${escapeHtml(e)}</li>`).join('')}</ul></div>`;
 	if (warnings.length) html += `<div class=\"alert alert-warning py-2 px-3 small mb-0\"><strong>Warnings:</strong><ul class=\"mb-0 small\">${warnings.map(w=>`<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`;
@@ -898,11 +943,8 @@ function attachLavaanPanelHandlers(){
 // Ensure lavaan panel updates after each save
 const originalPersist = persistStep4;
 persistStep4 = async function(){
+	generateItemCustomIds();
 	await originalPersist();
 	refreshLavaanPanel();
 };
 
-
-// todo validation error add if nothing selected. warning
-    // - option to deselect items
-    // use custom id for items like OO1

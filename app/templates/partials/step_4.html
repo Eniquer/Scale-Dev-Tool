@@ -9,8 +9,9 @@
 <div id="step2-content" data-get-sync-function="init"></div>
 <div id="area1">
     <div class="container-fluid">
-    <h2 class="h3 mb-3">Step 4: formally specify the measurement model</h2>
-    <div id="validationMessages" class="mb-4"></div>
+        <h2 class="h3 mb-3">Step 4: formally specify the measurement model</h2>
+        <div class="row">
+            <div class="col-12 col-xl-9">    
                 <!-- Second-Order (Overall Construct) Panel (shown only if multidimensional) -->
                 <div class="card mb-4 d-none" id="secondOrderPanel">
                     <div class="card-body">
@@ -60,18 +61,25 @@
                                 <div id="firstOrderFacetsList" class="row g-3"></div>
                         </div>
                 </div>
-
+            </div>
+            <div class="col-12 col-xl-3">
+                <div id="validationMessages" class="mb-4"></div>
                 <!-- Lavaan Specification Panel -->
                 <div class="card mb-4" id="lavaanSpecPanel">
                     <div class="card-body">
-                        <h4 class="card-title mb-3 d-flex align-items-center justify-content-between">
-                            <span>Lavaan Specification</span>
-                            <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-secondary" id="btnRefreshLavaan" title="Regenerate now"><i class="bi bi-arrow-repeat"></i> Refresh</button>
-                                <button type="button" class="btn btn-outline-secondary" id="btnCopyLavaan" title="Copy to clipboard"><i class="bi bi-clipboard"></i> Copy</button>
-                                <button type="button" class="btn btn-outline-secondary" id="btnDownloadLavaan" title="Download as .txt"><i class="bi bi-download"></i> Download</button>
+                        <div class="row card-title mb-3 d-flex align-items-center justify-content-between">
+                            <div class="col-auto">
+
+                                <h4>Lavaan Specification</h4>
                             </div>
-                        </h4>
+                            <div class="col">
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-secondary" id="btnRefreshLavaan" title="Regenerate now"><i class="bi bi-arrow-repeat"></i> Refresh</button>
+                                    <button type="button" class="btn btn-outline-secondary" id="btnCopyLavaan" title="Copy to clipboard"><i class="bi bi-clipboard"></i> Copy</button>
+                                    <button type="button" class="btn btn-outline-secondary" id="btnDownloadLavaan" title="Download as .txt"><i class="bi bi-download"></i> Download</button>
+                                </div>
+                            </div>
+                        </div>
                         <p class="text-muted small mb-2">Automatically generated when you adjust facet modes, scaling, globals, or higher-order settings. Use in R with the <code>lavaan</code> package.</p>
                         <div class="border rounded bg-body-secondary p-2" style="max-height:320px; overflow:auto;">
                             <pre class="mb-0 small" id="lavaanSpecCode" style="white-space:pre;">(spec will appear here)</pre>
@@ -79,6 +87,10 @@
                         <div class="small text-muted mt-2" id="lavaanSpecTimestamp"></div>
                     </div>
                 </div>
+                <!-- Continue Button (shown when no validation errors) -->
+                <a id="continueStep4Btn" href="/step/5" class="btn btn-primary w-100 d-none">Continue to Next Step</a>
+            </div>
+        </div>
     </div>
 </div>
 
