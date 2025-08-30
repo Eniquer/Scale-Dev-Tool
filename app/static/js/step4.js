@@ -152,7 +152,7 @@ function renderFirstOrderFacets() {
 				<div class="mb-2 formative-globals" data-facet="${sd.id}">
 					<div class="small fw-bold mb-1">Global Reflective Items (for identification)</div>
 					<div class="form-text small mb-1">Provide up to two global reflective items (leave blank if not used).</div>
-					${(globalReflective[sd.id]||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 global-reflective-input" data-facet="${sd.id}" data-idx="${i}" placeholder="Global reflective item ${i+1}" value="${escapeHtml(g.text)}">`).join('')}
+							${(globalReflective[sd.id]||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 global-reflective-input" data-facet="${sd.id}" data-idx="${i}" placeholder="${i===0 ? 'Generally speaking, my ...' : 'Overall, I ...'}" value="${escapeHtml(g.text)}">`).join('')}
 				</div>` : ''}
 				<div class="mb-2">
 					<div class="small fw-bold mb-1">Scaling Rule</div>
@@ -662,6 +662,9 @@ function updateSecondOrderUI(){
 	const globalWrapper = document.getElementById('secondOrderFormativeGlobals');
 	const refItemWrapper = document.getElementById('secondOrderRefItemWrapper');
 	if (secondOrder.type === 'reflective') {
+		// Ensure radios are enabled (they might have been disabled while in formative mode with <2 globals)
+		if (fixLoad) fixLoad.disabled = false;
+		if (fixVar) fixVar.disabled = false;
 		// facet-based scaling
 		if (secondOrder.scaling.method === 'fix_loading') {
 			refWrapper.classList.remove('d-none');
@@ -678,7 +681,7 @@ function updateSecondOrderUI(){
 		// Render inputs for globals
 		const inputsHost = document.getElementById('secondOrderGlobalsInputs');
 		if (inputsHost) {
-			inputsHost.innerHTML = (secondOrder.globalReflective||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 second-order-global-reflective" data-idx="${i}" placeholder="Global reflective item ${i+1}" value="${escapeHtml(g.text)}">`).join('');
+			inputsHost.innerHTML = (secondOrder.globalReflective||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 second-order-global-reflective" data-idx="${i}" placeholder="${i===0 ? 'Generally speaking, my ...' : 'Overall, I ...'}" value="${escapeHtml(g.text)}">`).join('');
 		}
 		if (refItemWrapper) {
 			const globals = (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim());

@@ -63,32 +63,33 @@
                 </div>
             </div>
             <div class="col-12 col-xl-3">
-                <div id="validationMessages" class="mb-4"></div>
-                <!-- Lavaan Specification Panel -->
-                <div class="card mb-4" id="lavaanSpecPanel">
-                    <div class="card-body">
-                        <div class="row card-title mb-3 d-flex align-items-center justify-content-between">
-                            <div class="col-auto">
-
-                                <h4>Lavaan Specification</h4>
-                            </div>
-                            <div class="col">
-                                <div class="btn-group btn-group-sm">
-                                    <button type="button" class="btn btn-outline-secondary" id="btnRefreshLavaan" title="Regenerate now"><i class="bi bi-arrow-repeat"></i> Refresh</button>
-                                    <button type="button" class="btn btn-outline-secondary" id="btnCopyLavaan" title="Copy to clipboard"><i class="bi bi-clipboard"></i> Copy</button>
-                                    <button type="button" class="btn btn-outline-secondary" id="btnDownloadLavaan" title="Download as .txt"><i class="bi bi-download"></i> Download</button>
+                <div id="step4Sidebar" class="d-flex flex-column gap-4">
+                    <div id="validationMessages" class="mb-0"></div>
+                    <!-- Lavaan Specification Panel -->
+                    <div class="card" id="lavaanSpecPanel">
+                        <div class="card-body">
+                            <div class="row card-title mb-3 d-flex align-items-center justify-content-between">
+                                <div class="col-auto">
+                                    <h4 class="mb-0">Lavaan Specification</h4>
+                                </div>
+                                <div class="col">
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-secondary" id="btnRefreshLavaan" title="Regenerate now"><i class="bi bi-arrow-repeat"></i> Refresh</button>
+                                        <button type="button" class="btn btn-outline-secondary" id="btnCopyLavaan" title="Copy to clipboard"><i class="bi bi-clipboard"></i> Copy</button>
+                                        <button type="button" class="btn btn-outline-secondary" id="btnDownloadLavaan" title="Download as .txt"><i class="bi bi-download"></i> Download</button>
+                                    </div>
                                 </div>
                             </div>
+                            <p class="text-muted small mb-2">Automatically generated when you adjust facet modes, scaling, globals, or higher-order settings. Use in R with the <code>lavaan</code> package.</p>
+                            <div class="border rounded bg-body-secondary p-2 lavaan-scroll">
+                                <pre class="mb-0 small" id="lavaanSpecCode" style="white-space:pre;">(spec will appear here)</pre>
+                            </div>
+                            <div class="small text-muted mt-2" id="lavaanSpecTimestamp"></div>
                         </div>
-                        <p class="text-muted small mb-2">Automatically generated when you adjust facet modes, scaling, globals, or higher-order settings. Use in R with the <code>lavaan</code> package.</p>
-                        <div class="border rounded bg-body-secondary p-2" style="max-height:320px; overflow:auto;">
-                            <pre class="mb-0 small" id="lavaanSpecCode" style="white-space:pre;">(spec will appear here)</pre>
-                        </div>
-                        <div class="small text-muted mt-2" id="lavaanSpecTimestamp"></div>
                     </div>
+                    <!-- Continue Button (shown when no validation errors) -->
+                    <a id="continueStep4Btn" href="/step/5" class="btn btn-primary w-100 d-none mt-auto">Continue to Next Step</a>
                 </div>
-                <!-- Continue Button (shown when no validation errors) -->
-                <a id="continueStep4Btn" href="/step/5" class="btn btn-primary w-100 d-none">Continue to Next Step</a>
             </div>
         </div>
     </div>
@@ -109,4 +110,25 @@
         .mm-item-tag.long {font-size:.65rem;}
     .mm-item-tag.inactive {opacity:.35; filter:grayscale(0.6); text-decoration:line-through;}
     .mm-item-tag.inactive::before {background: var(--bs-secondary); box-shadow:none;}
+</style>
+
+<style>
+    /* Sticky sidebar for large screens */
+    @media (min-width: 1200px) {
+        #step4Sidebar {
+            position: sticky;
+            top: 1rem; /* space below navbar */
+            max-height: calc(100vh - 2rem);
+            overflow-y: auto;
+            padding-right: 2px; /* avoid scrollbar overlap */
+        }
+        #step4Sidebar .lavaan-scroll {
+            max-height: 40vh; /* prevent spec from pushing out other panels */
+            overflow:auto;
+        }
+    }
+    /* Improve scrollbar aesthetics (optional) */
+    #step4Sidebar .lavaan-scroll::-webkit-scrollbar { width: 8px; }
+    #step4Sidebar .lavaan-scroll::-webkit-scrollbar-track { background: transparent; }
+    #step4Sidebar .lavaan-scroll::-webkit-scrollbar-thumb { background: var(--bs-secondary-color); border-radius:4px; }
 </style>
