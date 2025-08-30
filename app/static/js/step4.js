@@ -420,7 +420,7 @@ function generateLavaanSpec(){
 			mapping.push(`# ${disabled? '(excluded) ':''}${itemVar(it.id)} = item ${it.id}: ${shorten(it.text||'',70)}`);
 		});
 		Object.keys(globalReflective||{}).forEach(fid => {
-			(globalReflective[fid]||[]).forEach((g,i) => mapping.push(`# ${globalItemVar(fid,i)} = global (${fid}) ${shorten(g.text||'',70)}`));
+			(globalReflective[fid]||[]).forEach((g,i) => mapping.push(`# ${globalItemVar(fid,i)} = global (${subdimensions.find(s => s.id === fid).name}) ${shorten(g.text||'',70)}`));
 		});
 		(secondOrder.globalReflective||[]).forEach((g,i) => mapping.push(`# ${secondGlobalItemVar(i)} = higher-order global: ${shorten(g.text||'',70)}`));
 		subdimensions.forEach(sd => { if (sd.code) mapping.push(`# Facet ${facetVar(sd)} code: ${sd.code}`); });
