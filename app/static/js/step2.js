@@ -338,7 +338,7 @@ function generatePrompt(step1Data){
 "${step1Data.panel1.constructName}"
 
 Initial definition:
-"${step1Data.panel1.initialDefinition}"
+"${step1Data.panel2.savedDefinition}"
 
 ${dimensionText}
 

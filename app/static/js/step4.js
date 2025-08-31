@@ -54,6 +54,15 @@ async function init() {
 	}
 }
 document.addEventListener('DOMContentLoaded', () => { init(); });
+// Inject minimal styling for excluded reference options
+document.addEventListener('DOMContentLoaded', () => {
+	if (!document.getElementById('step4-excluded-style')) {
+		const style = document.createElement('style');
+		style.id = 'step4-excluded-style';
+		style.textContent = `select.facet-ref-item option[data-excluded="1"] { color: #b1b1b1ff; font-style: italic; }`;
+		document.head.appendChild(style);
+	}
+});
 
 function renderFirstOrderFacets() {
 	const list = document.getElementById('firstOrderFacetsList');
@@ -69,13 +78,13 @@ function renderFirstOrderFacets() {
 		const activeItems = allItems.filter(it => !disabledSet.has(String(it.id)));
 		const pseudoId = 'unidim';
 		ensureScalingDefaults(pseudoId, activeItems);
-		const itemsHtml = allItems.length
-			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${allItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(itemCustomIds[it.id] || ''); return `<span class="mm-item-tag${long}${inactive}" data-facet="${pseudoId}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class="badge bg-secondary me-1">${cid}</span>`:''}${t}</span>`; }).join('')}</div>`
-			: '<div class="text-muted small mb-2">No items added in Step 2.</div>';
 		const scale = facetScaling[pseudoId] || {};
 		const method = scale.method || 'fix_loading';
 		const refItemId = scale.refItemId;
-		const refSelect = allItems.length ? `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${pseudoId}">${allItems.map(it=>`<option value="${it.id}" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` : '<div class="small text-muted mt-1">No items to reference</div>';
+		const itemsHtml = allItems.length
+			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${allItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(itemCustomIds[it.id] || ''); const refMark = (method==='fix_loading' && String(scale.refItemId)===String(it.id)) ? ' ref-item' : ''; return `<span class="mm-item-tag${long}${inactive}${refMark}" data-facet="${pseudoId}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class="badge bg-secondary me-1">${cid}</span>`:''}${t}${refMark? ' <i class="bi bi-asterisk text-warning"></i>':''}</span>`; }).join('')}</div>`
+			: '<div class="text-muted small mb-2">No items added in Step 2.</div>';
+		const refSelect = allItems.length ? `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${pseudoId}">${allItems.map(it=>{ const excluded = disabledSet.has(String(it.id)); return `<option value="${it.id}" ${String(it.id)===String(refItemId)?'selected':''} ${excluded? 'data-excluded="1"':''}>${escapeHtml(shorten(it.text,40))}${excluded? ' (excluded)':''}</option>`; }).join('')}</select>` : '<div class="small text-muted mt-1">No items to reference</div>';
 		const col = document.createElement('div');
 		col.className = 'col-12';
 		col.innerHTML = `
@@ -119,21 +128,21 @@ function renderFirstOrderFacets() {
 		const currentMode = facetModes[sd.id] || '';
 		if (currentMode === 'formative') ensureGlobalReflectiveDefaults(sd.id);
 		ensureScalingDefaults(sd.id, activeFacetItems);
-		const itemsHtml = facetItems.length
-			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${facetItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(itemCustomIds[it.id] || ''); return `<span class="mm-item-tag${long}${inactive}" data-facet="${sd.id}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class="badge bg-secondary me-1">${cid}</span>`:''}${t}</span>`; }).join('')}</div>`
-			: '<div class="text-muted small mb-2">No items assigned</div>';
 		const scale = facetScaling[sd.id] || {};
 		const method = scale.method || 'fix_loading';
 		const refItemId = scale.refItemId;
+		const itemsHtml = facetItems.length
+			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${facetItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(itemCustomIds[it.id] || ''); const refMark = (method==='fix_loading' && String(scale.refItemId)===String(it.id)) ? ' ref-item' : ''; return `<span class="mm-item-tag${long}${inactive}${refMark}" data-facet="${sd.id}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class=\"badge bg-secondary me-1\">${cid}</span>`:''}${t}${refMark? ' <i class=\"bi bi-asterisk text-warning\"></i>':''}</span>`; }).join('')}</div>`
+			: '<div class="text-muted small mb-2">No items assigned</div>';
 		const reflectiveCandidates = currentMode === 'formative'
 			? (globalReflective[sd.id]||[]).filter(g => (g.text||'').trim())
 			: facetItems;
 		let refSelect;
 		if (currentMode === 'formative') {
 			// Always render a select so it can be dynamically populated when user types globals (needs 2 globals)
-			refSelect = `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${sd.id}" ${reflectiveCandidates.length>=2? '' : ''}>${reflectiveCandidates.map(it=>`<option value="${it.id}" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` + (reflectiveCandidates.length>=2? '' : '<div class="small text-muted mt-1">Add two global reflective items above to enable fixing a loading.</div>');
+			refSelect = `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${sd.id}" ${reflectiveCandidates.length>=2? '' : ''}>${reflectiveCandidates.map(it=>`<option value="${it.id}" ${String(it.id)===String(refItemId)?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` + (reflectiveCandidates.length>=2? '' : '<div class="small text-muted mt-1">Add two global reflective items above to enable fixing a loading.</div>');
 		} else {
-			refSelect = reflectiveCandidates.length ? `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${sd.id}">${reflectiveCandidates.map(it=>`<option value="${it.id}" ${it.id===refItemId?'selected':''}>${escapeHtml(shorten(it.text,40))}</option>`).join('')}</select>` : '<div class="small text-muted mt-1">No items to reference</div>';
+			refSelect = reflectiveCandidates.length ? `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${sd.id}">${reflectiveCandidates.map(it=>{ const excluded = disabledSet.has(String(it.id)); return `<option value="${it.id}" ${String(it.id)===String(refItemId)?'selected':''} ${excluded? 'data-excluded="1"':''}>${escapeHtml(shorten(it.text,40))}${excluded? ' (excluded)':''}</option>`; }).join('')}</select>` : '<div class="small text-muted mt-1">No items to reference</div>';
 		}
 		col.innerHTML = `
 			<div class="facet-card h-100 d-flex flex-column" data-facet="${sd.id}" data-facet-code="${escapeHtml(shortCode)}">
@@ -152,7 +161,7 @@ function renderFirstOrderFacets() {
 				<div class="mb-2 formative-globals" data-facet="${sd.id}">
 					<div class="small fw-bold mb-1">Global Reflective Items (for identification)</div>
 					<div class="form-text small mb-1">Provide up to two global reflective items (leave blank if not used).</div>
-							${(globalReflective[sd.id]||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 global-reflective-input" data-facet="${sd.id}" data-idx="${i}" placeholder="${i===0 ? 'Generally speaking, my ...' : 'Overall, I ...'}" value="${escapeHtml(g.text)}">`).join('')}
+					${(globalReflective[sd.id]||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 global-reflective-input" data-facet="${sd.id}" data-idx="${i}" placeholder="Global reflective item ${i+1}" value="${escapeHtml(g.text)}">`).join('')}
 				</div>` : ''}
 				<div class="mb-2">
 					<div class="small fw-bold mb-1">Scaling Rule</div>
@@ -192,6 +201,17 @@ async function loadStep4Model(){
 	facetDisabledItems = stored.facetDisabledItems || {};
 	itemCustomIds = stored.itemCustomIds || {};
 	overallCode = stored.overallCode || overallCode || deriveShortCode(constructName);
+	// Normalize ref ids (convert numeric-like strings to numbers) to avoid equality mismatches after reload
+	Object.keys(facetScaling).forEach(fid => {
+		const sc = facetScaling[fid];
+		if (sc && sc.method === 'fix_loading' && sc.refItemId != null && /^\d+$/.test(String(sc.refItemId))) {
+			sc.refItemId = Number(sc.refItemId);
+		}
+	});
+	if (secondOrder?.scaling) {
+		if (secondOrder.scaling.refFacetId != null && /^\d+$/.test(String(secondOrder.scaling.refFacetId))) secondOrder.scaling.refFacetId = Number(secondOrder.scaling.refFacetId);
+		if (secondOrder.scaling.refItemId != null && /^\d+$/.test(String(secondOrder.scaling.refItemId))) secondOrder.scaling.refItemId = Number(secondOrder.scaling.refItemId);
+	}
 	// Backward compatibility: ensure scaling object shape and global reflective defaults for second-order
 	if (!secondOrder.scaling) secondOrder.scaling = { method: 'fix_loading', refFacetId: null };
 	if (secondOrder.type === 'formative' && !secondOrder.globalReflective) {
@@ -229,7 +249,14 @@ function attachAutoSaveHandlers(){
 		}
 		if (e.target && e.target.matches('select.facet-ref-item')) {
 			const facetId = e.target.getAttribute('data-facet');
-			if (facetScaling[facetId]) facetScaling[facetId].refItemId = e.target.value;
+				// Normalize numeric ids so strict comparisons in code work (item ids are numbers)
+				if (facetScaling[facetId]) {
+					const raw = e.target.value;
+					const maybeNum = raw !== undefined && raw !== null && /^\d+$/.test(raw) ? Number(raw) : raw; // keep globals (string ids) intact
+					facetScaling[facetId].refItemId = maybeNum;
+				}
+				refreshLavaanPanel();
+					updateRefItemVisual(facetId);
 			scheduleAutoSave();
 		}
 		if (e.target && e.target.matches('input.second-order-type')) {
@@ -373,10 +400,13 @@ function ensureScalingDefaults(facetId, facetItems){
 			facetScaling[facetId] = { method: 'fix_variance' };
 		}
 	} else if (facetScaling[facetId].method === 'fix_loading') {
+		// Do NOT auto-change the reference if it is no longer in active items (user disabled it). Leave as-is for user to resolve.
+		// Only downgrade to variance if absolutely no candidates exist for identification (e.g., zero globals for formative with <2 entries & user cleared them all).
 		if (mode === 'formative' && candidateRefItems.length < 2) {
+			// Keep method if user intentionally keeps ref; switch only if zero candidate reflective globals.
+			if (candidateRefItems.length === 0) facetScaling[facetId] = { method: 'fix_variance' };
+		} else if (!candidateRefItems.length) {
 			facetScaling[facetId] = { method: 'fix_variance' };
-		} else if (!candidateRefItems.find(it => it.id === facetScaling[facetId].refItemId)) {
-			if (candidateRefItems.length) facetScaling[facetId].refItemId = candidateRefItems[0].id; else facetScaling[facetId] = { method: 'fix_variance' };
 		}
 	}
 }
@@ -435,7 +465,7 @@ function generateLavaanSpec(){
 			const facetItems = (items||[]).filter(it => !disabledSet.has(String(it.id)));
 			if (facetItems.length){
 				const refId = (scale.method === 'fix_loading') ? scale.refItemId : null;
-				const parts = facetItems.map(it => (refId && it.id === refId ? '1*'+itemVar(it.id) : itemVar(it.id)));
+				const parts = facetItems.map(it => (refId != null && String(it.id) === String(refId) ? '1*'+itemVar(it.id) : itemVar(it.id)));
 				lines.push(`${varName} =~ ${parts.join(' + ')}`);
 				if (scale.method === 'fix_variance') lines.push(`${varName} ~~ 1*${varName}`);
 			}
@@ -453,7 +483,7 @@ function generateLavaanSpec(){
 			if (mode === 'reflective') {
 				if (facetItems.length){
 					const refId = (scale.method === 'fix_loading') ? scale.refItemId : null;
-					const parts = facetItems.map(it => (refId && it.id === refId ? '1*'+itemVar(it.id) : itemVar(it.id)));
+					const parts = facetItems.map(it => (refId != null && String(it.id) === String(refId) ? '1*'+itemVar(it.id) : itemVar(it.id)));
 					lines.push(`${fVar} =~ ${parts.join(' + ')}`);
 					if (scale.method === 'fix_variance') lines.push(`${fVar} ~~ 1*${fVar}`);
 				}
@@ -468,7 +498,7 @@ function generateLavaanSpec(){
 					const refId = (scale.method === 'fix_loading') ? scale.refItemId : null;
 					const parts = globals.map((g,i) => {
 						const gv = globalItemVar(sd.id,i);
-						return (refId && g.id === refId ? '1*'+gv : gv);
+						return (refId != null && String(g.id) === String(refId) ? '1*'+gv : gv);
 					});
 					lines.push(`${fVar} =~ ${parts.join(' + ')}`);
 					if (scale.method === 'fix_variance') lines.push(`${fVar} ~~ 1*${fVar}`);
@@ -486,7 +516,7 @@ function generateLavaanSpec(){
 				const refFacet = (secondOrder.scaling?.method === 'fix_loading') ? secondOrder.scaling.refFacetId : null;
 				const parts = subdimensions.map(sd => {
 					const v = facetVar(sd);
-					return (refFacet && sd.id === refFacet ? '1*'+v : v);
+					return (refFacet != null && String(sd.id) === String(refFacet) ? '1*'+v : v);
 				});
 				lines.push(`${overallVar} =~ ${parts.join(' + ')}`);
 				if (secondOrder.scaling?.method === 'fix_variance') lines.push(`${overallVar} ~~ 1*${overallVar}`);
@@ -499,7 +529,7 @@ function generateLavaanSpec(){
 					const refId = (secondOrder.scaling?.method === 'fix_loading') ? secondOrder.scaling.refItemId : null;
 					const parts = globals.map((g,i) => {
 						const gv = secondGlobalItemVar(i);
-						return (refId && g.id === refId ? '1*'+gv : gv);
+						return (refId != null && String(g.id) === String(refId) ? '1*'+gv : gv);
 					});
 					lines.push(`${overallVar} =~ ${parts.join(' + ')}`);
 					if (secondOrder.scaling?.method === 'fix_variance') lines.push(`${overallVar} ~~ 1*${overallVar}`);
@@ -533,11 +563,7 @@ function refreshFormativeScalingUI(facetId){
 		select.innerHTML = reflectiveItems.map(g => `<option value="${g.id}" ${facetScaling[facetId]?.refItemId===g.id?'selected':''}>${escapeHtml(shorten(g.text,40))}</option>`).join('');
 		// Enable select if items now exist
 		select.disabled = !reflectiveItems.length;
-		if (facetScaling[facetId]?.method === 'fix_loading') {
-			if (!reflectiveItems.find(r => r.id === facetScaling[facetId].refItemId)) {
-				if (reflectiveItems.length) facetScaling[facetId].refItemId = reflectiveItems[0].id; else facetScaling[facetId] = { method: 'fix_variance' };
-			}
-		}
+		// Do not auto-change ref if missing; let validation flag it.
 	}
 	const fixLoadRadio = card.querySelector(`input.facet-scale-radio[value="fix_loading"][data-facet="${facetId}"]`);
 	const fixVarRadio = card.querySelector(`input.facet-scale-radio[value="fix_variance"][data-facet="${facetId}"]`);
@@ -662,9 +688,6 @@ function updateSecondOrderUI(){
 	const globalWrapper = document.getElementById('secondOrderFormativeGlobals');
 	const refItemWrapper = document.getElementById('secondOrderRefItemWrapper');
 	if (secondOrder.type === 'reflective') {
-		// Ensure radios are enabled (they might have been disabled while in formative mode with <2 globals)
-		if (fixLoad) fixLoad.disabled = false;
-		if (fixVar) fixVar.disabled = false;
 		// facet-based scaling
 		if (secondOrder.scaling.method === 'fix_loading') {
 			refWrapper.classList.remove('d-none');
@@ -681,7 +704,7 @@ function updateSecondOrderUI(){
 		// Render inputs for globals
 		const inputsHost = document.getElementById('secondOrderGlobalsInputs');
 		if (inputsHost) {
-			inputsHost.innerHTML = (secondOrder.globalReflective||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 second-order-global-reflective" data-idx="${i}" placeholder="${i===0 ? 'Generally speaking, my ...' : 'Overall, I ...'}" value="${escapeHtml(g.text)}">`).join('');
+			inputsHost.innerHTML = (secondOrder.globalReflective||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 second-order-global-reflective" data-idx="${i}" placeholder="Global reflective item ${i+1}" value="${escapeHtml(g.text)}">`).join('');
 		}
 		if (refItemWrapper) {
 			const globals = (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim());
@@ -695,6 +718,12 @@ function updateSecondOrderUI(){
 	}
 	refreshSecondOrderFormativeScalingUI();
 	updateValidationMessages();
+	// Refresh visual reference markers
+	if (!dimensionality || dimensionality === 'Unidimensional') {
+		updateRefItemVisual('unidim');
+	} else {
+		subdimensions.forEach(sd => updateRefItemVisual(sd.id));
+	}
 }
 
 function populateSecondOrderRefSelect(){
@@ -781,7 +810,8 @@ function collectScalingSelections(){
 			const method = r.value;
 			if (method === 'fix_loading') {
 				const sel = document.querySelector(`select.facet-ref-item[data-facet="${facetId}"]`);
-				const refItemId = sel ? sel.value : null;
+				let refItemId = sel ? sel.value : null;
+				if (refItemId != null && /^\d+$/.test(String(refItemId))) refItemId = Number(refItemId);
 				facetScaling[facetId] = { method, refItemId };
 			} else {
 				facetScaling[facetId] = { method: 'fix_variance' };
@@ -798,12 +828,34 @@ function handleScaleRadioChange(radio){
 		if (wrapper) wrapper.classList.remove('d-none');
 		if (!facetScaling[facetId] || facetScaling[facetId].method !== 'fix_loading') {
 			const sel = wrapper?.querySelector('select.facet-ref-item');
-			const refItemId = sel ? sel.value : null;
+			let refItemId = sel ? sel.value : null;
+			if (refItemId != null && /^\d+$/.test(String(refItemId))) refItemId = Number(refItemId);
 			facetScaling[facetId] = { method: 'fix_loading', refItemId };
 		}
 	} else {
 		if (wrapper) wrapper.classList.add('d-none');
 		facetScaling[facetId] = { method: 'fix_variance' };
+	}
+	updateRefItemVisual(facetId);
+}
+
+// Visually mark reference item without full re-render
+function updateRefItemVisual(facetId){
+	const scale = facetScaling[facetId];
+	// Clear previous marks
+	document.querySelectorAll(`.mm-item-tag[data-facet="${facetId}"]`).forEach(tag => {
+		tag.classList.remove('ref-item');
+		const icon = tag.querySelector('i.bi.bi-asterisk');
+		if (icon) icon.remove();
+	});
+	if (!scale || scale.method !== 'fix_loading' || scale.refItemId == null) return;
+	const refTag = document.querySelector(`.mm-item-tag[data-facet="${facetId}"][data-item-id="${scale.refItemId}"]`);
+	if (refTag) {
+		refTag.classList.add('ref-item');
+		// Append icon at end if not present
+		if (!refTag.querySelector('i.bi.bi-asterisk')) {
+			refTag.insertAdjacentHTML('beforeend',' <i class="bi bi-asterisk text-warning"></i>');
+		}
 	}
 }
 
@@ -854,6 +906,11 @@ function computeValidation(){
 		}
 		const sc = facetScaling[sd.id];
 		if (sc.method === 'fix_loading' && !sc.refItemId) errors.push(`Facet "${sd.name || sd.id}" set to fix a loading but no reference item chosen.`);
+		// Reference item disabled check
+		if (sc.method === 'fix_loading' && sc.refItemId != null) {
+			const disabledSet = new Set((facetDisabledItems[sd.id]||[]).map(String));
+			if (disabledSet.has(String(sc.refItemId))) errors.push(`Facet "${sd.name || sd.id}" reference item is excluded; re-include it or select another reference.`);
+		}
 	});
 	if (secondOrder.type) {
 		if (!secondOrder.scaling) errors.push('Higher-order latent has no scaling configuration.');
@@ -876,6 +933,10 @@ function computeValidation(){
 		const active = (items||[]).filter(it => !disabledSet.has(String(it.id)));
 		if (active.length < 2) errors.push(`At least 2 items must remain included for a unidimensional reflective model (has ${active.length}).`);
 		else if (active.length === 2) warnings.push('Only 2 items remain included for the unidimensional construct.');
+		const scUni = facetScaling['unidim'];
+		if (scUni && scUni.method === 'fix_loading' && scUni.refItemId != null && disabledSet.has(String(scUni.refItemId))) {
+			errors.push('Unidimensional reference item is excluded; re-include it or choose another reference.');
+		}
 	}
 	subdimensions.forEach(sd => {
 		if (facetModes[sd.id] === 'formative') {
@@ -950,4 +1011,3 @@ persistStep4 = async function(){
 	await originalPersist();
 	refreshLavaanPanel();
 };
-
