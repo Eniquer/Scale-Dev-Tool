@@ -38,12 +38,19 @@ async function init() {
 		overallCode = overallCode || deriveShortCode(constructName);
 		window.step4Data = { constructName, savedDefinition, subdimensions, dimensionality, items };
 		await loadStep4Model();
+		ensureUniqueOverallCode();
 		// Generate / refresh custom item IDs (depends on loaded subdimensions & items)
 		generateItemCustomIds();
 		if (!overallCode) overallCode = deriveShortCode(constructName);
 		renderFirstOrderFacets();
 		initSecondOrderPanel();
 		refreshLavaanPanel();
+		// If AI suggestions were previously stored, show them
+		if (lastAISuggestions) {
+			renderAISuggestions(lastAISuggestions);
+			const actions = document.getElementById('aiSuggestionsActions');
+			if (actions) actions.classList.remove('d-none');
+		}
 		attachAutoSaveHandlers();
 		attachLavaanPanelHandlers();
 		return window.step4Data;
@@ -200,6 +207,12 @@ async function loadStep4Model(){
 	secondOrder = stored.secondOrder || secondOrder;
 	facetDisabledItems = stored.facetDisabledItems || {};
 	itemCustomIds = stored.itemCustomIds || {};
+	// Load any previously saved AI suggestions
+	if (stored.aiSuggestions) {
+		lastAISuggestions = stored.aiSuggestions; // legacy key
+	} else if (stored.lastAISuggestions) { // future-proof if name changes
+		lastAISuggestions = stored.lastAISuggestions;
+	}
 	overallCode = stored.overallCode || overallCode || deriveShortCode(constructName);
 	// Normalize ref ids (convert numeric-like strings to numbers) to avoid equality mismatches after reload
 	Object.keys(facetScaling).forEach(fid => {
@@ -233,6 +246,7 @@ function attachAutoSaveHandlers(){
 	document.addEventListener('change', e => {
 		if (e.target && e.target.id === 'overallCodeInput') {
 			overallCode = sanitizeShortCodeInput(e.target.value, true);
+			ensureUniqueOverallCode();
 			e.target.value = overallCode;
 			scheduleAutoSave();
 		}
@@ -381,7 +395,7 @@ async function persistStep4(){
 	const existing = await window.dataStorage.getData('data_step_4') || {};
 	if (existing.facets) delete existing.facets;
 	const lavaanSpec = generateLavaanSpec();
-	const payload = { facetModes, indicators, facetScaling, globalReflective, secondOrder, lavaanSpec, overallCode, facetDisabledItems, itemCustomIds, updatedAt: new Date().toISOString() };
+	const payload = { facetModes, indicators, facetScaling, globalReflective, secondOrder, lavaanSpec, overallCode, facetDisabledItems, itemCustomIds, lastAISuggestions, updatedAt: new Date().toISOString() };
 	await window.dataStorage.storeData('data_step_4', payload, false);
 }
 
@@ -450,10 +464,15 @@ function generateLavaanSpec(){
 			mapping.push(`# ${disabled? '(excluded) ':''}${itemVar(it.id)} = item ${it.id}: ${shorten(it.text||'',70)}`);
 		});
 		Object.keys(globalReflective||{}).forEach(fid => {
-			(globalReflective[fid]||[]).forEach((g,i) => mapping.push(`# ${globalItemVar(fid,i)} = global (${subdimensions.find(s => s.id === fid).name}) ${shorten(g.text||'',70)}`));
+			// Only include globals for formative facets currently set to formative
+			if (facetModes[fid] !== 'formative') return;
+			const sd = subdimensions.find(s => s.id === fid);
+			(globalReflective[fid]||[]).filter(g => (g.text||'').trim()).forEach((g,i) => mapping.push(`# ${globalItemVar(fid,i)} = global (${sd ? (sd.name||fid) : fid}) ${shorten(g.text||'',70)}`));
 		});
-		(secondOrder.globalReflective||[]).forEach((g,i) => mapping.push(`# ${secondGlobalItemVar(i)} = higher-order global: ${shorten(g.text||'',70)}`));
-		subdimensions.forEach(sd => { if (sd.code) mapping.push(`# Facet ${facetVar(sd)} code: ${sd.code}`); });
+		if (secondOrder.type === 'formative') {
+			(secondOrder.globalReflective||[]).filter(g => (g.text||'').trim()).forEach((g,i) => mapping.push(`# ${secondGlobalItemVar(i)} = higher-order global: ${shorten(g.text||'',70)}`));
+		}
+		subdimensions.forEach(sd => { if (sd.code) mapping.push(`# Code ${sd.code}: Facet ${sd.name} `); });
 		if (overallCode) mapping.push(`# Overall code: ${overallCode}`);
 
 		// Unidimensional shortcut
@@ -493,7 +512,7 @@ function generateLavaanSpec(){
 					const causal = facetItems.map(it => itemVar(it.id));
 					lines.push(`${fVar} <~ ${causal.join(' + ')}`);
 				}
-				const globals = (globalReflective[sd.id]||[]).filter(g => (g.text||'').trim());
+				const globals = (facetModes[sd.id]==='formative' ? (globalReflective[sd.id]||[]).filter(g => (g.text||'').trim()) : []);
 				if (globals.length){
 					const refId = (scale.method === 'fix_loading') ? scale.refItemId : null;
 					const parts = globals.map((g,i) => {
@@ -524,7 +543,7 @@ function generateLavaanSpec(){
 				// Facets cause the higher order
 				const facetVars = subdimensions.map(sd => facetVar(sd));
 				if (facetVars.length) lines.push(`${overallVar} <~ ${facetVars.join(' + ')}`);
-				const globals = (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim());
+				const globals = (secondOrder.type==='formative' ? (secondOrder.globalReflective||[]).filter(g => (g.text||'').trim()) : []);
 				if (globals.length){
 					const refId = (secondOrder.scaling?.method === 'fix_loading') ? secondOrder.scaling.refItemId : null;
 					const parts = globals.map((g,i) => {
@@ -802,6 +821,22 @@ function sanitizeShortCodeInput(val, allowEmpty=false){
 	return val;
 }
 
+function ensureUniqueOverallCode(){
+	if (!overallCode) return;
+	const facetCodes = new Set(subdimensions.map(sd => (sd.code||'').trim().toUpperCase()).filter(Boolean));
+	if (!facetCodes.has(overallCode)) return; // already unique
+	// If clash, append a numeric suffix not used yet (1..99)
+	let base = overallCode.replace(/\d+$/,'');
+	if (!base) base = deriveShortCode(constructName) || 'OV';
+	let n = 1;
+	while (facetCodes.has((base + n).toUpperCase()) && n < 100) n++;
+	const newCode = (base + n).toUpperCase();
+	overallCode = newCode;
+	const input = document.getElementById('overallCodeInput');
+	if (input) input.value = overallCode;
+	window.displayInfo?.('info', 'Overall Short ID adjusted to avoid clash with facet code.');
+}
+
 function collectScalingSelections(){
 	const radios = document.querySelectorAll('input.facet-scale-radio');
 	radios.forEach(r => {
@@ -951,6 +986,11 @@ function computeValidation(){
 	if (secondOrder.type && (!subdimensions.length || dimensionality === 'Unidimensional')) {
 		errors.push('Higher-order latent specified but there are no first-order facets.');
 	}
+	// Overall code uniqueness check
+	if (overallCode) {
+		const dup = subdimensions.find(sd => (sd.code||'').trim().toUpperCase() === overallCode.toUpperCase());
+		if (dup) errors.push(`Overall Short ID "${overallCode}" duplicates facet code "${dup.code}". Choose a different Overall Short ID.`);
+	}
 	return { errors, warnings };
 }
 
@@ -1011,3 +1051,180 @@ persistStep4 = async function(){
 	await originalPersist();
 	refreshLavaanPanel();
 };
+
+// ------------------------ smart assistant -------------------
+// ---------- AI Suggestions Integration ----------
+let lastAISuggestions = null; // cached object
+
+function initAISuggestionsUI(){
+	const fetchBtn = document.getElementById('btnFetchAISuggestions');
+	const applyAllBtn = document.getElementById('btnApplyAllAISuggestions');
+	if (fetchBtn) fetchBtn.addEventListener('click', async () => { await fetchAndRenderAISuggestions(); });
+	if (applyAllBtn) applyAllBtn.addEventListener('click', () => { applyAISuggestions(null, true); });
+}
+
+async function fetchAndRenderAISuggestions(){
+	try {
+		const host = document.getElementById('aiSuggestionsContent');
+		const raw = await getSpecificationSuggestions();
+		let obj = null;
+		try { obj = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch(parseErr){
+			window.displayInfo?.('error','AI suggestions JSON parse failed.');
+			if (host) host.textContent = 'Failed to parse suggestions.';
+			return;
+		}
+		lastAISuggestions = obj;
+		renderAISuggestions(obj);
+		// persist suggestions so they survive reloads
+		persistStep4();
+		window.displayInfo?.('success','AI suggestions loaded.');
+	} catch(err){
+		console.error('[AI Suggestions] fetch failed', err);
+		window.displayInfo?.('error','Failed to fetch AI suggestions.');
+	}
+}
+
+function renderAISuggestions(data){
+	const host = document.getElementById('aiSuggestionsContent');
+	if (!host){ return; }
+	if (!data){ host.textContent = 'No suggestions.'; return; }
+	const higher = data.higherOrderFacet;
+	const firstOrder = data.firstOrderFacets || {};
+	const rows = [];
+	if (higher) {
+		let globalsList = '';
+		if (higher.spec === 'formative' && Array.isArray(higher.globalReflectiveItems)) {
+			const items = higher.globalReflectiveItems.slice(0,2).filter(t => (t||'').trim());
+			if (items.length) globalsList = `<ul class="small ms-3 mt-1 mb-0">${items.map(t=>`<li>${escapeHtml(shorten(t,80))}</li>`).join('')}</ul>`;
+		}
+		rows.push(`<div class="mb-2"><div class="fw-bold">Higher-Order: <span class="badge bg-secondary">${escapeHtml(higher.spec||'')}</span></div><div class="small text-muted">${escapeHtml(higher.justification||'')}</div>${globalsList}</div>`);
+	}
+	const facetMap = {}; subdimensions.forEach(sd => facetMap[sd.id] = sd);
+	Object.keys(firstOrder).forEach(fid => {
+		const sug = firstOrder[fid];
+		const sd = facetMap[fid];
+		if (!sd) return;
+		let globalsList = '';
+		if (sug.spec === 'formative' && Array.isArray(sug.globalReflectiveItems)) {
+			const items = sug.globalReflectiveItems.slice(0,2).filter(t => (t||'').trim());
+			if (items.length) globalsList = `<ul class="small ms-3 mt-1 mb-0">${items.map(t=>`<li>${escapeHtml(shorten(t,80))}</li>`).join('')}</ul>`;
+		}
+		rows.push(`<div class="mb-2" data-ai-facet="${fid}"><div class="fw-bold">${escapeHtml(sd.name||fid)} <span class="badge bg-secondary">${escapeHtml(sug.spec||'')}</span></div><div class="small text-muted">${escapeHtml(sug.justification||'')}</div>${globalsList}</div>`);
+	});
+	host.innerHTML = rows.join('') || 'No facet suggestions.';
+	const actions = document.getElementById('aiSuggestionsActions');
+	if (actions) actions.classList.remove('d-none');
+}
+
+function applyAISuggestions(_, applyAll=false){
+	if (!lastAISuggestions) return;
+	const data = lastAISuggestions;
+	const firstOrder = data.firstOrderFacets || {};
+	// Always treat as apply all (only button present)
+	if (data.higherOrderFacet && data.higherOrderFacet.spec) {
+		secondOrder.type = data.higherOrderFacet.spec === 'none' ? null : data.higherOrderFacet.spec;
+		// Apply higher-order global reflective items if formative and provided
+		if (secondOrder.type === 'formative') {
+			const globals = (data.higherOrderFacet.globalReflectiveItems || []).slice(0,2);
+			if (!secondOrder.globalReflective) {
+				secondOrder.globalReflective = [ { id: 'g_second_1', text: '' }, { id: 'g_second_2', text: '' } ];
+			}
+			globals.forEach((txt,i) => { if (secondOrder.globalReflective[i]) secondOrder.globalReflective[i].text = txt || ''; });
+		}
+	}
+	Object.keys(firstOrder).forEach(fid => {
+		const sug = firstOrder[fid];
+		if (sug.spec) facetModes[fid] = sug.spec;
+		if (sug.spec === 'formative' && Array.isArray(sug.globalReflectiveItems)) {
+			ensureGlobalReflectiveDefaults(fid);
+			const globals = sug.globalReflectiveItems.slice(0,2);
+			globals.forEach((txt,i) => { if (globalReflective[fid][i]) globalReflective[fid][i].text = txt || ''; });
+		}
+	});
+	// Recompute scaling defaults as new globals may enable loading-fix scaling
+	if (!dimensionality || dimensionality === 'Unidimensional') {
+		const allItems = (items || []).filter(it => true); // unchanged
+		ensureScalingDefaults('unidim', allItems);
+	} else {
+		subdimensions.forEach(sd => {
+			const disabledSet = new Set((facetDisabledItems[sd.id]||[]).map(String));
+			const facetItems = (items||[]).filter(it => it.subdimensionId === sd.id && !disabledSet.has(String(it.id)));
+			ensureScalingDefaults(sd.id, facetItems);
+		});
+	}
+	renderFirstOrderFacets();
+	initSecondOrderPanel();
+	refreshLavaanPanel();
+	scheduleAutoSave();
+	window.displayInfo?.('success','Applied AI suggestions.');
+}
+
+// Initialize AI suggestions UI after DOM load
+document.addEventListener('DOMContentLoaded', initAISuggestionsUI);
+
+
+
+async function getSpecificationSuggestions(tries = 0) {
+    if(dimensionality == "Unidimensional") {
+		displayInfo('info', 'The construct is unidimensional. No subdimensions available for suggestions.');
+		return;
+    }
+	const prompt = `
+	You are an expert in measurement model specification following MacKenzie et al. (2011). 
+	Task: Recommend how to specify a latent variable measurement model in lavaan, given facets (first-order constructs), items, and optional higher-order structure.
+
+	Context:
+	Construct name: "${constructName}"
+	Overall definition: "${savedDefinition}"
+	Dimensionality: ${dimensionality}
+
+	Facets (first-order):
+	${subdimensions.map(sd => `Dimensionname: ${sd.name}, Definition: ${sd.definition}, id: ${sd.id}, code: ${sd.code}, Their items: ${items.filter(item => item.subdimensionId === sd.id).map(item => item.text).join(', ')}`).join(';\n')}
+
+Goals:
+1. Decide if higher-order latent is needed.
+2. For each latent (first or higher order): recommend reflective vs formative with a concise justification (≤25 words).
+3. If formative propose two global reflective item phrasings.
+
+Output format (strict JSON, no markdown or commentary):
+
+
+{
+	"higherOrderFacet": { "spec": "do not model"|"reflective"|"formative", "justification": "≤25 WORDS HERE" ,"globalReflectiveItems": ["text1","text2"] (if formative, else omit)},
+	"firstOrderFacets": {
+		"FACET-ID HERE": {"spec": "reflective"|"formative", "justification": "≤25 WORDS HERE", "globalReflectiveItems": ["text1","text2"] (if formative, else omit)},
+		"FACET-ID HERE": {"spec": "reflective"|"formative", "justification": "≤25 WORDS HERE", "globalReflectiveItems": ["text1","text2"] (if formative, else omit)},
+		......
+	}
+}
+    ` 
+
+    // Send prompt to chat API and retrieve JSON text
+    try {
+        showLoading();
+		let response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
+        AIResponse = window.cleanAIRespond(response[0]); // Get the reply text from the response
+		
+
+    } catch (err) {
+        if (tries < 2) {
+            console.error('Error processing AI response:', err);
+            window.displayInfo('info', 'AI suggestion format is invalid. Trying again...');
+            return await getSpecificationSuggestions(tries + 1);
+        }
+        console.error('Error fetching suggestions:', err);
+        window.displayInfo('danger', 'Failed to retrieve suggestions. Please try again.');
+        return;
+    }finally {
+        hideLoading();
+        
+    }
+   
+    // Parse JSON response
+    if (AIResponse.length === 0) {
+        window.displayInfo('info', 'Empty return Try again!');
+        return
+    }
+	return AIResponse
+
+}
