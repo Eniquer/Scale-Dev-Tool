@@ -128,7 +128,7 @@ function renderFirstOrderFacets() {
 	subdimensions.forEach(sd => {
 		const shortCode = (sd.code || '').trim();
 		const col = document.createElement('div');
-		col.className = 'col-12 col-md-6 col-lg-4';
+		col.className = 'col-12 col-md-6';
 		const facetItems = (items || []).filter(it => it.subdimensionId === sd.id).sort((a,b)=>a.id-b.id);
 		const disabledSet = new Set((facetDisabledItems[sd.id]||[]).map(String));
 		const activeFacetItems = facetItems.filter(it => !disabledSet.has(String(it.id)));

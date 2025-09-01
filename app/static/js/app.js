@@ -1,6 +1,7 @@
 import { initAPIKey, deleteAPIKey, storeAPIKey } from './handleAPIKey.js';
 window.currentAPIKey_enc = await initAPIKey();
 
+// todo add option to modify the prompts
 
 function displayInfo(type = 'info', message = '') {
     // Show success message

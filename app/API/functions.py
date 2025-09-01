@@ -144,7 +144,7 @@ def analyze_content_adequacy(
         if dropped_empty > 0:
             note_msgs.append(f"dropped {dropped_empty} empty rater(s)")
 
-        # Ensure each remaining rater contributed a complete within-subject profile (MacKenzie / Hinkin–Tracey design)
+        # Ensure each remaining rater contributed a complete within-subject profile (MacKenzie / Hinkin-Tracey design)
         if drop_incomplete:
             counts = d_nonmissing.groupby(rater_col)[facet_col].nunique()
             keep_ids = counts[counts == k].index
@@ -228,7 +228,7 @@ def analyze_content_adequacy(
         other_facet_means = {f: float(facet_means.loc[f]) for f in facet_means.index if f != target}
         all_facet_means = {f: float(facet_means.loc[f]) for f in facet_means.index}
 
-        # 3) Decision per MacKenzie/Hinkin–Tracey
+        # 3) Decision per MacKenzie/Hinkin-Tracey
         omnibus_sig = (p_omnibus < alpha)
         contrast_sig = (p_one < alpha)
         keep = omnibus_sig and contrast_sig and (target_is_highest if require_target_highest else True)

@@ -334,10 +334,10 @@ function wireRaterUI() {
     const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 
     btn.onclick = async () => {
-        // Ask how many raters to generate (1–10)
+        // Ask how many raters to generate (1-10)
         const countStr = await window.customPrompt({
             title: 'Generate AI Raters',
-            message: 'How many AI raters would you like to generate? (1–10)',
+            message: 'How many AI raters would you like to generate? (1-10)',
             placeholder: '5',
             confirmText: 'Generate'
         });
@@ -418,7 +418,7 @@ Output schema (JSON only, no extra text, no markdown):
   }
 }
 
-Rating scale (integers 1–5):
+Rating scale (integers 1-5):
 1 = not representative / off‑target
 2 = weak representation
 3 = moderate / ambiguous
@@ -428,21 +428,21 @@ Rating scale (integers 1–5):
 Generation rules:
 - Rate each item against every subdimension definition.
 - Discriminate: avoid uniformly high scores unless clearly warranted.
-- Penalize vague / broad wording (1–2). Reward precise alignment (4–5).
+- Penalize vague / broad wording (1-2). Reward precise alignment (4-5).
 - If item is clearly specific to one subdimension, keep others near midpoint or below unless justified.
 - No missing keys: every item must include every subdimension as a key.
 
 Persona influence (apply consistently):
 - Strict/skeptical → slight downward shift, tighter variance.
 - Enthusiastic/lenient → slight upward shift, occasional 5s.
-- High domain expertise → more extremes (1–2 & 4–5), fewer 3s.
+- High domain expertise → more extremes (1-2 & 4-5), fewer 3s.
 - Values clarity → penalize vague items further.
 
 Quality checks (MUST PASS):
 - Return valid JSON only.
 - Include every item id from input (even though randomized in prompt).
 - Include every subdimension name under each item.
-- All ratings are integers 1–5.
+- All ratings are integers 1-5.
                             `
                         }
                     ];
@@ -1059,12 +1059,12 @@ function renderAnovaResults(rows) {
             const bNum = Number.isFinite(bv) ? bv : -Infinity;
             return aNum - bNum;
     }, widthGrow: 1, headerTooltip: 'Second highest facet and its mean value.' },
-    { title: 'p(RM-ANOVA, GG)', field: 'p_omnibus', formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'Greenhouse–Geisser corrected omnibus repeated-measures ANOVA p-value.' },
+    { title: 'p(RM-ANOVA, GG)', field: 'p_omnibus', formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'Greenhouse-Geisser corrected omnibus repeated-measures ANOVA p-value.' },
     { title: 'p(>0)', field: 'p_contrast_one_sided', formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'One-sided contrast p-value testing intended facet > average of others.' },
     { title: 'Highest?', field: 'target_is_highest', formatter: 'tickCross', hozAlign: 'center', headerTooltip: 'Tick if intended facet has the highest mean among all facets.' },
     { title: 'ηp²', field: 'eta_p2', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Partial eta squared (effect size for facet differences).' },
     { title: 'd_z', field: 'dz', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Within-subject standardized mean difference (Cohen\'s d_z) for planned contrast.' },
-    { title: 'epsilon', field: 'epsilon', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Greenhouse–Geisser epsilon (sphericity estimate).' },
+    { title: 'epsilon', field: 'epsilon', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Greenhouse-Geisser epsilon (sphericity estimate).' },
     { title: 'Action', field: 'action', headerSort: true, headerTooltip: 'Suggested decision: keep / revise / delete (heuristic rules).' },
     { title: 'Notes', field: 'notes', widthGrow: 2, headerTooltip: 'Additional notes; default indicates GG correction was applied.' }
     ];

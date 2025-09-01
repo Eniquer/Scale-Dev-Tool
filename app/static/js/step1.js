@@ -216,7 +216,7 @@ async function getDefinitions(forceNewDefs = false) {
     const getDefinitionsPrompt = `
     You are assisting with the development of a conceptual definition following MacKenzie et al. (2011), which requires definitions to be clear, concise, theoretically grounded, and distinct from related constructs. Definitions should specify the essential attributes of the construct and its domain (e.g., property type, target entity, dimensionality if mentioned).
 
-    Given the construct name "${constructData.constructName}" and the rough initial definition provided below, retrieve 3–5 concise, relevant academic definitions (maximum 1–2 sentences each) from well-known published literature in this area.
+    Given the construct name "${constructData.constructName}" and the rough initial definition provided below, retrieve 3-5 concise, relevant academic definitions (maximum 1-2 sentences each) from well-known published literature in this area.
 
     Construct name:  
     "${constructData.constructName}"
@@ -1027,7 +1027,7 @@ Use the following rules to classify attributes:
 
 
 Given the construct definition, return:
-- A list of 1–7 likely defining **attributes** (name + classification as: Common|Unique|Both|Neither + indication as: Necessary|Sufficient|Both|Neither)
+- A list of 1-7 likely defining **attributes** (name + classification as: Common|Unique|Both|Neither + indication as: Necessary|Sufficient|Both|Neither)
 - From the list of attributes, identify the smallest subset that is jointly necessary and sufficient to define the construct according to MacKenzie et al. (2011). This means:
     - If all of these attributes are present, the construct is present.
     - If any of these attributes are absent, the construct is incomplete.
@@ -1452,7 +1452,7 @@ Return your answer in **strict JSON format**:
   "subdimensions": [
     {
       "name": "Fitting Dimension Name",
-      "definition": "Short conceptual definition (1–2 sentences)",
+      "definition": "Short conceptual definition (1-2 sentences)",
       "attributes": ["Attribute 1", "Attribute 2", "Attribute 3"]
     }
   ],
