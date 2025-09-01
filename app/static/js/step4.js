@@ -8,9 +8,12 @@ let dimensionality = '';
 let items = [];
 let overallCode = '';
 // Track disabled (excluded) items per facet id (including 'unidim')
-// Stored facet measurement modes
+let facetDisabledItems = {};
+// Auto-generated custom per-item identifiers { itemId: customId }
+let itemCustomIds = {};
+// Stored facet measurement modes and indicator directions
 let facetModes = {}; // { facetId: 'reflective' | 'formative' }
-// Derived indicators (not persisted) built from per-item direction
+// indicators: [{facetId, itemId, direction, global?}] direction: 'out' (reflective) or 'in' (formative)
 let indicators = [];
 // Scaling rules per facet: { facetId: { method: 'fix_loading', refItemId } | { method: 'fix_variance' } }
 let facetScaling = {}; 
@@ -78,8 +81,7 @@ function renderFirstOrderFacets() {
 		const panel = document.getElementById('firstOrderFacetsPanel');
 		if (panel) panel.classList.remove('d-none');
 		const allItems = (items || []).slice().sort((a,b)=>a.id-b.id);
-		// Use per-item excluded flag only
-		const disabledSet = new Set(allItems.filter(it => it.excluded).map(it=>String(it.id)));
+		const disabledSet = new Set((facetDisabledItems['unidim']||[]).map(String));
 		const activeItems = allItems.filter(it => !disabledSet.has(String(it.id)));
 		const pseudoId = 'unidim';
 		ensureScalingDefaults(pseudoId, activeItems);
@@ -87,7 +89,7 @@ function renderFirstOrderFacets() {
 		const method = scale.method || 'fix_loading';
 		const refItemId = scale.refItemId;
 		const itemsHtml = allItems.length
-			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${allItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(it.customId || ''); const refMark = (method==='fix_loading' && String(scale.refItemId)===String(it.id)) ? ' ref-item' : ''; return `<span class="mm-item-tag${long}${inactive}${refMark}" data-facet="${pseudoId}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class=\"badge bg-secondary me-1\">${cid}</span>`:''}${t}${refMark? ' <i class=\"bi bi-asterisk text-warning\"></i>':''}</span>`; }).join('')}</div>`
+			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${allItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(itemCustomIds[it.id] || ''); const refMark = (method==='fix_loading' && String(scale.refItemId)===String(it.id)) ? ' ref-item' : ''; return `<span class="mm-item-tag${long}${inactive}${refMark}" data-facet="${pseudoId}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class="badge bg-secondary me-1">${cid}</span>`:''}${t}${refMark? ' <i class="bi bi-asterisk text-warning"></i>':''}</span>`; }).join('')}</div>`
 			: '<div class="text-muted small mb-2">No items added in Step 2.</div>';
 		const refSelect = allItems.length ? `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${pseudoId}">${allItems.map(it=>{ const excluded = disabledSet.has(String(it.id)); return `<option value="${it.id}" ${String(it.id)===String(refItemId)?'selected':''} ${excluded? 'data-excluded="1"':''}>${escapeHtml(shorten(it.text,40))}${excluded? ' (excluded)':''}</option>`; }).join('')}</select>` : '<div class="small text-muted mt-1">No items to reference</div>';
 		const col = document.createElement('div');
@@ -128,7 +130,7 @@ function renderFirstOrderFacets() {
 		const col = document.createElement('div');
 		col.className = 'col-12 col-md-6';
 		const facetItems = (items || []).filter(it => it.subdimensionId === sd.id).sort((a,b)=>a.id-b.id);
-		const disabledSet = new Set(facetItems.filter(it => it.excluded).map(it=>String(it.id)));
+		const disabledSet = new Set((facetDisabledItems[sd.id]||[]).map(String));
 		const activeFacetItems = facetItems.filter(it => !disabledSet.has(String(it.id)));
 		const currentMode = facetModes[sd.id] || '';
 		if (currentMode === 'formative') ensureGlobalReflectiveDefaults(sd.id);
@@ -137,7 +139,7 @@ function renderFirstOrderFacets() {
 		const method = scale.method || 'fix_loading';
 		const refItemId = scale.refItemId;
 		const itemsHtml = facetItems.length
-			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${facetItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(it.customId || ''); const refMark = (method==='fix_loading' && String(scale.refItemId)===String(it.id)) ? ' ref-item' : ''; return `<span class="mm-item-tag${long}${inactive}${refMark}" data-facet="${sd.id}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class=\"badge bg-secondary me-1\">${cid}</span>`:''}${t}${refMark? ' <i class=\"bi bi-asterisk text-warning\"></i>':''}</span>`; }).join('')}</div>`
+			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${facetItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(itemCustomIds[it.id] || ''); const refMark = (method==='fix_loading' && String(scale.refItemId)===String(it.id)) ? ' ref-item' : ''; return `<span class="mm-item-tag${long}${inactive}${refMark}" data-facet="${sd.id}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class=\"badge bg-secondary me-1\">${cid}</span>`:''}${t}${refMark? ' <i class=\"bi bi-asterisk text-warning\"></i>':''}</span>`; }).join('')}</div>`
 			: '<div class="text-muted small mb-2">No items assigned</div>';
 		const reflectiveCandidates = currentMode === 'formative'
 			? (globalReflective[sd.id]||[]).filter(g => (g.text||'').trim())
@@ -199,25 +201,45 @@ function renderFirstOrderFacets() {
 async function loadStep4Model(){
 	const stored = await window.dataStorage.getData('data_step_4') || {};
 	facetModes = stored.facetModes || {};
+	indicators = stored.indicators || [];
 	facetScaling = stored.facetScaling || {};
 	globalReflective = stored.globalReflective || {};
 	secondOrder = stored.secondOrder || secondOrder;
-	// AI suggestions (keep single canonical key; accept legacy name silently)
-	if (stored.lastAISuggestions) lastAISuggestions = stored.lastAISuggestions; else if (stored.aiSuggestions) lastAISuggestions = stored.aiSuggestions;
+	facetDisabledItems = stored.facetDisabledItems || {};
+	itemCustomIds = stored.itemCustomIds || {};
+	// Load any previously saved AI suggestions
+	if (stored.aiSuggestions) {
+		lastAISuggestions = stored.aiSuggestions; // legacy key
+	} else if (stored.lastAISuggestions) { // future-proof if name changes
+		lastAISuggestions = stored.lastAISuggestions;
+	}
 	overallCode = stored.overallCode || overallCode || deriveShortCode(constructName);
+	// Normalize ref ids (convert numeric-like strings to numbers) to avoid equality mismatches after reload
 	Object.keys(facetScaling).forEach(fid => {
 		const sc = facetScaling[fid];
-		if (sc && sc.method === 'fix_loading' && sc.refItemId != null && /^\d+$/.test(String(sc.refItemId))) sc.refItemId = Number(sc.refItemId);
+		if (sc && sc.method === 'fix_loading' && sc.refItemId != null && /^\d+$/.test(String(sc.refItemId))) {
+			sc.refItemId = Number(sc.refItemId);
+		}
 	});
 	if (secondOrder?.scaling) {
 		if (secondOrder.scaling.refFacetId != null && /^\d+$/.test(String(secondOrder.scaling.refFacetId))) secondOrder.scaling.refFacetId = Number(secondOrder.scaling.refFacetId);
 		if (secondOrder.scaling.refItemId != null && /^\d+$/.test(String(secondOrder.scaling.refItemId))) secondOrder.scaling.refItemId = Number(secondOrder.scaling.refItemId);
 	}
+	// Backward compatibility: ensure scaling object shape and global reflective defaults for second-order
 	if (!secondOrder.scaling) secondOrder.scaling = { method: 'fix_loading', refFacetId: null };
-	if (secondOrder.type === 'formative' && !secondOrder.globalReflective) secondOrder.globalReflective = [ { id: 'g_second_1', text: '' }, { id: 'g_second_2', text: '' } ];
-	if (stored.facets) { delete stored.facets; await window.dataStorage.storeData('data_step_4', stored, false); }
-	// Recompute indicators fresh (no legacy maps)
-	indicators = buildIndicatorsFromModes();
+	if (secondOrder.type === 'formative' && !secondOrder.globalReflective) {
+		secondOrder.globalReflective = [
+			{ id: 'g_second_1', text: '' },
+			{ id: 'g_second_2', text: '' }
+		];
+	}
+	if (stored.facets) {
+		delete stored.facets;
+		await window.dataStorage.storeData('data_step_4', stored, false);
+	}
+	if (!indicators.length && Object.keys(facetModes).length){
+		indicators = buildIndicatorsFromModes();
+	}
 }
 
 function attachAutoSaveHandlers(){
@@ -300,7 +322,7 @@ function attachAutoSaveHandlers(){
 			scheduleAutoSave();
 		}
 	});
-	// Click to toggle include/exclude items (now saved on item.excluded and synced to Step 2 storage)
+	// Click to toggle include/exclude items
 	document.addEventListener('click', e => {
 		const tag = e.target.closest('.mm-item-tag[data-item-id]');
 		if (!tag) return;
@@ -308,13 +330,17 @@ function attachAutoSaveHandlers(){
 		const openFacets = Array.from(document.querySelectorAll('.collapse.show')).map(c=>c.id);
 		const facetId = tag.getAttribute('data-facet') || 'unidim';
 		const itemId = tag.getAttribute('data-item-id');
-		const it = items.find(i => String(i.id) === String(itemId));
-		if (it) {
-			it.excluded = !it.excluded;
-			if (it.excluded) tag.classList.add('inactive'); else tag.classList.remove('inactive');
-			// Persist exclusion state back to step 2 storage (augment existing data)
-			updateStep2Items();
+		if (!facetDisabledItems[facetId]) facetDisabledItems[facetId] = [];
+		const arr = facetDisabledItems[facetId].map(String);
+		const idx = arr.indexOf(String(itemId));
+		if (idx >= 0) { // currently disabled -> enable
+			arr.splice(idx,1);
+			tag.classList.remove('inactive');
+		} else { // disable
+			arr.push(String(itemId));
+			tag.classList.add('inactive');
 		}
+		facetDisabledItems[facetId] = arr;
 		renderFirstOrderFacets(); // rebuild UI with new counts and states
 		// Restore previously open collapses
 		openFacets.forEach(id => {
@@ -345,31 +371,23 @@ function saveFacetModes(isAuto=false){
 
 function buildIndicatorsFromModes(){
 	const result = [];
-	// Reset directions on items
-	(items||[]).forEach(it => { delete it.direction; });
-	const isUnidim = !subdimensions.length || dimensionality === 'Unidimensional';
-	if (isUnidim){
-		// Treat all included items as reflective outward by default
-		(items||[]).filter(it => !it.excluded).forEach(it => { it.direction = 'out'; result.push({ facetId: 'unidim', itemId: it.id, direction: 'out' }); });
-	} else {
-		subdimensions.forEach(sd => {
-			const mode = facetModes[sd.id];
-			if (!mode) return;
-			const facetItems = (items||[]).filter(it => it.subdimensionId === sd.id && !it.excluded);
-			if (mode === 'reflective') {
-				facetItems.forEach(it => { it.direction = 'out'; result.push({ facetId: sd.id, itemId: it.id, direction: 'out' }); });
-			} else {
-				facetItems.forEach(it => { it.direction = 'in'; result.push({ facetId: sd.id, itemId: it.id, direction: 'in' }); });
-				(globalReflective[sd.id]||[]).filter(g => (g.text||'').trim()).forEach(g => result.push({ facetId: sd.id, itemId: g.id, direction: 'out', global: true }));
-			}
-		});
-		if (secondOrder.type === 'formative') {
-			subdimensions.forEach(sd => result.push({ facetId: 'secondOrder', itemId: 'facet_'+sd.id, direction: 'in', secondOrder: true }));
-			(secondOrder.globalReflective||[]).filter(g => (g.text||'').trim()).forEach(g => result.push({ facetId: 'secondOrder', itemId: g.id, direction: 'out', global: true, secondOrder: true }));
+	subdimensions.forEach(sd => {
+		const mode = facetModes[sd.id];
+		if (!mode) return;
+		const disabledSet = new Set((facetDisabledItems[sd.id]||[]).map(String));
+		const facetItems = (items || []).filter(it => it.subdimensionId === sd.id && !disabledSet.has(String(it.id)));
+		if (mode === 'reflective') {
+			facetItems.forEach(it => result.push({ facetId: sd.id, itemId: it.id, direction: 'out' }));
+		} else {
+			facetItems.forEach(it => result.push({ facetId: sd.id, itemId: it.id, direction: 'in' }));
+			(globalReflective[sd.id]||[]).filter(g => (g.text||'').trim()).forEach(g => result.push({ facetId: sd.id, itemId: g.id, direction: 'out', global: true }));
 		}
+	});
+	// Second-order formative: treat first-order facets as causal 'in' indicators, globals as 'out'
+	if (secondOrder.type === 'formative') {
+		subdimensions.forEach(sd => result.push({ facetId: 'secondOrder', itemId: 'facet_'+sd.id, direction: 'in', secondOrder: true }));
+		(secondOrder.globalReflective||[]).filter(g => (g.text||'').trim()).forEach(g => result.push({ facetId: 'secondOrder', itemId: g.id, direction: 'out', global: true, secondOrder: true }));
 	}
-	// Persist updated item directions back to step2 storage
-	updateStep2Items();
 	return result;
 }
 
@@ -377,8 +395,7 @@ async function persistStep4(){
 	const existing = await window.dataStorage.getData('data_step_4') || {};
 	if (existing.facets) delete existing.facets;
 	const lavaanSpec = generateLavaanSpec();
-	// Legacy per-item maps removed; relying solely on item properties
-	const payload = { facetModes, facetScaling, globalReflective, secondOrder, lavaanSpec, overallCode, lastAISuggestions, updatedAt: new Date().toISOString(), version: 2 };
+	const payload = { facetModes, indicators, facetScaling, globalReflective, secondOrder, lavaanSpec, overallCode, facetDisabledItems, itemCustomIds, lastAISuggestions, updatedAt: new Date().toISOString() };
 	await window.dataStorage.storeData('data_step_4', payload, false);
 }
 
@@ -422,7 +439,10 @@ function generateLavaanSpec(){
 	try {
 		// Helper sanitizers
 		const sanitize = (name) => String(name || '').replace(/[^A-Za-z0-9_]/g,'_').replace(/^([0-9])/, '_$1') || 'X';
-		const itemVar = (it) => sanitize(it.customId || ('i'+it.id));
+		const itemVar = (itemId) => {
+			const cid = itemCustomIds[itemId];
+			return cid ? sanitize(cid) : sanitize('i'+itemId);
+		};
 		const facetVar = (sd) => sanitize(sd.code || sd.name || ('F_'+sd.id));
 		const overallVar = sanitize(overallCode || constructName || 'Overall');
 		const globalItemVar = (facetId, idx) => {
@@ -438,7 +458,10 @@ function generateLavaanSpec(){
 
 		// Build item id -> variable mapping
 		(items||[]).forEach(it => {
-			mapping.push(`# ${it.excluded? '(excluded) ':''}${itemVar(it)} = item ${it.id}: ${shorten(it.text||'',70)}`);
+			const facetId = (!subdimensions.length || dimensionality==='Unidimensional') ? 'unidim' : (it.subdimensionId || '');
+			const disabled = (facetDisabledItems[facetId]||[]).map(String).includes(String(it.id));
+			const cid = itemCustomIds[it.id];
+			mapping.push(`# ${disabled? '(excluded) ':''}${itemVar(it.id)} = item ${it.id}: ${shorten(it.text||'',70)}`);
 		});
 		Object.keys(globalReflective||{}).forEach(fid => {
 			// Only include globals for formative facets currently set to formative
@@ -457,10 +480,11 @@ function generateLavaanSpec(){
 			const pseudoId = 'unidim';
 			const scale = facetScaling[pseudoId] || {};
 			const varName = overallVar;
-			const facetItems = (items||[]).filter(it => !it.excluded);
+			const disabledSet = new Set((facetDisabledItems['unidim']||[]).map(String));
+			const facetItems = (items||[]).filter(it => !disabledSet.has(String(it.id)));
 			if (facetItems.length){
 				const refId = (scale.method === 'fix_loading') ? scale.refItemId : null;
-				const parts = facetItems.map(it => (refId != null && String(it.id) === String(refId) ? '1*'+itemVar(it) : itemVar(it)));
+				const parts = facetItems.map(it => (refId != null && String(it.id) === String(refId) ? '1*'+itemVar(it.id) : itemVar(it.id)));
 				lines.push(`${varName} =~ ${parts.join(' + ')}`);
 				if (scale.method === 'fix_variance') lines.push(`${varName} ~~ 1*${varName}`);
 			}
@@ -472,19 +496,20 @@ function generateLavaanSpec(){
 			const mode = facetModes[sd.id];
 			if (!mode) return;
 			const fVar = facetVar(sd);
-			const facetItems = (items||[]).filter(it => it.subdimensionId === sd.id && !it.excluded);
+			const disabledSet = new Set((facetDisabledItems[sd.id]||[]).map(String));
+			const facetItems = (items||[]).filter(it => it.subdimensionId === sd.id && !disabledSet.has(String(it.id)));
 			const scale = facetScaling[sd.id] || {};
 			if (mode === 'reflective') {
 				if (facetItems.length){
 					const refId = (scale.method === 'fix_loading') ? scale.refItemId : null;
-					const parts = facetItems.map(it => (refId != null && String(it.id) === String(refId) ? '1*'+itemVar(it) : itemVar(it)));
+					const parts = facetItems.map(it => (refId != null && String(it.id) === String(refId) ? '1*'+itemVar(it.id) : itemVar(it.id)));
 					lines.push(`${fVar} =~ ${parts.join(' + ')}`);
 					if (scale.method === 'fix_variance') lines.push(`${fVar} ~~ 1*${fVar}`);
 				}
 			} else if (mode === 'formative') {
 				// Causal indicators (items cause latent)
 				if (facetItems.length){
-					const causal = facetItems.map(it => itemVar(it));
+					const causal = facetItems.map(it => itemVar(it.id));
 					lines.push(`${fVar} <~ ${causal.join(' + ')}`);
 				}
 				const globals = (facetModes[sd.id]==='formative' ? (globalReflective[sd.id]||[]).filter(g => (g.text||'').trim()) : []);
@@ -871,9 +896,10 @@ function updateRefItemVisual(facetId){
 
 // ---- Custom Item Identifier Generation ----
 function generateItemCustomIds(){
-	if (!items || !items.length) return;
+	if (!items || !items.length) { itemCustomIds = {}; return; }
 	const byFacet = {};
 	const isUnidim = !subdimensions.length || dimensionality === 'Unidimensional';
+	// Build lookup for facet codes
 	const facetCodeMap = {};
 	subdimensions.forEach(sd => { facetCodeMap[sd.id] = (sd.code || deriveShortCode(sd.name || 'F')).toUpperCase(); });
 	const overall = (overallCode || deriveShortCode(constructName) || 'IT').toUpperCase();
@@ -882,30 +908,13 @@ function generateItemCustomIds(){
 		if (!byFacet[facetId]) byFacet[facetId] = 0;
 		byFacet[facetId] += 1;
 		const seq = byFacet[facetId];
-		const prefix = isUnidim ? overall : (facetCodeMap[facetId] || overall);
+		let prefix;
+		if (isUnidim) prefix = overall;
+		else prefix = (facetCodeMap[facetId] || overall);
+		// Lowercase per request but keep consistent a-z0-9 only
 		const base = (prefix || 'IT').toLowerCase();
-		it.customId = base + seq;
+		itemCustomIds[it.id] = base + seq; // e.g., ab1
 	});
-	updateStep2Items();
-}
-
-async function updateStep2Items(){
-	try {
-		const step2 = await window.dataStorage.getData('data_step_2') || {};
-		if (!Array.isArray(step2.items)) return;
-		// Merge by id
-		const byId = Object.fromEntries(step2.items.map(i => [String(i.id), i]));
-		items.forEach(it => {
-			const target = byId[String(it.id)];
-			if (target){
-				target.excluded = !!it.excluded;
-				target.customId = it.customId || target.customId;
-				target.direction = it.direction || target.direction;
-			}
-		});
-		step2.items = Object.values(byId);
-		await window.dataStorage.storeData('data_step_2', step2, false);
-	} catch(err){ console.error('[Step4] updateStep2Items failed', err); }
 }
 
 function shorten(str,len){ return !str ? '' : (str.length > len ? str.slice(0,len-1)+'…' : str); }
@@ -917,7 +926,8 @@ function computeValidation(){
 	const warnings = [];
 	const itemsByFacet = {};
 	subdimensions.forEach(sd => {
-		itemsByFacet[sd.id] = (items||[]).filter(it => it.subdimensionId === sd.id && !it.excluded);
+		const disabledSet = new Set((facetDisabledItems[sd.id]||[]).map(String));
+		itemsByFacet[sd.id] = (items||[]).filter(it => it.subdimensionId === sd.id && !disabledSet.has(String(it.id)));
 	});
 	subdimensions.forEach(sd => {
 		// Measurement type must be chosen
@@ -933,7 +943,7 @@ function computeValidation(){
 		if (sc.method === 'fix_loading' && !sc.refItemId) errors.push(`Facet "${sd.name || sd.id}" set to fix a loading but no reference item chosen.`);
 		// Reference item disabled check
 		if (sc.method === 'fix_loading' && sc.refItemId != null) {
-			const disabledSet = new Set(); // legacy removed
+			const disabledSet = new Set((facetDisabledItems[sd.id]||[]).map(String));
 			if (disabledSet.has(String(sc.refItemId))) errors.push(`Facet "${sd.name || sd.id}" reference item is excluded; re-include it or select another reference.`);
 		}
 	});
@@ -954,7 +964,7 @@ function computeValidation(){
 	});
 	// Unidimensional case: ensure at least 2 active items if reflective-like interpretation
 	if (!subdimensions.length || dimensionality === 'Unidimensional') {
-		const disabledSet = new Set(); // legacy removed
+		const disabledSet = new Set((facetDisabledItems['unidim']||[]).map(String));
 		const active = (items||[]).filter(it => !disabledSet.has(String(it.id)));
 		if (active.length < 2) errors.push(`At least 2 items must remain included for a unidimensional reflective model (has ${active.length}).`);
 		else if (active.length === 2) warnings.push('Only 2 items remain included for the unidimensional construct.');
@@ -1137,7 +1147,8 @@ function applyAISuggestions(_, applyAll=false){
 		ensureScalingDefaults('unidim', allItems);
 	} else {
 		subdimensions.forEach(sd => {
-			const facetItems = (items||[]).filter(it => it.subdimensionId === sd.id && !it.excluded);
+			const disabledSet = new Set((facetDisabledItems[sd.id]||[]).map(String));
+			const facetItems = (items||[]).filter(it => it.subdimensionId === sd.id && !disabledSet.has(String(it.id)));
 			ensureScalingDefaults(sd.id, facetItems);
 		});
 	}
