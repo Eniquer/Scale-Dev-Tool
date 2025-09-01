@@ -167,7 +167,7 @@ function renderFirstOrderFacets() {
 				${currentMode==='formative' ? `
 				<div class="mb-2 formative-globals" data-facet="${sd.id}">
 					<div class="small fw-bold mb-1">Global Reflective Items (for identification)</div>
-					<div class="form-text small mb-1">Provide up to two global reflective items (leave blank if not used).</div>
+					<div class="form-text small mb-1">Provide up to two global reflective items. <div>
 					${(globalReflective[sd.id]||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 global-reflective-input" data-facet="${sd.id}" data-idx="${i}" placeholder="Global reflective item ${i+1}" value="${escapeHtml(g.text)}">`).join('')}
 				</div>` : ''}
 				<div class="mb-2">
