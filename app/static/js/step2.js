@@ -331,7 +331,7 @@ function generatePrompt(step1Data){
 
     Items should reflect the essential attributes of the construct and its domain as specified in the definition.
 
-    Given the construct name "${step1Data.panel1.constructName}" and the definition provided below, retrieve or generate 5-10 concise, relevant self-report questionnaire items (one per line)
+    Given the construct name "${step1Data.panel1.constructName}" and the definition provided below, retrieve or generate 5–10 concise, relevant self-report questionnaire items (one per line)
 
     
  Construct name:
