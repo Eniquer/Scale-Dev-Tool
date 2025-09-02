@@ -8,6 +8,10 @@ let aiItems = {};
 let subdimensions = [];
 let dimensionality = "";
 let nextItemId = 1; // monotonically increasing id to avoid reuse
+// Step 4 integration metadata
+let step4FacetDisabledItems = {}; // { facetId: [itemId,...] }
+let step4ItemCustomIds = {}; // { itemId: customCode }
+let step4FacetModes = {}; // { facetId: 'reflective' | 'formative' }
 
 // todo add Json input to add multiple Items
 
@@ -30,7 +34,14 @@ function syncData() {
     allItemRows.forEach(row => row.remove());
     // Populate with current items
     items.forEach(item => {
-        createItemRow(item.text, item.subdimensionId, item.id);
+        const facetKey = (dimensionality === 'Multidimensional' && subdimensions.length)
+            ? (item.subdimensionId || '')
+            : 'unidim';
+        const allDisabledIdsUnique = [...new Set(Object.values(step4FacetDisabledItems).flat())];
+        const isDisabled = allDisabledIdsUnique.includes(String(item.id));
+
+        const code = step4ItemCustomIds[item.id];
+        createItemRow(item.text, item.subdimensionId, item.id, isDisabled, code);
     });
     revealNextStepButton();
 
@@ -38,6 +49,12 @@ function syncData() {
         createAiItemRows(key);
     });
         
+    // After rendering items evaluate code/subdimension consistency
+    checkItemCodeConsistency();
+    // After (re)checking, apply markers if issues exist
+    if (typeof window.applyCodeConsistencyMarkers === 'function') {
+        window.applyCodeConsistencyMarkers();
+    }
 
 }
 
@@ -48,6 +65,7 @@ function syncData() {
 async function init(){
     const step1Data = await window.dataStorage.getData('data_step_1');
     const step2Data = await window.dataStorage.getData('data_step_2') || {};
+    const step4Data = await window.dataStorage.getData('data_step_4') || {}; // bring in measurement model metadata
     dimensionality = step1Data?.panel4?.dimensionality || "";
 
     subdimensions = step1Data?.panel5?.subdimensions || [];
@@ -60,6 +78,10 @@ async function init(){
 "focusGroup":[],
 "existing":[]
 }
+    // Load Step 4 disabled and tag meta (if user has progressed to Step 4 before)
+    step4FacetDisabledItems = step4Data?.facetDisabledItems || {};
+    step4ItemCustomIds = step4Data?.itemCustomIds || {};
+    step4FacetModes = step4Data?.facetModes || {};
     // initialize nextItemId from storage or compute from existing items
     if (typeof step2Data.nextItemId === 'number' && step2Data.nextItemId > 0) {
         nextItemId = step2Data.nextItemId;
@@ -85,6 +107,8 @@ async function init(){
     renderSubdimensionPanels()
     // Populate items in their panels
     syncData();
+    // Initial consistency check
+    checkItemCodeConsistency();
 
 }
 
@@ -172,7 +196,7 @@ function changeSubdimension(text = '', subdimensionId = '', id = null) {
  * @param {string} subdimension - Current subdimension of the item
  * @param {number|null} id - Unique identifier of the item
  */
-function createItemRow(itemText = '', subdimensionId = '', id = null) {
+function createItemRow(itemText = '', subdimensionId = '', id = null, disabledByStep4 = false, itemCode = null) {
      // Determine which panel to append this row into
     const subdimensionIndex = subdimensions.findIndex(sd => sd.id === subdimensionId);
      const subdimensionPanel = document.getElementById(`items-${subdimensionIndex}`);
@@ -181,6 +205,10 @@ function createItemRow(itemText = '', subdimensionId = '', id = null) {
      const row = document.createElement('div');
      row.className = 'input-group mb-2 item-row';
      row.dataset.id = id || null;
+     if (disabledByStep4) {
+         row.classList.add('disabled-by-step4');
+         row.title = 'Excluded in Step 4 (measurement model)';
+     }
 
      // Build <select> options for changing subdimension if applicable
      let optionsHtml = '';
@@ -203,12 +231,36 @@ function createItemRow(itemText = '', subdimensionId = '', id = null) {
      }
 
      // Compose inner HTML: text input, save button, subdimension dropdown, remove button
-     row.innerHTML = `
-         <input type="text" class="form-control item-text" placeholder="Item text" value="${itemText}">
+     // Determine direction (only if subdimension and facet mode known). Reflective => out, Formative => in
+     let dirBadge = '';
+     if (subdimensionId && step4FacetModes[subdimensionId]) {
+         const mode = step4FacetModes[subdimensionId];
+         if (mode === 'reflective' || mode === 'formative') {
+            const dirSymbol = mode === 'reflective' ? 'out' : 'in';
+            const label = mode === 'reflective' ? 'Reflective (item reflects facet)' : 'Formative (item forms facet)';
+            dirBadge = `<span class="input-group-text direction-badge ${mode==='reflective' ? 'bg-info text-dark' : 'bg-info text-dark'}" title="${label}">${dirSymbol}</span>`;
+        }
+     }
+    row.innerHTML = `
+         ${itemCode ? `<span class="input-group-text small bg-secondary text-light px-2 item-code" title="Item code (Step 4)">${itemCode}</span>` : ''}
+         ${dirBadge}
+         <input type="text" class="form-control item-text" placeholder="Item text" value="${itemText}" ${disabledByStep4 ? 'data-step4-disabled="1"' : ''}>
          <button class="btn btn-outline-secondary save-item" type="button" style="display:none;"><i class="bi bi-floppy2"></i></button>
          ${optionsHtml}
          <button class="btn btn-outline-danger remove-item" type="button">&times;</button>
      `;
+
+     if (disabledByStep4) {
+         // visually differentiate the input only (allow editing to revise wording even if excluded)
+         const inputEl = row.querySelector('input.item-text');
+         if (inputEl) inputEl.classList.add('step4-excluded');
+         if (!itemCode) {
+             const badge = document.createElement('span');
+             badge.className = 'input-group-text bg-warning text-dark small';
+             badge.textContent = 'Excluded';
+             row.insertBefore(badge, row.firstChild);
+         }
+     }
 
      // Remove handler: delete from array, persist, and refresh
      row.querySelector('.remove-item').addEventListener('click', () => {
@@ -594,3 +646,60 @@ function revealNextStepButton(){
        btn.classList.add('d-none');
    }    
 }
+
+// Inject minimal CSS (idempotent) for disabled & code styling
+if (!document.getElementById('step2-disabled-style')) {
+    const style = document.createElement('style');
+    style.id = 'step2-disabled-style';
+    style.textContent = `
+    .item-row.disabled-by-step4 { opacity: 0.7; position: relative; }
+    .item-row.disabled-by-step4 .item-text.step4-excluded { text-decoration: line-through; }
+    .item-row .item-code { font-size: 0.65rem; letter-spacing:0.5px; }
+    .item-row .direction-badge { font-size: 0.55rem; text-transform: uppercase; letter-spacing:0.5px; padding: 0 .35rem; }
+    .item-row.code-consistency-error { position: relative; }
+    .item-row .code-consistency-badge { font-size: 0.55rem; background: #ffc107; color: #212529; border:1px solid #665c00; }
+    .item-row .code-consistency-tooltip { cursor: help; }
+    `;
+    document.head.appendChild(style);
+}
+
+// Apply visual markers to items with code consistency issues
+window.applyCodeConsistencyMarkers = function () {
+    const issues = window.codeConsistencyIssues || [];
+    if (!issues.length) {
+        // Remove old markers
+        document.querySelectorAll('.item-row.code-consistency-error').forEach(r => {
+            r.classList.remove('code-consistency-error');
+            const badge = r.querySelector('.code-consistency-badge');
+            if (badge) badge.remove();
+        });
+        return;
+    }
+    // Map itemId -> array of issues
+    const issuesByItem = issues.reduce((acc, iss) => {
+        if (!acc[iss.itemId]) acc[iss.itemId] = [];
+        acc[iss.itemId].push(iss);
+        return acc;
+    }, {});
+    document.querySelectorAll('.item-row').forEach(row => {
+        const id = row.dataset.id;
+        const rowIssues = issuesByItem[id] || [];
+        // Clear previous marker
+        row.classList.remove('code-consistency-error');
+        const old = row.querySelector('.code-consistency-badge');
+        if (old) old.remove();
+        if (!rowIssues.length) return;
+        row.classList.add('code-consistency-error');
+        const badge = document.createElement('span');
+        const summaryTypes = [...new Set(rowIssues.map(i => i.type))];
+        badge.className = 'input-group-text code-consistency-badge code-consistency-tooltip';
+        badge.title = rowIssues.map(i => i.message).join('\n');
+        badge.textContent = '⚠';
+        // Insert before first child (so appears at left like other badges)
+        row.insertBefore(badge, row.firstChild);
+        // Bootstrap tooltip (optional)
+        if (window.bootstrap && bootstrap.Tooltip) {
+            new bootstrap.Tooltip(badge, { trigger: 'hover', placement: 'top' });
+        }
+    });
+};

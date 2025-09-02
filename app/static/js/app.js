@@ -634,3 +634,174 @@ function getSubdimensionNameById(id){
     const sd = subdimensions.find(s => s.id === id);
     return sd ? sd.name : '';
 }
+
+
+// visualize inconsitency:
+
+// =====================
+// Validation: Item Code vs Subdimension Code Consistency
+// =====================
+// Rules:
+// 1. If an item has a Step 4 custom code (e.g., TE1) and is assigned to a subdimension with code TE => OK.
+//    Prefix = leading letters of item code (case-insensitive). Must match subdimension.code (case-insensitive).
+// 2. If codes mismatch => flag.
+// 3. If construct is Multidimensional and item has no subdimensionId but has a code => flag.
+// 4. Any item code present in Step 4 (step4ItemCustomIds) whose itemId no longer exists in Step 2 items => flag.
+// A global flag is stored in data_step_2.codeConsistency.hasIssues plus issue details.
+// Triggered: on page load (init) and after every syncData (adds / edits / deletes / subdimension changes).
+
+async function checkItemCodeConsistency(){
+    try {
+        const step1Data = await window.dataStorage.getData('data_step_1');
+        const step2Data = await window.dataStorage.getData('data_step_2');
+        const step4Data = await window.dataStorage.getData('data_step_4');
+        
+        let dimensionality = step1Data?.panel4?.dimensionality || 'Unidimensional';
+        let step4ItemCustomIds = step4Data?.itemCustomIds || {};
+    let subdimensions = step1Data?.panel5?.subdimensions || [];
+    let items = step2Data?.items || [];
+
+        const subdimCodeById = {};
+        subdimensions.forEach(sd => { if (sd.code) subdimCodeById[sd.id] = String(sd.code).trim().toUpperCase(); });
+
+        const itemIds = new Set(items.map(it => String(it.id)));
+        const issues = [];
+
+        // Rule 1 & 2 & 3: iterate items
+        items.forEach(it => {
+            const code = step4ItemCustomIds[it.id];
+            if (!code) return; // no item code => nothing to validate
+            const codePrefixMatch = String(code).match(/^[A-Za-z]+/);
+            const codePrefix = codePrefixMatch ? codePrefixMatch[0].toUpperCase() : null;
+            if (dimensionality === 'Multidimensional' && (!it.subdimensionId || !subdimCodeById[it.subdimensionId])) {
+                // Unassigned item has code (and multidimensional) => issue
+                if (!it.subdimensionId) {
+                    issues.push({ type: 'UNASSIGNED_WITH_CODE', itemId: it.id, itemCode: code, message: 'Item has a code but no subdimension assignment in a multidimensional construct.' });
+                }
+                return; // can't further validate without a subdimension code
+            }
+            if (it.subdimensionId) {
+                const expected = subdimCodeById[it.subdimensionId];
+                if (expected && codePrefix && codePrefix !== expected.toUpperCase()) {
+                    issues.push({ type: 'MISMATCH_PREFIX', itemId: it.id, itemCode: code, codePrefix, expectedPrefix: expected, message: `Item code prefix ${codePrefix} does not match subdimension code ${expected}.` });
+                }
+            }
+        });
+
+        // Rule 4: orphan codes present in Step 4 but missing in Step 2 items
+        Object.entries(step4ItemCustomIds).forEach(([id, code]) => {
+            if (!itemIds.has(String(id))) {
+                issues.push({ type: 'ORPHAN_CODE', itemId: id, itemCode: code, message: 'Item code exists in Step 4 metadata but item is missing in Step 2.' });
+            }
+        });
+
+        const hasIssues = issues.length > 0;
+        // Persist global flag + details merged into existing step2 data (non-destructive for other keys)
+        window.dataStorage.getData('data_flags').then(current => {
+            const updated = { ...(current || {}), codeConsistency: { hasIssues, issues, checkedAt: Date.now() } };
+            window.dataStorage.storeData('data_flags', updated, false);
+        });
+        // Expose flag & issues globally (optional quick access)
+        window.itemCodeConsistencyFlag = hasIssues;
+        window.codeConsistencyIssues = issues; // store full issue objects
+
+        // Update Model Specification navigation marker
+        updateModelSpecIssueMarker(issues);
+        // If step2 item rows exist, attempt to mark them (function defined in step2.js)
+        if (typeof window.applyCodeConsistencyMarkers === 'function') {
+            // Defer to next microtask to allow any pending DOM updates
+            setTimeout(() => window.applyCodeConsistencyMarkers(), 0);
+        }
+        if (hasIssues) {
+            console.warn('[CodeConsistency] Issues detected:', issues);
+        } else {
+            console.debug('[CodeConsistency] All item codes consistent with subdimension assignments.');
+        }
+    } catch (e) {
+        console.error('checkItemCodeConsistency failed:', e);
+    }
+}
+window.checkItemCodeConsistency = checkItemCodeConsistency;
+
+// ====================================================================
+// Visual marker (yellow) on Model Specification nav link if issues
+// ====================================================================
+const MODEL_SPEC_SELECTOR = 'a.nav-link[href="/step/4"]';
+
+function updateModelSpecIssueMarker(issues = []) {
+    const link = document.querySelector(MODEL_SPEC_SELECTOR);
+    if (!link) return; // nav not present yet
+
+    link.classList.add('position-relative');
+
+    // Remove existing marker if any
+    const existing = link.querySelector('.model-spec-issue-marker');
+    if (existing) {
+        const t = bootstrap.Tooltip.getInstance(existing);
+        if (t) t.dispose();
+        existing.remove();
+    }
+
+    if (!issues.length) return; // nothing to show
+
+    // Summarize issue types
+    const counts = issues.reduce((acc, it) => { acc[it.type] = (acc[it.type] || 0) + 1; return acc; }, {});
+    const summary = Object.entries(counts).map(([k,v]) => `${k}: ${v}`).join(' | ');
+    const title = `Code consistency issues: ${issues.length}\n${summary} <br> Please review Step 4.`;
+
+    const dot = document.createElement('span');
+    dot.className = 'model-spec-issue-marker position-absolute top-0 start-100 translate-middle p-1 bg-warning border border-light rounded-circle';
+    dot.style.width = '12px';
+    dot.style.height = '12px';
+    dot.style.zIndex = '10';
+    dot.setAttribute('data-bs-toggle', 'tooltip');
+    dot.setAttribute('data-bs-html', 'true');
+    dot.setAttribute('data-bs-placement', 'right');
+    dot.setAttribute('title', title);
+    link.appendChild(dot);
+    // Initialize tooltip immediately (since added after DOMContentLoaded)
+    new bootstrap.Tooltip(dot);
+}
+window.updateModelSpecIssueMarker = updateModelSpecIssueMarker;
+
+
+// Run code-consistency detection on initial load and after each sync.
+(function () {
+    function runDetection() {
+        if (typeof window.checkItemCodeConsistency === 'function') {
+            window.checkItemCodeConsistency();
+        }
+    }
+
+    // Initial run after DOM ready (slight delay to allow initial data retrieval).
+    function scheduleInitialDetection(){
+        console.log('[CodeConsistency] scheduling initial detection');
+        setTimeout(runDetection, 300);
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', scheduleInitialDetection, { once: true });
+    } else {
+        // DOM already ready (e.g., fast load, script injected later)
+        scheduleInitialDetection();
+    }
+
+    // Patch getSyncFunc to also trigger detection after it finishes.
+    if (typeof window.getSyncFunc === 'function' && !window.getSyncFunc.__patchedForCodeConsistency) {
+        const original = window.getSyncFunc;
+        window.getSyncFunc = function (...args) {
+            const ret = original.apply(this, args);
+            // In case original is async or returns a promise
+            Promise.resolve(ret).finally(() => {
+                // Delay a tick to let any async dataStorage updates settle
+                setTimeout(runDetection, 50);
+            });
+            return ret;
+        };
+        window.getSyncFunc.__patchedForCodeConsistency = true;
+    }
+
+    // Optional: re-run when tab becomes visible again (in case data changed elsewhere).
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) runDetection();
+    });
+})();

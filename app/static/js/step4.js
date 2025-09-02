@@ -45,6 +45,8 @@ async function init() {
 		renderFirstOrderFacets();
 		initSecondOrderPanel();
 		refreshLavaanPanel();
+		// Recalculate derived structures on initial load per requirement and persist
+		await recalcDerivedOnInitialLoad();
 		// If AI suggestions were previously stored, show them
 		if (lastAISuggestions) {
 			renderAISuggestions(lastAISuggestions);
@@ -389,6 +391,26 @@ function buildIndicatorsFromModes(){
 		(secondOrder.globalReflective||[]).filter(g => (g.text||'').trim()).forEach(g => result.push({ facetId: 'secondOrder', itemId: g.id, direction: 'out', global: true, secondOrder: true }));
 	}
 	return result;
+}
+
+// Recalculate transient derived objects on initial load and persist so downstream consumers see up-to-date values
+async function recalcDerivedOnInitialLoad(){
+	try {
+		// Ensure disabled items object has keys for any existing facets/unidimensional pseudo facet
+		if (!subdimensions.length || dimensionality === 'Unidimensional') {
+			if (!facetDisabledItems['unidim']) facetDisabledItems['unidim'] = facetDisabledItems['unidim'] || [];
+		} else {
+			subdimensions.forEach(sd => { if (!facetDisabledItems[sd.id]) facetDisabledItems[sd.id] = []; });
+		}
+		// Always regenerate custom ids (already done earlier but do again for safety if state changed)
+		generateItemCustomIds();
+		// Rebuild indicators based on current facet modes and disabled items
+		indicators = buildIndicatorsFromModes();
+		// Persist recalculated structures
+		await persistStep4();
+	} catch(err){
+		console.warn('[Step4] Recalc on load failed:', err);
+	}
 }
 
 async function persistStep4(){
@@ -896,7 +918,8 @@ function updateRefItemVisual(facetId){
 
 // ---- Custom Item Identifier Generation ----
 function generateItemCustomIds(){
-	if (!items || !items.length) { itemCustomIds = {}; return; }
+	// if (!items || !items.length) { itemCustomIds = {}; return; }
+	itemCustomIds = {}
 	const byFacet = {};
 	const isUnidim = !subdimensions.length || dimensionality === 'Unidimensional';
 	// Build lookup for facet codes
@@ -904,13 +927,23 @@ function generateItemCustomIds(){
 	subdimensions.forEach(sd => { facetCodeMap[sd.id] = (sd.code || deriveShortCode(sd.name || 'F')).toUpperCase(); });
 	const overall = (overallCode || deriveShortCode(constructName) || 'IT').toUpperCase();
 	items.sort((a,b)=>a.id-b.id).forEach(it => {
+		console.log(`Generating custom ID for item ${it.id}...`);
+		
 		const facetId = isUnidim ? 'unidim' : it.subdimensionId;
 		if (!byFacet[facetId]) byFacet[facetId] = 0;
 		byFacet[facetId] += 1;
 		const seq = byFacet[facetId];
 		let prefix;
-		if (isUnidim) prefix = overall;
-		else prefix = (facetCodeMap[facetId] || overall);
+		if (isUnidim) 
+			prefix = overall
+		else{
+			if (facetCodeMap[facetId]) {
+				prefix = facetCodeMap[facetId];
+			} else {
+				return;
+			}
+		} 
+
 		// Lowercase per request but keep consistent a-z0-9 only
 		const base = (prefix || 'IT').toLowerCase();
 		itemCustomIds[it.id] = base + seq; // e.g., ab1
