@@ -657,7 +657,9 @@ if (!document.getElementById('step2-disabled-style')) {
     .item-row .item-code { font-size: 0.65rem; letter-spacing:0.5px; }
     .item-row .direction-badge { font-size: 0.55rem; text-transform: uppercase; letter-spacing:0.5px; padding: 0 .35rem; }
     .item-row.code-consistency-error { position: relative; }
+    .item-row.code-consistency-error.missing-code { }
     .item-row .code-consistency-badge { font-size: 0.55rem; background: #ffc107; color: #212529; border:1px solid #665c00; }
+    .item-row .code-consistency-badge.missing-code { background:#6c757d; border-color:#495057; color:#f8f9fa; }
     .item-row .code-consistency-tooltip { cursor: help; }
     `;
     document.head.appendChild(style);
@@ -686,15 +688,18 @@ window.applyCodeConsistencyMarkers = function () {
         const rowIssues = issuesByItem[id] || [];
         // Clear previous marker
         row.classList.remove('code-consistency-error');
+        row.classList.remove('missing-code');
         const old = row.querySelector('.code-consistency-badge');
         if (old) old.remove();
         if (!rowIssues.length) return;
         row.classList.add('code-consistency-error');
         const badge = document.createElement('span');
         const summaryTypes = [...new Set(rowIssues.map(i => i.type))];
-        badge.className = 'input-group-text code-consistency-badge code-consistency-tooltip';
+        const missingOnly = summaryTypes.length === 1 && summaryTypes[0] === 'MISSING_CODE';
+        if (missingOnly) row.classList.add('missing-code');
+        badge.className = 'input-group-text code-consistency-badge code-consistency-tooltip' + (missingOnly ? ' missing-code' : '');
         badge.title = rowIssues.map(i => i.message).join('\n');
-        badge.textContent = '⚠';
+        badge.textContent = missingOnly ? '?' : '⚠';
         // Insert before first child (so appears at left like other badges)
         row.insertBefore(badge, row.firstChild);
         // Bootstrap tooltip (optional)

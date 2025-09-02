@@ -666,11 +666,19 @@ async function checkItemCodeConsistency(){
 
         const itemIds = new Set(items.map(it => String(it.id)));
         const issues = [];
+    const anyCodesDefined = Object.keys(step4ItemCustomIds).length > 0; // Step 4 already populated for at least some items
 
-        // Rule 1 & 2 & 3: iterate items
+        // Rule 0 (new): Items missing a code after Step 4 started; then Rule 1,2,3
         items.forEach(it => {
             const code = step4ItemCustomIds[it.id];
-            if (!code) return; // no item code => nothing to validate
+            const hasValidSubdim = !!(it.subdimensionId && subdimCodeById[it.subdimensionId]);
+            if (!code) {
+                // Only flag missing code if Step 4 already has codes AND this item is tied to a valid subdimension (so a prefix expectation exists)
+                if (anyCodesDefined && hasValidSubdim) {
+                    issues.push({ type: 'MISSING_CODE', itemId: it.id, message: 'Item assigned to a subdimension lacks a code while other items are already coded in Step 4.' });
+                }
+                return; // skip further checks for this item
+            }
             const codePrefixMatch = String(code).match(/^[A-Za-z]+/);
             const codePrefix = codePrefixMatch ? codePrefixMatch[0].toUpperCase() : null;
             if (dimensionality === 'Multidimensional' && (!it.subdimensionId || !subdimCodeById[it.subdimensionId])) {
