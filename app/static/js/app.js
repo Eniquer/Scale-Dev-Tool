@@ -156,6 +156,43 @@ async function sendChat(input, history = [], model="gpt-4.1") {
 }
 window.sendChat = sendChat;
 
+async function genPersonaPool(numberOfPersonas=20, groupDescription, model) {
+    const cipher = window.currentAPIKey_enc;
+    if (!cipher) {
+        alert('API key is not set. Please enter your OpenAI API key first.');
+        window.currentAPIKey_enc = await initAPIKey();
+        return;
+    }
+    const resp = await fetch('/api/personaGen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numberOfPersonas, groupDescription, model, keyCipher: cipher })
+    });
+    if (resp.ok) {
+        const { personas } = await resp.json();
+        return personas;
+    } else {
+        // Detailed error logging: parse JSON if possible
+        let errorDetail;
+        try {
+            const errJson = await resp.json();
+            errorDetail = errJson.detail || errJson.error || JSON.stringify(errJson);
+        } catch {
+            errorDetail = await resp.text();
+        }
+        console.error(`Error from persona generation endpoint: ${resp.status} ${resp.statusText}`, errorDetail);
+        // Handle invalid API key: prompt user to re-enter
+        if ((resp.status === 401) && /invalid/i.test(errorDetail)) {
+            const newKey = prompt('Your API key appears invalid or unauthorized. Please re-enter your key.');
+            // Re-init API key and retry storing cipher
+            window.currentAPIKey_enc = await storeAPIKey(newKey, false);
+            return await genPersonaPool(numberOfPersonas, groupDescription, temperature, model); // Retry with new key
+        }
+    }
+}
+
+window.genPersonaPool = genPersonaPool;
+
 // ***********************************       Export Data         ***********************************************
 // Add exportSelected function for modal-based export
 async function exportSelected() {

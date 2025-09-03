@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import pingouin as pg
+import re
 
 import time
 
@@ -310,3 +311,42 @@ def _empty_row(it, target, n_raters, k, notes):
         "action": "revise/delete",
         "notes": notes
     }
+    
+    
+# def get_chatgpt_response(user_input, messages, temperature=0.7, model="gpt-4.1", api_key=None):
+
+def generate_persona_set(numberOfPersonas,groupDescription,temperature=0.7, model="gpt-4.1", api_key=None):
+    messages = []
+    matches = []
+    resultsPersonas = []
+    resultsCleanPersonas = []
+    print(groupDescription)
+    # todo prevent endless loop, if x times no new personas are generated -> break
+    while len(matches) < numberOfPersonas:
+        messages.clear()
+        personasPrompt = f'''
+        
+        **Role**: Act as an impartial persona architect specializing in human complexity. Create a multidimensional persona that authentically represents both positive and challenging traits. Create a persona that is not overly unique or "special," but rather embodies an average individual with relatable strengths and flaws.
+
+        **Core Instructions**: Think of {groupDescription}. Now generate 20 personas from this pool and define its characteristics in 3 to 5 sentences. Include at least one positiv and one negative character trait. You may safely describe negative traits as required for psychological accuracy
+        **Validation Checks**:
+            - Does this persona have at least one significant flaw that impacts their decisions?
+            - Is there a balance between positive and negative outlook for the future?
+            - Are there logical consequences for antisocial behaviors?
+        '''
+        if len(matches) != 0:
+            personasPrompt = personasPrompt + f"These are the personas You already generated, dont repeat yourself: {matches}. "
+        cleanPersonasPrompt = 'ok now give me the description of every Persona in this format and nothing else. I provide with you with a Template, Only alter the Placeholder in all caps. Your output should just look like this Template, no exessive whitespaces. Do this for every Persona and append them to one long string. No linebrakes or unneccary whitespaces:<startPersona>PERSONA AND THE DESCRIPTION<endPersona>'
+        print("prompts generated")
+        rawPersonas = get_chatgpt_response(personasPrompt, [], temperature, model,api_key)
+        print(rawPersonas)
+        resultsPersonas.append(rawPersonas[0])
+        midResultsCleanPersonas = get_chatgpt_response(cleanPersonasPrompt, rawPersonas[1], 0.3, model,api_key)
+        print(midResultsCleanPersonas)
+        resultsCleanPersonas.append(midResultsCleanPersonas[0])
+
+        # Use regex to extract content between <startPersona> and <endPersona>
+        matches.extend(re.findall(r'<startPersona>(.*?)<endPersona>', midResultsCleanPersonas[0]))
+        print(f"{len(matches)} personas generated out of 100")
+    return matches[:numberOfPersonas]
+    

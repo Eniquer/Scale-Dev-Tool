@@ -49,6 +49,13 @@ class ChatRequest(BaseModel):
     temperature: float = 0.7
     keyCipher: str
 
+class PersonaGenRequest(BaseModel):
+    numberOfPersonas: int
+    groupDescription: str = "a diverse Pool of citizens with different characteristics representing an average population"
+    temperature: float = 0.7
+    model: str = "gpt-4o"
+    keyCipher: str
+
 router = APIRouter()
 
 @router.post("/encrypt-key")
@@ -118,8 +125,8 @@ async def chat_endpoint(chat_req: ChatRequest):
                 chat_req.history,
                 temperature=chat_req.temperature,
                 model=chat_req.model,
-            api_key=api_key
-        )
+                api_key=api_key
+            )
     except AuthenticationError:
         raise HTTPException(status_code=401, detail="invalid_api_key")
     except PermissionDeniedError:
@@ -136,3 +143,26 @@ async def chat_endpoint(chat_req: ChatRequest):
 
     return {"reply": reply[0], "history": reply[1]}
 
+@router.post("/personaGen")
+async def generate_personas_endpoint(gen_req: PersonaGenRequest):
+    try:
+        personas = generate_persona_set(
+            numberOfPersonas=gen_req.numberOfPersonas,
+            groupDescription=gen_req.groupDescription,
+            temperature=gen_req.temperature,
+            model=gen_req.model,
+            api_key=simple_decrypt(gen_req.keyCipher)
+        )
+        return {"personas": personas}
+    except AuthenticationError:
+        raise HTTPException(status_code=401, detail="invalid_api_key")
+    except PermissionDeniedError:
+        raise HTTPException(status_code=403, detail="permission_denied")
+    except RateLimitError:
+        raise HTTPException(status_code=429, detail="rate_limit_exceeded")
+    except BadRequestError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except APIError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
