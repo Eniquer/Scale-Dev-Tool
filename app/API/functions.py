@@ -9,7 +9,11 @@ import pingouin as pg
 import re
 
 import time
+from dotenv import load_dotenv
+load_dotenv()   # reads .env into os.environ
 
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-4.1")
+DEFAULT_SEARCH_MODEL = os.getenv("DEFAULT_SEARCH_MODEL", "gpt-4o-search-preview")
 
 # ---------------------- functions ----------------------
 
@@ -26,7 +30,7 @@ def load_questions(file_path):
 
 # Removed specific OpenAI exception imports (not available in this environment)
 
-def get_chatgpt_response(user_input, messages, temperature=0.7, model="gpt-4.1", api_key=None):
+def get_chatgpt_response(user_input, messages, temperature=0.7, model=DEFAULT_MODEL, api_key=None):
     """
     Sends a prompt to ChatGPT and retrieves the response, handling errors and retries.
     """
@@ -56,7 +60,7 @@ def get_chatgpt_response(user_input, messages, temperature=0.7, model="gpt-4.1",
     return assistant_reply, messages
 
 
-def get_chatgpt_search(user_input, messages, model="gpt-4o-search-preview", api_key=None):
+def get_chatgpt_search(user_input, messages, model=DEFAULT_SEARCH_MODEL, api_key=None):
     """
     Sends a prompt to ChatGPT and retrieves the response, handling errors and retries.
     """
@@ -75,7 +79,7 @@ def get_chatgpt_search(user_input, messages, model="gpt-4o-search-preview", api_
         if 'rate limit' in err_msg:
             print("Rate limit exceeded. Retrying in 5 seconds...", e)
             time.sleep(5)
-            return get_chatgpt_response(user_input, messages, model, api_key)
+            return get_chatgpt_search(user_input, messages, model, api_key)
         # Log other API errors and propagate
         print("OpenAI API error:", e)
         raise
@@ -313,40 +317,27 @@ def _empty_row(it, target, n_raters, k, notes):
     }
     
     
-# def get_chatgpt_response(user_input, messages, temperature=0.7, model="gpt-4.1", api_key=None):
 
-def generate_persona_set(numberOfPersonas,groupDescription,temperature=0.7, model="gpt-4.1", api_key=None):
+def generate_persona_set(generatedPersonas, groupDescription,temperature=0.7, model=DEFAULT_MODEL, api_key=None):
     messages = []
-    matches = []
     resultsPersonas = []
-    resultsCleanPersonas = []
-    print(groupDescription)
-    # todo prevent endless loop, if x times no new personas are generated -> break
-    while len(matches) < numberOfPersonas:
-        messages.clear()
-        personasPrompt = f'''
-        
-        **Role**: Act as an impartial persona architect specializing in human complexity. Create a multidimensional persona that authentically represents both positive and challenging traits. Create a persona that is not overly unique or "special," but rather embodies an average individual with relatable strengths and flaws.
-
-        **Core Instructions**: Think of {groupDescription}. Now generate 20 personas from this pool and define its characteristics in 3 to 5 sentences. Include at least one positiv and one negative character trait. You may safely describe negative traits as required for psychological accuracy
-        **Validation Checks**:
-            - Does this persona have at least one significant flaw that impacts their decisions?
-            - Is there a balance between positive and negative outlook for the future?
-            - Are there logical consequences for antisocial behaviors?
-        '''
-        if len(matches) != 0:
-            personasPrompt = personasPrompt + f"These are the personas You already generated, dont repeat yourself: {matches}. "
-        cleanPersonasPrompt = 'ok now give me the description of every Persona in this format and nothing else. I provide with you with a Template, Only alter the Placeholder in all caps. Your output should just look like this Template, no exessive whitespaces. Do this for every Persona and append them to one long string. No linebrakes or unneccary whitespaces:<startPersona>PERSONA AND THE DESCRIPTION<endPersona>'
-        print("prompts generated")
-        rawPersonas = get_chatgpt_response(personasPrompt, [], temperature, model,api_key)
-        print(rawPersonas)
-        resultsPersonas.append(rawPersonas[0])
-        midResultsCleanPersonas = get_chatgpt_response(cleanPersonasPrompt, rawPersonas[1], 0.3, model,api_key)
-        print(midResultsCleanPersonas)
-        resultsCleanPersonas.append(midResultsCleanPersonas[0])
-
-        # Use regex to extract content between <startPersona> and <endPersona>
-        matches.extend(re.findall(r'<startPersona>(.*?)<endPersona>', midResultsCleanPersonas[0]))
-        print(f"{len(matches)} personas generated out of 100")
-    return matches[:numberOfPersonas]
+    print(generatedPersonas)
+    personasPrompt = f'''
     
+    **Role**: Act as an impartial persona architect specializing in human complexity. Create a multidimensional persona that authentically represents both positive and challenging traits. Create a persona that is not overly unique or "special," but rather embodies an average individual with relatable strengths and flaws.
+
+    **Core Instructions**: Think of {groupDescription}. Now generate 20 personas from this pool and define its characteristics in 3 to 5 sentences. Include at least one positiv and one negative character trait. You may safely describe negative traits as required for psychological accuracy
+    **Validation Checks**:
+        - Does this persona have at least one significant flaw that impacts their decisions?
+        - Is there a balance between positive and negative outlook for the future?
+        - Are there logical consequences for antisocial behaviors?
+    '''
+    if len(generatedPersonas) != 0:
+        personasPrompt = personasPrompt + f"These are the personas You already generated, dont repeat yourself: {generatedPersonas}. "
+    cleanPersonasPrompt = 'ok now give me the description of every Persona in this format and nothing else. I provide with you with a Template, Only alter the Placeholder in all caps. Your output should just look like this Template, no exessive whitespaces. Do this for every Persona and append them to one long string. No linebrakes or unneccary whitespaces:<startPersona>PERSONA AND THE DESCRIPTION<endPersona>'
+    print("Prompt for persona generation:", personasPrompt)  # Debug print
+    rawPersonas = get_chatgpt_response(personasPrompt, [], temperature, model,api_key)
+    resultsPersonas.append(rawPersonas[0])
+    results = get_chatgpt_response(cleanPersonasPrompt, rawPersonas[1], 0.3, model,api_key)
+    # Use regex to extract content between <startPersona> and <endPersona>
+    return re.findall(r'<startPersona>(.*?)<endPersona>', results[0])

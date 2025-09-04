@@ -14,6 +14,8 @@ from openai._exceptions import (
 from dotenv import load_dotenv
 load_dotenv()   # reads .env into os.environ
 
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-4.1")
+DEFAULT_SEARCH_MODEL = os.getenv("DEFAULT_SEARCH_MODEL", "gpt-4o-search-preview")
 
 # Load encryption secret from environment (set ENCRYPTION_SECRET)
 ENCRYPTION_SECRET = os.getenv("ENCRYPTION_SECRET", "")
@@ -41,20 +43,21 @@ def simple_decrypt(cipher: str) -> str:
 class EncryptKey(BaseModel):
     key: str
 
-searchModel = "gpt-4o-search-preview"
 class ChatRequest(BaseModel):
     prompt: str
-    model: str = "gpt-4o"
+    model: str = DEFAULT_MODEL
     history: list = []
     temperature: float = 0.7
     keyCipher: str
 
 class PersonaGenRequest(BaseModel):
-    numberOfPersonas: int
+    generatedPersonas: list = []
     groupDescription: str = "a diverse Pool of citizens with different characteristics representing an average population"
     temperature: float = 0.7
-    model: str = "gpt-4o"
+    model: str = DEFAULT_MODEL
     keyCipher: str
+
+
 
 router = APIRouter()
 
@@ -112,11 +115,11 @@ async def chat_endpoint(chat_req: ChatRequest):
     print(f"Using API key: {api_key[-3:]}")  # Log last 3 chars for debugging  //TODO remove in production
     # call ChatGPT via functions
     try:
-        if chat_req.model == "gpt-4o-search-preview":
+        if chat_req.model == "search":
             reply = get_chatgpt_search(
                 chat_req.prompt,
                 chat_req.history,
-                model=chat_req.model,
+                model=DEFAULT_SEARCH_MODEL,
                 api_key=api_key
             )
         else:
@@ -147,13 +150,13 @@ async def chat_endpoint(chat_req: ChatRequest):
 async def generate_personas_endpoint(gen_req: PersonaGenRequest):
     try:
         personas = generate_persona_set(
-            numberOfPersonas=gen_req.numberOfPersonas,
+            generatedPersonas=gen_req.generatedPersonas,
             groupDescription=gen_req.groupDescription,
             temperature=gen_req.temperature,
             model=gen_req.model,
             api_key=simple_decrypt(gen_req.keyCipher)
         )
-        return {"personas": personas}
+        return personas
     except AuthenticationError:
         raise HTTPException(status_code=401, detail="invalid_api_key")
     except PermissionDeniedError:
@@ -166,3 +169,5 @@ async def generate_personas_endpoint(gen_req: PersonaGenRequest):
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+    
