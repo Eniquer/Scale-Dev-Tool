@@ -352,12 +352,14 @@ let personas = [];
 
 		await loadStoredPersonas();
 		const storedLikert = await loadLikertAnswers();
-		// Load existing prompt addon if stored
+		// Load existing prompt addon & likert scale if stored
 		try {
 			const existingAll = await window.dataStorage.getData(STORAGE_KEY) || {};
 			if (existingAll.promptAddon && typeof existingAll.promptAddon === 'string') {
 				addon.value = existingAll.promptAddon;
 			}
+			if (typeof existingAll.likertScaleMin === 'number') minLikertScale.value = existingAll.likertScaleMin;
+			if (typeof existingAll.likertScaleMax === 'number') maxLikertScale.value = existingAll.likertScaleMax;
 		} catch(e){ console.warn('[Step5] Failed to load stored prompt addon', e); }
 
 		// If we already have personas, show them immediately
@@ -389,6 +391,7 @@ let personas = [];
 
 		// Persist prompt addon (debounced)
 		let promptSaveTimer = null;
+		let scaleSaveTimer = null;
 		async function savePromptAddon(val){
 			try {
 				const existing = await window.dataStorage.getData(STORAGE_KEY) || {};
@@ -403,6 +406,20 @@ let personas = [];
 		addon.addEventListener('blur', () => {
 			if (promptSaveTimer) { clearTimeout(promptSaveTimer); }
 			savePromptAddon(addon.value);
+		});
+
+		async function saveScaleRange(){
+			try {
+				const existing = await window.dataStorage.getData(STORAGE_KEY) || {};
+				await window.dataStorage.storeData(STORAGE_KEY, { ...existing, likertScaleMin: Number(minLikertScale.value), likertScaleMax: Number(maxLikertScale.value), likertScaleUpdatedAt: new Date().toISOString() }, false);
+			} catch(e){ console.warn('[Step5] Failed to save likert scale range', e); }
+		}
+		[minLikertScale, maxLikertScale].forEach(inp => {
+			inp.addEventListener('input', () => {
+				clearTimeout(scaleSaveTimer);
+				scaleSaveTimer = setTimeout(()=> saveScaleRange(), 300);
+			});
+			inp.addEventListener('blur', () => { clearTimeout(scaleSaveTimer); saveScaleRange(); });
 		});
 
 		btn.addEventListener('click', async () => {
@@ -492,6 +509,8 @@ let personas = [];
 			if (window.Tabulator){
 				renderLikertTable(tableData, false);
 				saveLikertAnswers(tableData).catch(()=>{});
+				// Persist chosen scale range for Step 6 auto-detection
+				(async ()=>{ try { const existing = await window.dataStorage.getData(STORAGE_KEY)||{}; await window.dataStorage.storeData(STORAGE_KEY,{...existing, likertScaleMin: Number(minLikertScale.value), likertScaleMax: Number(maxLikertScale.value)}, false);} catch(e){ console.warn('[Step5] Failed to store likert scale range', e); } })();
 			} else {
 				targetDiv.textContent = 'Tabulator library not loaded.';
 			}
@@ -602,7 +621,7 @@ function renderLikertTable(rawRows, fromStorage){
 		window.answersTable = new Tabulator(targetDiv, {
 			data: tabData,
 			columns,
-			layout: 'fitColumns',
+			layout: 'fitData',
 			reactiveData: true,
 			resizableColumns: true,
 			movableColumns: true,
