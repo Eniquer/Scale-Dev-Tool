@@ -11,6 +11,8 @@
   let viewMode = 'original'; // 'original' | 'reversed'
   let userAdjustedScale = false; // track if user manually changed scale inputs
   let persistedUserAdjusted = false; // persisted flag
+  let lavaanEdited = ''; // stored edited lavaan syntax
+  let lavaanOriginalSnapshot = ''; // last loaded auto-generated spec from step4
 
   async function init(){
     bindUI();
@@ -19,6 +21,7 @@
     if (source === 'simulated' && !rawData.length) await loadSimulated();
     // Ensure correct UI visibility for upload block after restore
     switchSource(source);
+  await initLavaanEditor();
     updateViewButtons();
   }
 
@@ -51,6 +54,37 @@
   id('scaleMaxInput')?.addEventListener('input', e=>{ scaleMax = parseNumber(e.target.value,5); userAdjustedScale = true; persistState(); });
   id('showOriginalBtn')?.addEventListener('click', ()=>{ viewMode='original'; rawData = clone(originalData); setStatus('Showing original data.'); updateViewButtons(); renderTable(); });
   id('showReversedBtn')?.addEventListener('click', ()=>{ if (!reversedData.length){ setStatus('No reversed version stored yet.'); return; } viewMode='reversed'; rawData = clone(reversedData); setStatus('Showing reversed data.'); updateViewButtons(); renderTable(); });
+    // Lavaan editor handlers
+    const lavaTA = id('lavaanStep6Textarea');
+    const saveBtn = id('btnSaveEditedLavaan');
+    const reloadBtn = id('btnReloadLavaanFromStep4');
+    lavaTA?.addEventListener('input', ()=>{
+      if (!lavaTA) return;
+      const dirty = lavaTA.value !== lavaanEdited;
+      if (saveBtn) saveBtn.disabled = !dirty;
+      const status = id('lavaanStep6Status');
+      if (status) status.textContent = dirty ? 'Unsaved changes' : 'Saved';
+    });
+    saveBtn?.addEventListener('click', async ()=>{
+      if (!lavaTA) return;
+      lavaanEdited = lavaTA.value;
+      await persistState();
+      if (saveBtn) saveBtn.disabled = true;
+      const status = id('lavaanStep6Status');
+      if (status) status.textContent = 'Saved';
+      window.displayInfo?.('success','Lavaan specification saved for Step 6.');
+    });
+    reloadBtn?.addEventListener('click', async ()=>{
+      const proceed = await (window.customConfirm ? window.customConfirm({
+        title:'Reload lavaan',
+        message:'Discard current edits and reload auto-generated spec from Step 4?',
+        confirmText:'Reload',
+        cancelText:'Cancel'
+      }) : Promise.resolve(confirm('Reload from Step 4?')));
+      if (!proceed) return;
+      await loadLavaanFromStep4(true);
+      window.displayInfo?.('info','Reloaded model specification from Step 4.');
+    });
   }
 
   function switchSource(val){
@@ -264,7 +298,7 @@
 
   async function persistState(){
     try {
-      await window.dataStorage.storeData('data_step_6', {
+    await window.dataStorage.storeData('data_step_6', {
         storedAt: new Date().toISOString(),
         columns,
         reverseColumns: Array.from(reverseSet),
@@ -273,7 +307,8 @@
         viewMode,
         originalData,
   reversedData,
-  userAdjustedScale: userAdjustedScale || persistedUserAdjusted
+  userAdjustedScale: userAdjustedScale || persistedUserAdjusted,
+  lavaanEdited
       }, false);
     } catch(e){ console.warn('[Step6] persistState failed', e); }
   }
@@ -295,6 +330,7 @@
       rawData = clone(viewMode==='reversed' && reversedData.length? reversedData : originalData);
       id('scaleMinInput') && (id('scaleMinInput').value = scaleMin);
       id('scaleMaxInput') && (id('scaleMaxInput').value = scaleMax);
+  lavaanEdited = stored.lavaanEdited || '';
       // Apply radio button states explicitly instead of click (ensures consistent UI)
       const rUpload = id('srcUpload');
       const rSim = id('srcSimulated');
@@ -374,5 +410,39 @@
       setStatus('Step 6 reset. Load new data to continue.');
     }
     persistState();
+  }
+
+  async function initLavaanEditor(){
+    const ta = id('lavaanStep6Textarea');
+    if (!ta) return; // card not present
+    if (!lavaanEdited){
+      await loadLavaanFromStep4(false);
+    } else {
+      ta.value = lavaanEdited;
+      const status = id('lavaanStep6Status');
+      if (status) status.textContent = 'Saved (edited)';
+      id('btnSaveEditedLavaan') && (id('btnSaveEditedLavaan').disabled = true);
+    }
+  }
+
+  async function loadLavaanFromStep4(forceOverwrite){
+    try {
+      const step4 = await window.dataStorage.getData('data_step_4') || {};
+      const auto = (step4.lavaanSpec && step4.lavaanSpec.syntax) ? step4.lavaanSpec.syntax : '# No lavaan spec found in Step 4.';
+      lavaanOriginalSnapshot = auto;
+      if (!lavaanEdited || forceOverwrite){
+        lavaanEdited = auto;
+        const ta = id('lavaanStep6Textarea');
+        if (ta) ta.value = lavaanEdited;
+        const status = id('lavaanStep6Status');
+        if (status) status.textContent = forceOverwrite ? 'Loaded (fresh)' : 'Loaded';
+        id('btnSaveEditedLavaan') && (id('btnSaveEditedLavaan').disabled = true);
+        await persistState();
+      }
+    } catch(e){
+      console.warn('[Step6] loadLavaanFromStep4 failed', e);
+      const ta = id('lavaanStep6Textarea');
+      if (ta && !lavaanEdited) ta.value = '# Failed loading lavaan spec.';
+    }
   }
 })();
