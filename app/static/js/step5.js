@@ -84,7 +84,9 @@
 		const itemCodes = step4?.itemCustomIds || {};
 		const facetModes = step4?.facetModes || {}; // for detecting formative facets
 		const globalReflective = step4?.globalReflective || {}; // { facetId: [ {id, text}, ... ] }
-		const secondOrderGlobals = step4?.secondOrder?.globalReflective || []; // [ {id,text}, ... ]
+		const secondOrderData = step4?.secondOrder || {};
+		const overallCode = (step4?.overallCode || '').trim();
+		const secondOrderGlobals = (secondOrderData.type === 'formative' ? (secondOrderData.globalReflective||[]) : []).filter(g => (g?.text||'').trim()); // [ {id,text}, ... ]
 		// Facet modes maybe used later if formative etc; here just grouping
 		const subdimensions = panel5?.subdimensions || [];
 		// Build active items list (exclude those flagged in step4)
@@ -124,8 +126,8 @@
 				const txt = (g?.text||'').trim();
 				if (!txt) return;
 				const existingCode = itemCodes[g.id];
-				// Pattern: gSUBDIMCODE_NUMBER (e.g., gTE_1). Fallback if no facet code: gF<fid>_NUMBER
-				let baseCode = existingCode || (facetCodeById[fid] ? `g${facetCodeById[fid]}_${idx+1}` : `gF${fid}_${idx+1}`);
+				// Pattern: facetcodeGnumber (lowercase facet code) e.g., teG1. Fallback: f<fid>G<number>
+				let baseCode = existingCode || (facetCodeById[fid] ? `${facetCodeById[fid].toLowerCase()}G${idx+1}` : `f${fid}G${idx+1}`);
 				baseCode = baseCode.toString();
 				globalItems.push({ id: g.id || `global_${fid}_${idx+1}`, code: baseCode, text: clean(txt), subdimensionId: fid, isGlobal: true });
 			});
@@ -135,8 +137,10 @@
 			secondOrderGlobals.forEach((g,idx)=>{
 				const txt = (g?.text||'').trim(); if (!txt) return;
 				const existingCode = itemCodes[g.id];
-				let baseCode = existingCode || `GLOB${idx+1}`;
-				globalItems.push({ id: g.id || `so_global_${idx+1}`, code: baseCode.toString(), text: clean(txt), subdimensionId: null, isGlobal: true, secondOrder: true });
+				// Higher-order pattern: overallcodeGnumber (lowercase overall code) e.g., teG1
+				const oc = (overallCode || 'ho').toLowerCase();
+				let baseCode = existingCode || `${oc}G${idx+1}`;
+				globalItems.push({ id: g.id || `so_global_${idx+1}`, code: baseCode.toString(), text: clean(txt), subdimensionId: null, isGlobal: true, secondOrder: true, higherOrder: true });
 			});
 		}
 		// Ensure uniqueness of codes (avoid collision with item codes)
@@ -169,6 +173,13 @@
 		];
 		window.step5QuestionnaireItems = questionnaireItemList; // expose globally for simulation or export
 		if (dimensionality === 'Multidimensional' && subdimensions.length){
+			// Output higher-order globals (root level) first if any
+			const rootGlobals = globalItems.filter(g=>g.subdimensionId==null);
+			if (rootGlobals.length){
+				lines.push('## Higher-Order Global Items');
+				rootGlobals.forEach(g=> lines.push(`${g.code}. ${g.text}`));
+				lines.push('');
+			}
 			for (const sd of subdimensions){
 				const groupItems = codedItems.filter(it => it.subdimensionId === sd.id);
 				const facetGlobals = globalItems.filter(g=>g.subdimensionId === sd.id);
@@ -181,7 +192,7 @@
 				});
 				groupItems.forEach((it)=>{
 					const code = (itemCodes[it.id]||'').toString();
-					lines.push(`${code}. ${clean(it.text)}`);
+					lines.push(`${code}: ${clean(it.text)}`);
 				});
 				lines.push('');
 			}

@@ -470,9 +470,9 @@ function generateLavaanSpec(){
 		const globalItemVar = (facetId, idx) => {
 			const sd = subdimensions.find(s => s.id === facetId);
 			const base = sd ? (sd.code || sd.name || ('F'+facetId.slice(0,4))) : ('G'+facetId.slice(0,4));
-			return sanitize('g'+base+'_'+(idx+1));
+			return sanitize(((base || '').toLowerCase()) + 'G' + (idx+1));
 		};
-		const secondGlobalItemVar = (idx) => sanitize('gOVERALL_'+(idx+1));
+		const secondGlobalItemVar = (idx) => sanitize(((overallCode || '').toLowerCase()) + 'G' + (idx+1));
 
 		const lines = [];
 		const notes = [];
@@ -706,7 +706,7 @@ function updateSecondOrderUI(){
 		container.className = 'mt-3 d-none';
 		container.innerHTML = `
 			<div class="small fw-bold mb-1">Global Reflective Items (for identification)</div>
-			<div class="form-text small mb-1">Provide up to two global reflective items (leave blank if not used).</div>
+			<div class="form-text small mb-1">Provide up to two global reflective items.</div>
 			<div id="secondOrderGlobalsInputs"></div>`;
 		scalingWrapper.appendChild(container);
 	}
