@@ -5,7 +5,6 @@
 // Absolute heuristic range: 100 - 500
 // Decided range: <stored or suggested>
 // Plus stability message if construct not stable over time (from Step 1 Panel 4).
-// todo save changes in user prompt changes 
 (function(){
 	document.addEventListener('DOMContentLoaded', init);
 	let items = [];
@@ -83,6 +82,9 @@
 		// Step 4 exclusions
 		const facetDisabled = step4?.facetDisabledItems || {};
 		const itemCodes = step4?.itemCustomIds || {};
+		const facetModes = step4?.facetModes || {}; // for detecting formative facets
+		const globalReflective = step4?.globalReflective || {}; // { facetId: [ {id, text}, ... ] }
+		const secondOrderGlobals = step4?.secondOrder?.globalReflective || []; // [ {id,text}, ... ]
 		// Facet modes maybe used later if formative etc; here just grouping
 		const subdimensions = panel5?.subdimensions || [];
 		// Build active items list (exclude those flagged in step4)
@@ -110,7 +112,41 @@
 			window.step5QuestionnaireItems = questionnaireItemList;
 			return;
 		}
-		// Sort by subdimension then id for stability
+		// Prepare map of facet (subdimension) codes
+		const facetCodeById = Object.fromEntries((subdimensions||[]).map(sd=>[sd.id, (sd.code||'').trim()]));
+		// Gather global reflective items (only for formative facets or second-order if present)
+		const globalItems = [];
+		// Facet-level globals
+		Object.entries(globalReflective).forEach(([fid, arr])=>{
+			if (!Array.isArray(arr) || !arr.length) return;
+			if (facetModes[fid] !== 'formative') return; // only include for formative facets
+			arr.forEach((g,idx)=>{
+				const txt = (g?.text||'').trim();
+				if (!txt) return;
+				const existingCode = itemCodes[g.id];
+				// Pattern: gSUBDIMCODE_NUMBER (e.g., gTE_1). Fallback if no facet code: gF<fid>_NUMBER
+				let baseCode = existingCode || (facetCodeById[fid] ? `g${facetCodeById[fid]}_${idx+1}` : `gF${fid}_${idx+1}`);
+				baseCode = baseCode.toString();
+				globalItems.push({ id: g.id || `global_${fid}_${idx+1}`, code: baseCode, text: clean(txt), subdimensionId: fid, isGlobal: true });
+			});
+		});
+		// Second-order globals (if any)
+		if (Array.isArray(secondOrderGlobals) && secondOrderGlobals.length){
+			secondOrderGlobals.forEach((g,idx)=>{
+				const txt = (g?.text||'').trim(); if (!txt) return;
+				const existingCode = itemCodes[g.id];
+				let baseCode = existingCode || `GLOB${idx+1}`;
+				globalItems.push({ id: g.id || `so_global_${idx+1}`, code: baseCode.toString(), text: clean(txt), subdimensionId: null, isGlobal: true, secondOrder: true });
+			});
+		}
+		// Ensure uniqueness of codes (avoid collision with item codes)
+		const usedCodes = new Set(codedItems.map(it=> (itemCodes[it.id]||'').toString()));
+		globalItems.forEach(g=>{
+			let c = g.code; let n=2;
+			while (usedCodes.has(c)) { c = `${g.code}_${n++}`; }
+			g.code = c; usedCodes.add(c);
+		});
+		// Sort codedItems (stable) then we'll merge when rendering
 		codedItems.sort((a,b)=>{
 			const sdA = a.subdimensionId || '';
 			const sdB = b.subdimensionId || '';
@@ -124,31 +160,37 @@
 		let lines = [];
 		lines.push('# Questionnaire Draft');
 		lines.push(`# Generated: ${new Date().toISOString()}`);
-		lines.push(`# Items included: ${codedItems.length} coded (of ${items.length} total; ${activeItems.length - codedItems.length} uncoded active items skipped)`);
+		lines.push(`# Items included: ${codedItems.length} coded (of ${items.length} total; ${activeItems.length - codedItems.length} uncoded active items skipped) + ${globalItems.length} global `);
 		lines.push('');
 		// Build the exported questionnaire item list (lightweight objects)
-		questionnaireItemList = codedItems.map(it => ({
-			id: it.id,
-			code: (itemCodes[it.id]||'').toString(),
-			text: clean(it.text),
-			subdimensionId: it.subdimensionId || null
-		}));
+		questionnaireItemList = [
+			...globalItems.map(g=>({ id: g.id, code: g.code, text: g.text, subdimensionId: g.subdimensionId, isGlobal: true, secondOrder: !!g.secondOrder })),
+			...codedItems.map(it => ({ id: it.id, code: (itemCodes[it.id]||'').toString(), text: clean(it.text), subdimensionId: it.subdimensionId || null }))
+		];
 		window.step5QuestionnaireItems = questionnaireItemList; // expose globally for simulation or export
 		if (dimensionality === 'Multidimensional' && subdimensions.length){
 			for (const sd of subdimensions){
 				const groupItems = codedItems.filter(it => it.subdimensionId === sd.id);
-				if (!groupItems.length) continue;
+				const facetGlobals = globalItems.filter(g=>g.subdimensionId === sd.id);
+				if (!groupItems.length && !facetGlobals.length) continue;
 				lines.push(`## ${sd.name || 'Subdimension'}${sd.code? ' ['+sd.code+']':''}`);
 				if (sd.definition) lines.push(`// ${sd.definition.replace(/\n+/g,' ')}`);
-				groupItems.forEach((it,idx)=>{
-					const code = itemCodes[it.id];
+				// Global reflective items first (if any)
+				facetGlobals.forEach(g=>{
+					lines.push(`${g.code}. ${g.text}`);
+				});
+				groupItems.forEach((it)=>{
+					const code = (itemCodes[it.id]||'').toString();
 					lines.push(`${code}. ${clean(it.text)}`);
 				});
 				lines.push('');
 			}
 		} else {
+			// Unidimensional: prepend any second-order/global items (subdimensionId null)
+			const rootGlobals = globalItems.filter(g=>g.subdimensionId==null);
+			rootGlobals.forEach(g=> lines.push(`${g.code}. ${g.text}`));
 			codedItems.forEach(it => {
-				const code = itemCodes[it.id];
+				const code = (itemCodes[it.id]||'').toString();
 				lines.push(`${code}. ${clean(it.text)}`);
 			});
 		}
