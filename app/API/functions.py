@@ -321,7 +321,6 @@ def _empty_row(it, target, n_raters, k, notes):
 def generate_persona_set(generatedPersonas, groupDescription,temperature=0.7, model=DEFAULT_MODEL, api_key=None):
     messages = []
     resultsPersonas = []
-    print(generatedPersonas)
     personasPrompt = f'''
     
     **Role**: Act as an impartial persona architect specializing in human complexity. Create a multidimensional persona that authentically represents both positive and challenging traits. Create a persona that is not overly unique or "special," but rather embodies an average individual with relatable strengths and flaws.
@@ -335,7 +334,6 @@ def generate_persona_set(generatedPersonas, groupDescription,temperature=0.7, mo
     if len(generatedPersonas) != 0:
         personasPrompt = personasPrompt + f"These are the personas You already generated, dont repeat yourself: {generatedPersonas}. "
     cleanPersonasPrompt = 'ok now give me the description of every Persona in this format and nothing else. I provide with you with a Template, Only alter the Placeholder in all caps. Your output should just look like this Template, no exessive whitespaces. Do this for every Persona and append them to one long string. No linebrakes or unneccary whitespaces:<startPersona>PERSONA AND THE DESCRIPTION<endPersona>'
-    print("Prompt for persona generation:", personasPrompt)  # Debug print
     rawPersonas = get_chatgpt_response(personasPrompt, [], temperature, model,api_key)
     resultsPersonas.append(rawPersonas[0])
     results = get_chatgpt_response(cleanPersonasPrompt, rawPersonas[1], 0.3, model,api_key)
