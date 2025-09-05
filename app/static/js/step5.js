@@ -11,6 +11,7 @@
 	let decidedLower = null;
 	let decidedUpper = null;
 	let questionnaireItemList = []; // holds the final items included in questionnaire (id, code, text, subdimension)
+	let extraItems = []; // user-added additional items (code,text)
 	async function init(){
 		try {
 			const [step2, step1, step5, step4] = await Promise.all([
@@ -22,9 +23,12 @@
 			items = step2?.items || [];
 			decidedLower = (typeof step5?.decidedLower === 'number') ? step5.decidedLower : null;
 			decidedUpper = (typeof step5?.decidedUpper === 'number') ? step5.decidedUpper : null;
+			extraItems = Array.isArray(step5?.extraItems)? step5.extraItems : [];
 			renderSampleSize();
 			renderStability(step1?.panel4);
 			generateQuestionnaire(step1?.panel4, step1?.panel5, step4);
+			renderExtraItemsList();
+			attachExtraItemHandlers();
 		} catch(err){ console.error('[Step5] init failed', err); }
 	}
 
@@ -171,13 +175,16 @@
 			...globalItems.map(g=>({ id: g.id, code: g.code, text: g.text, subdimensionId: g.subdimensionId, isGlobal: true, secondOrder: !!g.secondOrder })),
 			...codedItems.map(it => ({ id: it.id, code: (itemCodes[it.id]||'').toString(), text: clean(it.text), subdimensionId: it.subdimensionId || null }))
 		];
+		// Append extra items (flagged but INCLUDED in simulation)
+		const sanitizedExtras = extraItems.filter(e => e && e.code && e.text).map(e => ({ id: e.code, code: e.code, text: clean(e.text), subdimensionId: null, isExtra: true, responseType: e.type||'likert' }));
+		questionnaireItemList.push(...sanitizedExtras);
 		window.step5QuestionnaireItems = questionnaireItemList; // expose globally for simulation or export
 		if (dimensionality === 'Multidimensional' && subdimensions.length){
 			// Output higher-order globals (root level) first if any
 			const rootGlobals = globalItems.filter(g=>g.subdimensionId==null);
 			if (rootGlobals.length){
 				lines.push('## Higher-Order Global Items');
-				rootGlobals.forEach(g=> lines.push(`${g.code}. ${g.text}`));
+				rootGlobals.forEach(g=> lines.push(`${g.code}: ${g.text}`));
 				lines.push('');
 			}
 			for (const sd of subdimensions){
@@ -192,9 +199,13 @@
 				});
 				groupItems.forEach((it)=>{
 					const code = (itemCodes[it.id]||'').toString();
-					lines.push(`${code}: ${clean(it.text)}`);
+					lines.push(`${code}. ${clean(it.text)}`);
 				});
 				lines.push('');
+			}
+			if (sanitizedExtras.length){
+				lines.push('## Additional Items');
+				sanitizedExtras.forEach(ex => { lines.push(`${ex.code}: ${ex.text}`); });
 			}
 		} else {
 			// Unidimensional: prepend any second-order/global items (subdimensionId null)
@@ -204,6 +215,11 @@
 				const code = (itemCodes[it.id]||'').toString();
 				lines.push(`${code}. ${clean(it.text)}`);
 			});
+			if (sanitizedExtras.length){
+				lines.push('');
+				lines.push('## Additional Items');
+				sanitizedExtras.forEach(ex => { lines.push(`${ex.code}: ${ex.text}`); });
+			}
 		}
 		// Basic response instruction placeholder
 		ta.value = lines.join('\n');
@@ -218,6 +234,70 @@
 	function clean(t){
 		return String(t||'').replace(/\s+/g,' ').trim();
 	}
+
+	function escapeHtml(str){
+		return String(str||'')
+			.replace(/&/g,'&amp;')
+			.replace(/</g,'&lt;')
+			.replace(/>/g,'&gt;')
+			.replace(/"/g,'&quot;')
+			.replace(/'/g,'&#39;');
+	}
+
+	function attachExtraItemHandlers(){
+		const form = document.getElementById('extraItemForm');
+		if (!form) return;
+		form.addEventListener('submit', async (e)=>{
+			e.preventDefault();
+			const codeEl = document.getElementById('extraItemCode');
+			const textEl = document.getElementById('extraItemText');
+			const typeEl = document.getElementById('extraItemType');
+			let code = (codeEl.value||'').trim();
+			const text = (textEl.value||'').trim();
+			const type = (typeEl.value||'likert');
+			const validCode = /^[A-Za-z][A-Za-z0-9_]{1,24}$/;
+			if (!code || !validCode.test(code)) { window.displayInfo?.('warning','Invalid code format.'); return; }
+			if (!text) { window.displayInfo?.('warning','Text required.'); return; }
+			// Prevent duplicate codes with existing questionnaire codes
+			const existingCodes = new Set(questionnaireItemList.map(i=>i.code));
+			if (existingCodes.has(code)) { window.displayInfo?.('warning','Code already used.'); return; }
+			extraItems.push({ code, text, type });
+			await persistExtraItems();
+			generateQuestionnaire(panel4Cache, panel5Cache, step4Cache);
+			renderExtraItemsList();
+			codeEl.value=''; textEl.value=''; typeEl.value='likert';
+		});
+	}
+
+	async function persistExtraItems(){
+		try {
+			const existing = await window.dataStorage.getData('data_step_5') || {};
+			await window.dataStorage.storeData('data_step_5', { ...existing, extraItems, extraItemsUpdatedAt: new Date().toISOString() }, false);
+		} catch(e){ console.warn('[Step5] Failed to persist extra items', e); }
+	}
+
+	function renderExtraItemsList(){
+		const host = document.getElementById('extraItemsList');
+		if (!host) return;
+		if (!extraItems.length){ host.innerHTML = '<div class="small text-muted">No additional items added.</div>'; return; }
+		host.innerHTML = '<div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th style="width:110px;">Code</th><th>Text</th><th style="width:90px;">Type</th><th style="width:40px;"></th></tr></thead><tbody>' +
+			extraItems.map((e,i)=>`<tr data-idx="${i}"><td><code>${e.code}</code></td><td>${escapeHtml(e.text)}</td><td><span class="badge bg-${e.type==='likert'?'info':'secondary'}">${e.type}</span></td><td><button type="button" class="btn btn-sm btn-outline-danger remove-extra-item" data-idx="${i}" title="Remove">&times;</button></td></tr>`).join('') + '</tbody></table></div>';
+		host.querySelectorAll('.remove-extra-item').forEach(btn=>{
+			btn.addEventListener('click', async () => {
+				const idx = parseInt(btn.getAttribute('data-idx'),10);
+				if (isNaN(idx)) return;
+				extraItems.splice(idx,1);
+				await persistExtraItems();
+				generateQuestionnaire(panel4Cache, panel5Cache, step4Cache);
+				renderExtraItemsList();
+			});
+		});
+	}
+
+	// Cache last panel data for regeneration after adding/removing extras
+	let panel4Cache = null, panel5Cache = null, step4Cache = null;
+	const origGenerate = generateQuestionnaire;
+	generateQuestionnaire = function(p4,p5,s4){ panel4Cache=p4; panel5Cache=p5; step4Cache=s4; return origGenerate(p4,p5,s4); };
 })();
 
 
@@ -441,6 +521,17 @@ async function likertSimulation(min=1,max=5) {
     const generatedPersonas = personas || [];
     const likerRange = max - min + 1;
     const randomizedQuestionaire = shuffle(step5QuestionnaireItems.map(item => ({ id: item.id, text: item.text })));
+	// Exclude non-likert extras from simulation
+	const simulationItems = randomizedQuestionaire.filter(q => {
+		const meta = (window.step5QuestionnaireItems||[]).find(it=>it.id===q.id);
+		return !meta || meta.responseType!=='open';
+	});
+    const openItems = randomizedQuestionaire.filter(q => {
+		const meta = (window.step5QuestionnaireItems||[]).find(it=>it.id===q.id);
+		return meta && meta.responseType==='open';
+	});
+    console.log(openItems);
+    
     const results = [];
     try {
         window.showLoading()
@@ -453,13 +544,17 @@ async function likertSimulation(min=1,max=5) {
                                 role: "system", 
                                 content: `This is a persona: ${persona}. From now on and based on this information, act as the Persona i gave you.`
                             }]
-            const prompt = `
-                Answer each of the following statements: ${JSON.stringify(randomizedQuestionaire)}. 
+            const openItemsPrompt = openItems.length > 0 ? `Also, answer the following open-ended questions briefly and in character: ${JSON.stringify(openItems)}.` : '';
+			const prompt = `
+				Answer each of the following statements: ${JSON.stringify(simulationItems)}. 
                 Only Answer with a number using a ${likerRange} point response scale: ${min} Very Inaccurate to ${max} Very Accurate. 
+
+                ${openItemsPrompt}
+
                 Output schema (JSON only, no extra text, no markdown):
                     {
-                        "ITEM-ID": NUMBER,
-                        "ITEM-ID": NUMBER,
+                        "ITEM-ID": NUMBER/ANSWER,
+                        "ITEM-ID": NUMBER/ANSWER,
                         ...,
                     }`
             const allAnswersNumbers = await window.sendChat(prompt,messages)
