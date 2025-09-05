@@ -110,11 +110,10 @@ function makeHxPostRequest(url, data) {
 }
 
 
-async function sendChat(input, history = [], model="gpt-4.1") {
+async function sendChat(input, history = [], model=undefined) {
     if (model === "search") {
         // If model is search, modify the input for search context
         input = `Search for: ${input}`;
-        model = "gpt-4o-search-preview"
     }
     const cipher = window.currentAPIKey_enc;
     if (!cipher) {
@@ -156,7 +155,7 @@ async function sendChat(input, history = [], model="gpt-4.1") {
 }
 window.sendChat = sendChat;
 
-async function genPersonaPool(numberOfPersonas=20, groupDescription, model) {
+async function genPersonaPool({generatedPersonas=[], groupDescription}) {
     const cipher = window.currentAPIKey_enc;
     if (!cipher) {
         alert('API key is not set. Please enter your OpenAI API key first.');
@@ -166,11 +165,10 @@ async function genPersonaPool(numberOfPersonas=20, groupDescription, model) {
     const resp = await fetch('/api/personaGen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numberOfPersonas, groupDescription, model, keyCipher: cipher })
+        body: JSON.stringify({generatedPersonas, groupDescription, keyCipher: cipher })
     });
     if (resp.ok) {
-        const { personas } = await resp.json();
-        return personas;
+        return resp.json();
     } else {
         // Detailed error logging: parse JSON if possible
         let errorDetail;
@@ -186,7 +184,7 @@ async function genPersonaPool(numberOfPersonas=20, groupDescription, model) {
             const newKey = prompt('Your API key appears invalid or unauthorized. Please re-enter your key.');
             // Re-init API key and retry storing cipher
             window.currentAPIKey_enc = await storeAPIKey(newKey, false);
-            return await genPersonaPool(numberOfPersonas, groupDescription, temperature, model); // Retry with new key
+            return await genPersonaPool(numberOfPersonas, groupDescription); // Retry with new key
         }
     }
 }
@@ -850,3 +848,12 @@ window.updateModelSpecIssueMarker = updateModelSpecIssueMarker;
         if (!document.hidden) runDetection();
     });
 })();
+
+function shuffle(a){
+  for (let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+window.shuffle = shuffle;

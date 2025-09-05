@@ -1,0 +1,72 @@
+<div id="loadingOverlay"
+    class="visually-hidden position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 d-flex align-items-center justify-content-center"
+    style="z-index:1050">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Loading…</span>
+    </div>
+</div>
+
+<div id="step2-content" data-get-sync-function="init"></div>
+<div id="area1">
+    <div class="container-fluid">
+        <h2 class="h3 mb-4">Step 5: Collect Data to Conduct Pretest</h2>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h4 class="card-title">Conduct items for pretest</h4>
+                <div id="sampleSizeGuidance"><!-- JS injects sample size guidance here --></div>
+                <div id="stabilityGuidance"><!-- JS injects stability guidance here --></div>
+                <hr class="my-3" />
+                <h5 class="card-title">Generated Questionnaire</h5>
+                <div class="small text-muted mb-2">Automatically compiled from active (non-excluded) items after Step 4.</div>
+                <textarea id="questionnairePreview" class="form-control form-control-sm" rows="10" readonly style="font-family: var(--bs-font-monospace);"></textarea>
+            </div>
+        </div>
+        <div id="genArea" data-bs-theme="light">
+            <div class="card text-bg-light mb-4">
+                <div class="card-body">
+                    <h4 class="card-title">Generate Participants</h4>
+                    <div class="small mb-2">Add any specific instructions or context for the participants here.</div>
+                    <textarea id="promptAddon" class="form-control form-control-sm" rows="2" placeholder="a diverse Pool of citizens with different characteristics representing an average population">a diverse Pool of citizens with different characteristics representing an average population</textarea>
+                    <div class="row g-2 align-items-center mt-3">
+                        <div class="col-auto">
+                                <div class="d-flex align-items-center gap-2">
+                                    <label for="numPersonas" class="form-label small mb-0"># Participants</label>
+                                    <input type="number" id="numPersonas" class="form-control form-control-sm w-auto" style="width:90px" min="1" max="300" value="10" />
+                                </div>
+                        </div>
+                        <div class="col-auto ms-auto d-flex align-items-center gap-3">
+                            <div class="form-check small mb-0">
+                                <input type="checkbox" class="form-check-input" id="appendPersonasCheckbox" checked />
+                                <label for="appendPersonasCheckbox" class="form-check-label">Append Existing Personas</label>
+                            </div>
+                            <button id="genPersonasBtn" class="btn btn-info btn-sm">Generate Participants</button>
+                        </div>
+                    </div>
+                    <textarea id="participantsDisplay" class="form-control form-control-sm d-none my-3" rows="10" readonly style="font-family: var(--bs-font-monospace);"></textarea>
+                </div>
+            </div>
+            <div class="card text-bg-light mb-4 d-none" id="likertSim">
+                <div class="card-body">
+                    <h4 class="card-title">Simulate Results</h4>
+                    <p class="mb-2">Let the Participants answer the questionnaire.</p>
+                    <div class="d-flex align-items-center gap-2">
+                        <label for="numPersonas" class="form-label small mb-0">Likert range</label>
+                        <input type="number" id="minLikertScale" class="form-control form-control-sm w-auto" style="width:90px" min="0" max="10" value="1" /> - <input type="number" id="maxLikertScale" class="form-control form-control-sm w-auto" style="width:90px" min="0" max="10" value="5" />
+                        <button id="likertSimBtn" class="btn btn-info btn-sm ms-auto">Simulate</button>
+                    </div>
+                    <div class="row">
+                        <div id="answersTable" class="d-none my-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .tabulator{
+        padding: 0%;
+        border-radius: 6px;
+    }
+</style>
