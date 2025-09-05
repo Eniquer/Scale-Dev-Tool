@@ -326,21 +326,87 @@ let personas = [];
 	async function saveLikertAnswers(tableData){
 		try {
 			const existing = await window.dataStorage.getData(STORAGE_KEY) || {};
-			await window.dataStorage.storeData(STORAGE_KEY, { ...existing, likertAnswers: tableData, likertAnswersUpdatedAt: new Date().toISOString() }, false);
+			const qHash = computeQuestionnaireHash();
+			await window.dataStorage.storeData(STORAGE_KEY, { ...existing, likertAnswers: tableData, likertAnswersUpdatedAt: new Date().toISOString(), likertAnswersQuestionnaireHash: qHash }, false);
 		} catch(e){ console.warn('[Step5] Failed to save likert answers', e); }
 	}
+
+	// Expose so external render / handlers can persist edits
+	window.saveLikertAnswers = saveLikertAnswers;
 
 	async function loadLikertAnswers(){
 		try {
 			const existing = await window.dataStorage.getData(STORAGE_KEY) || {};
-			return Array.isArray(existing.likertAnswers) ? existing.likertAnswers : null;
+			if (!Array.isArray(existing.likertAnswers)) return null;
+			const currentHash = computeQuestionnaireHash();
+			if (existing.likertAnswersQuestionnaireHash && existing.likertAnswersQuestionnaireHash !== currentHash){
+				console.info('[Step5] Stored likert answers discarded due to questionnaire change.');
+				return null;
+			}
+			return existing.likertAnswers;
 		} catch(e){ console.warn('[Step5] Failed to load likert answers', e); return null; }
 	}
+
+	function computeQuestionnaireHash(){
+		try {
+			const items = (window.step5QuestionnaireItems||[]).map(i=>`${i.code}|${i.responseType||'likert'}`).sort().join('||');
+			let hash = 0; for (let i=0;i<items.length;i++){ const c = items.charCodeAt(i); hash = ((hash<<5)-hash)+c; hash|=0; }
+			return 'q'+hash;
+		} catch(e){ return 'q0'; }
+	}
+
 
 	async function setup(){
         // todo warning if to many questionaire items. maybe break output
 		const btn = document.getElementById('genPersonasBtn');
 		const likertSimBtn = document.getElementById('likertSimBtn');
+		// Create / locate cancel button for likert simulation
+		let likertCancelBtn = document.getElementById('likertSimCancelBtn');
+		let likertCancelOriginalParent = null;
+		let likertCancelOriginalNext = null;
+		if (!likertCancelBtn && likertSimBtn) {
+			likertCancelBtn = document.createElement('button');
+			likertCancelBtn.type = 'button';
+			likertCancelBtn.id = 'likertSimCancelBtn';
+			likertCancelBtn.className = 'btn btn-sm btn-outline-warning ms-2 d-none';
+			likertCancelBtn.textContent = 'Stop Early';
+			likertSimBtn.parentNode && likertSimBtn.parentNode.insertBefore(likertCancelBtn, likertSimBtn.nextSibling);
+		}
+
+		function positionLikertCancelButton(){
+			if (!likertCancelBtn) return;
+			const area = document.getElementById('areaone');
+			if (!area) { // fallback: just ensure high z-index in current flow layout
+				likertCancelBtn.style.zIndex = '99999';
+				return;
+			}
+			// store original location for later restore once
+			if (!likertCancelOriginalParent){
+				likertCancelOriginalParent = likertCancelBtn.parentNode;
+				likertCancelOriginalNext = likertCancelBtn.nextSibling;
+			}
+			const rect = area.getBoundingClientRect();
+			Object.assign(likertCancelBtn.style, {
+				position: 'fixed',
+				left: (rect.right - 90) + 'px', // a bit inset from right edge
+				top: (rect.top + 12) + 'px',
+				zIndex: '99999',
+				pointerEvents: 'auto'
+			});
+			document.body.appendChild(likertCancelBtn);
+		}
+
+		function restoreLikertCancelButton(){
+			if (!likertCancelBtn) return;
+			if (likertCancelOriginalParent){
+				likertCancelBtn.removeAttribute('style');
+				if (likertCancelOriginalNext){
+					likertCancelOriginalParent.insertBefore(likertCancelBtn, likertCancelOriginalNext);
+				} else {
+					likertCancelOriginalParent.appendChild(likertCancelBtn);
+				}
+			}
+		}
 		const addon = document.getElementById('promptAddon');
 		const out = document.getElementById('participantsDisplay');
 		const numInput = document.getElementById('numPersonas');
@@ -376,6 +442,7 @@ let personas = [];
 				renderLikertTable(storedLikert, true);
 			} catch(e){ console.warn('[Step5] Failed to render stored likert answers', e); }
 		}
+
 
 		// Sanitize & clamp user input
 		numInput.addEventListener('input', () => {
@@ -445,52 +512,62 @@ let personas = [];
 			try {
                 showLoading()
 				while (iteration < maxIterations && currentPersonas.length < targetCount) {
-					const batch = await window.genPersonaPool({ generatedPersonas: personas, groupDescription });
+					const batch = await window.genPersonaPool({ generatedPersonas: currentPersonas, groupDescription });
 					if (Array.isArray(batch) && batch.length){
 						// Merge unique (avoid duplicates just in case)
 						for (const p of batch){
 							if (currentPersonas.length >= targetCount) break;
 							if (!currentPersonas.includes(p)) currentPersonas.push(p);
 						}
-                        personas = personas.concat(currentPersonas)
-						await savePersonas();
 					}
 					displayInfo('info', `Generated ${currentPersonas.length}/${targetCount}`);
 					iteration++;
 				}
 				if (currentPersonas.length >= targetCount){
-					displayInfo('success', `Successfully generated ${currentPersonas.length} personas.`);
+                    displayInfo('success', `Successfully generated ${currentPersonas.length} personas.`);
 				} else if (iteration === maxIterations){
-					displayInfo('warning', `Stopped after ${iteration} iterations with ${currentPersonas.length}/${targetCount}.`);
+                    displayInfo('warning', `Stopped after ${iteration} iterations with ${currentPersonas.length}/${targetCount}.`);
 				}
-				const lines = personas.map((p,i)=> `${i+1}. ${String(p)}`);
-				out.value = lines.join('\n');
 			} catch(err){
-				console.error(err);
+                console.error(err);
 				displayInfo('error', 'Error generating personas.');
 			} finally {
-				hideLoading()
+                hideLoading()
+                personas = personas.concat(currentPersonas)
+                await savePersonas();
+				const lines = personas.map((p,i)=> `${i+1}. ${String(p)}`);
+				out.value = lines.join('\n');
 			}
 		});
-        likertSimBtn.addEventListener('click', async () => {
+		likertSimBtn.addEventListener('click', async () => {
+			// If existing simulated data present, confirm before proceeding
+			try {
+				const existingCount = (window.answersTable && typeof window.answersTable.getData === 'function') ? window.answersTable.getData().length : 0;
+				if (existingCount > 0 && !window._likertSimRunning) {
+					const proceed = await (window.customConfirm ? window.customConfirm({
+						title: 'Simulated data exists',
+						message: `There are already ${existingCount} simulated response rows. Run another simulation? (New simulation replaces table view but previously stored data will be updated.)`,
+						confirmText: 'Simulate',
+						cancelText: 'Cancel'
+					}) : Promise.resolve(confirm('Existing simulated data detected. Run simulation again?')));
+					if (!proceed) return;
+				}
+			} catch(e){ console.warn('[Step5] pre-sim confirm failed', e); }
 			// Simulate Likert scale responses
-            // todo gen questionaire#
-            const answers = await likertSimulation(minLikertScale.value,maxLikertScale.value);
-            // Build a quick lookup: itemId -> code
-
-            const codeById = Object.fromEntries(
-                (window.step5QuestionnaireItems || []).map(it => [String(it.id), it.code])
-            );
-
-
-            const tableData = (answers || []).map(obj => {
-                const converted = {};
-                for (const [id, val] of Object.entries(obj)){
-                    const code = codeById[id] || id; // fallback if missing
-                    converted[code] = val;
-                }
-                return converted;
-            });
+			if (window._likertSimRunning) { return; }
+			window._likertSimCancelled = false; // reset cancel flag
+			window._likertSimRunning = true;
+			// UI state adjustments
+			likertSimBtn.disabled = true;
+			if (likertCancelBtn){ likertCancelBtn.classList.remove('d-none'); likertCancelBtn.disabled = false; }
+			// Position above overlay so it's always clickable
+			positionLikertCancelButton();
+			// Pre-build code map for simulation & incremental persistence
+			const codeById = Object.fromEntries((window.step5QuestionnaireItems || []).map(it => [String(it.id), it.code]));
+			const answers = await likertSimulation(minLikertScale.value,maxLikertScale.value, codeById);
+			// answers already ID-keyed; convert once more defensively
+			const tableData = (answers || []).map(row => {
+				const conv={}; Object.entries(row).forEach(([id,val])=>{ const c=codeById[id]||id; conv[c]=val; }); return conv; });
 
 			// Build Tabulator columns dynamically from union of keys
 			const allKeys = new Set();
@@ -514,8 +591,23 @@ let personas = [];
 			} else {
 				targetDiv.textContent = 'Tabulator library not loaded.';
 			}
+			// Restore buttons state
+			likertSimBtn.disabled = false;
+			if (likertCancelBtn){ likertCancelBtn.classList.add('d-none'); }
+			window._likertSimRunning = false;
+			restoreLikertCancelButton();
 
 		});
+
+		// Attach cancel handler
+		if (likertCancelBtn){
+			likertCancelBtn.addEventListener('click', ()=>{
+				if (!window._likertSimRunning) return;
+				window._likertSimCancelled = true;
+				likertCancelBtn.disabled = true;
+				window.displayInfo && window.displayInfo('warning','Stopping early after current persona...');
+			});
+		}
 	}
 
 	if (document.readyState === 'loading') {
@@ -526,7 +618,7 @@ let personas = [];
 })();
 
 
-async function likertSimulation(min=1,max=5) {
+async function likertSimulation(min=1,max=5, codeMap) {
     if (min == max) {
         displayInfo("info",`Only one point scale selected: ${min}.`);
         return
@@ -552,9 +644,15 @@ async function likertSimulation(min=1,max=5) {
     console.log(openItems);
     
     const results = [];
-    try {
-        window.showLoading()
-        for (const persona of generatedPersonas) {
+	try {
+		window.showLoading()
+		for (const persona of generatedPersonas) {
+			if (window._likertSimCancelled) {
+					displayInfo('warning', `Cancelled. Generated ${results.length}/${generatedPersonas.length} so far.`);
+					// Persist what we have before breaking
+					try { if (codeMap){ const mapped = mapResultsToCodes(results, codeMap); await (window.saveLikertAnswers && window.saveLikertAnswers(mapped)); } } catch(e){ console.warn('[Step5] Incremental save (cancel) failed', e); }
+					break;
+			}
             const messages = [{
                                 role: "system",
                                 content: "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."
@@ -578,21 +676,31 @@ async function likertSimulation(min=1,max=5) {
                     }`
             const allAnswersNumbers = await window.sendChat(prompt,messages)
 
-            const data = cleanAIRespond(allAnswersNumbers[0]);
-            results.push(data);
-            if (results.length % 5 === 0 && results.length < generatedPersonas.length) {
-                displayInfo("info",`Simulated responses for ${results.length} personas so far...`);
+			const data = cleanAIRespond(allAnswersNumbers[0]);
+			results.push(data);
+			// Incremental persistence each persona (code-keyed)
+			try { if (results.length === 1 || results.length % 3 === 0){ if (codeMap){ const mapped = mapResultsToCodes(results, codeMap); await (window.saveLikertAnswers && window.saveLikertAnswers(mapped)); } } } catch(e){ console.warn('[Step5] Incremental save failed', e); }
+			if (!window._likertSimCancelled && results.length % 5 === 0 && results.length < generatedPersonas.length) {
+                displayInfo("info",`Simulated responses for ${results.length}/${generatedPersonas.length} personas so far...`);
             }
         }
-        displayInfo("success",`Simulated responses for ${results.length} personas.`);
+		if (!window._likertSimCancelled) {
+			displayInfo("success",`Simulated responses for ${results.length} personas.`);
+		}
     } catch (err) {
         console.error('Generate AI responses error', err);
         window.displayInfo && window.displayInfo('danger', 'Could not generate AI responses.');
     } finally {
         window.hideLoading && window.hideLoading();
+		// Final persistence of whatever we ended with (code-keyed)
+		try { if (codeMap){ const mapped = mapResultsToCodes(results, codeMap); await (window.saveLikertAnswers && window.saveLikertAnswers(mapped)); } } catch(e){ console.warn('[Step5] Final save failed', e); }
+		return results;
     }
 
-    return results;
+}
+
+function mapResultsToCodes(resultRows, codeMap){
+	return (resultRows||[]).map(r=>{ const obj={}; Object.entries(r).forEach(([id,val])=>{ const c=codeMap[id]||id; obj[c]=val; }); return obj; });
 }
 
 // Shared renderer for Likert Tabulator ensuring consistent column min width
@@ -600,6 +708,10 @@ function renderLikertTable(rawRows, fromStorage){
 	try {
 		const targetDiv = document.getElementById('answersTable');
 		if (!targetDiv) return;
+		// Lightweight local debounce fallback (non-interfering) if none present
+		if (typeof window.debounce !== 'function') {
+			window.debounce = function(fn, delay=300){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), delay); }; };
+		}
 		const codeById = Object.fromEntries((window.step5QuestionnaireItems||[]).map(it=>[String(it.id), it.code]));
 		// Detect if rows are code keyed already (non numeric keys)
 		const sample = rawRows[0]||{};
@@ -620,7 +732,10 @@ function renderLikertTable(rawRows, fromStorage){
 		if (window.answersTable){ try { window.answersTable.destroy(); } catch(e){} }
 		window.answersTable = new Tabulator(targetDiv, {
 			data: tabData,
-			columns,
+				columns: columns.map(col => {
+					if (col.field === '_idx') return col; // index column not editable
+					return { ...col, editor: 'input' };
+				}),
 			layout: 'fitData',
 			reactiveData: true,
 			resizableColumns: true,
@@ -628,6 +743,15 @@ function renderLikertTable(rawRows, fromStorage){
 			placeholder: 'No items available',
 			columnDefaults: { minWidth: 70 },
 			index: '_idx',
+				cellEdited: debounce(async function(){
+					try {
+						// Reconstruct raw table data without the index column
+						const current = window.answersTable.getData().map(r => {
+							const { _idx, ...rest } = r; return rest; });
+						await (window.saveLikertAnswers && window.saveLikertAnswers(current));
+						window.displayInfo && window.displayInfo('success','Saved table edits');
+					} catch(e){ console.warn('[Step5] Failed to persist edited likert answers', e); }
+				}, 500)
 		});
 		// Force redraw to normalize column widths (addresses discrepancy after reload)
 		setTimeout(()=>{ try { window.answersTable.redraw(true); } catch(e){} }, 0);
