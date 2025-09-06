@@ -22,12 +22,12 @@ This module is resilient to an empty / placeholder R script (no output file).
 from __future__ import annotations
 
 import subprocess, tempfile, json, os, uuid, shutil
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Sequence
 
 class RExecutionError(RuntimeError):
     pass
 
-def run_r_subprocess(data: List[Dict[str, Any]], script_path: str, model_syntax: Optional[str] = None) -> Dict[str, Any]:
+def run_r_subprocess(data: List[Dict[str, Any]], script_path: str, model_syntax: Optional[str] = None, extra_args: Optional[Sequence[str]] = None) -> Dict[str, Any]:
     # Allow override via env var (useful for deployment / testing)
     script_path = os.getenv("R_SCRIPT_PATH", script_path)
     if not os.path.isabs(script_path):
@@ -62,6 +62,8 @@ def run_r_subprocess(data: List[Dict[str, Any]], script_path: str, model_syntax:
 
         # Updated invocation includes model path before output path
         cmd = [rscript_bin, script_path, in_path, model_path, out_path]
+        if extra_args:
+            cmd.extend(list(map(str, extra_args)))
         proc = subprocess.run(
             cmd,
             capture_output=True,

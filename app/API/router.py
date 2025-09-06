@@ -169,6 +169,36 @@ async def run_r_script(payload: dict):
         except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/r/efa")
+async def run_efa(payload: dict):
+        """Execute the EFA R script.
+
+        Payload:
+            {
+              "data": [ { ...row objects ... } ],
+              "n_factors": int | "auto" (optional),
+              "rotation": "oblimin" | "varimax" | "promax" (optional),
+              "script": "analysis/scripts/efa_analysis.R" (optional override)
+            }
+        """
+        data = payload.get("data", [])
+        if not isinstance(data, list):
+            raise HTTPException(status_code=400, detail="'data' must be a list of row objects")
+        n_factors = payload.get("n_factors", "auto")
+        rotation = payload.get("rotation", "oblimin")
+        script_rel = payload.get("script", "analysis/scripts/efa_analysis.R")
+        # We pass factors/rotation via environment variables or append args? Modify r_runner to accept extra? For simplicity, embed into model_syntax arg combined JSON.
+        # Here we overload model_syntax to carry a control JSON the R script can ignore; we instead extend run_r_subprocess to accept extra_args if available.
+        try:
+            # run_r_subprocess signature (data, script_rel, model_syntax=None). We'll pass None and rely on script arguments after writing temp files.
+            # Quick adaptation: if r_runner supports extra args environment; if not, we add simple wrapper by constructing command via a small control script.
+            result = run_r_subprocess(data, script_rel, model_syntax=None, extra_args=[str(n_factors), str(rotation)])
+            return result
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/personaGen")
 async def generate_personas_endpoint(gen_req: PersonaGenRequest):
     try:

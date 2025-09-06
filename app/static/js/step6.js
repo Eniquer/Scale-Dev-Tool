@@ -26,6 +26,16 @@
     switchSource(source);
   await initLavaanEditor();
     updateViewButtons();
+    // Auto-set default EFA factor count to theorized subdimensions (if available) instead of 'auto'
+    try {
+      const step1 = await window.dataStorage.getData('data_step_1');
+      const subs = step1?.panel5?.subdimensions || [];
+      const distinct = Array.isArray(subs)? subs.filter(sd=> sd && sd.name)?.length : 0;
+      const efaInput = document.getElementById('efaNFactors');
+      if (efaInput && (efaInput.value.trim().toLowerCase()==='auto' || !efaInput.value.trim()) && distinct>0){
+        efaInput.value = String(distinct);
+      }
+    } catch(e){ /* silent */ }
   }
 
   function bindUI(){
@@ -121,6 +131,12 @@
   cfaStatusEl = id('cfaStatus');
   cfaResultsEl = id('cfaResults');
   analyzeBtn && analyzeBtn.addEventListener('click', runCFAAnalysis);
+
+  // EFA elements
+  const efaBtn = id('btnRunEFA');
+  const efaStatus = id('efaStatus');
+  const efaResults = id('efaResults');
+  efaBtn && efaBtn.addEventListener('click', runEFA);
   }
 
   async function getReverseSuggestions(retry=0){
@@ -684,6 +700,9 @@ Output format (strict JSON):
         cfaStatusEl.textContent = 'Ready';
       }
     }
+  // EFA enable
+  const efaBtn = id('btnRunEFA');
+  if (efaBtn) efaBtn.disabled = !hasData;
   }
 
   async function runCFAAnalysis(){
@@ -715,6 +734,110 @@ Output format (strict JSON):
       analyzeBtn.disabled = false;
     }
   }
+
+  // todo check how to handle disabled items in R
+
+  async function runEFA(){
+    const btn = id('btnRunEFA');
+    const statusEl = id('efaStatus');
+    const outEl = id('efaResults');
+    if (!btn || btn.disabled) return;
+    if (!Array.isArray(rawData) || !rawData.length){ return; }
+    
+    const nFactorsVal = (id('efaNFactors')?.value || 'auto').trim() || 'auto';
+    const rotation = (id('efaRotation')?.value || 'oblimin');
+    btn.disabled = true;
+    statusEl && (statusEl.textContent = 'Running…');
+    outEl && (outEl.innerHTML = '<span class="text-muted">Submitting...</span>');
+    try {
+      const res = await fetch('/api/r/efa', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ data: rawData, n_factors: nFactorsVal, rotation })
+      });
+      const json = await res.json().catch(()=>({status:'client_parse_error'}));
+      if (!res.ok){ throw new Error(json.detail || ('HTTP '+res.status)); }
+      renderEFAResults(json);
+      statusEl && (statusEl.textContent = 'Done');
+    } catch(err){
+      outEl && (outEl.innerHTML = `<span class='text-danger'>Error: ${escapeHtml(err.message||err)}</span>`);
+      statusEl && (statusEl.textContent = 'Error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderEFAResults(resp){
+    const outEl = id('efaResults');
+    if (!outEl) return;
+    const out = resp.output || {};
+    const efa = out.efa || {};
+    if (!efa.n_factors_selected){ outEl.innerHTML = '<span class="text-muted">No EFA output.</span>'; return; }
+    const lines = [];
+    lines.push(`Selected factors: ${efa.n_factors_selected}`);
+    if (Array.isArray(efa.eigenvalues)){
+      lines.push('Eigenvalues: '+ efa.eigenvalues.map(v=>Number(v).toFixed(3)).join(', '));
+    }
+    const variance = efa.variance || [];
+    if (Array.isArray(variance) && variance.length){
+      lines.push('\nVariance Explained:');
+      variance.forEach(v=>{ lines.push(`  ${v.factor}: SS=${numFmt(v.SS_loadings)} prop=${numFmt(v.Proportion)} cum=${numFmt(v.Cumulative)}`); });
+    }
+  // (Removed previous per-item list of loadings to avoid duplication; matrix shown below.)
+    const Phi = efa.factor_correlation;
+    if (Phi && typeof Phi === 'object'){
+      const keys = Object.keys(Phi);
+      if (keys.length){
+        lines.push('\nFactor Correlations:');
+        keys.forEach(rn=>{
+          const row = Phi[rn];
+            if (row && typeof row === 'object'){
+              lines.push('  '+rn+': '+ Object.entries(row).map(([k,v])=> `${k}=${numFmt(v)}`).join(' '));
+            }
+        });
+      }
+    }
+
+    // Matrix style like print(efa_result$loadings, cutoff=0.3)
+    const lm = efa.loadings_matrix || [];
+    if (Array.isArray(lm) && lm.length){
+      const cutoff = 0.30;
+      // Sort items alphabetically (case-insensitive) before formatting
+      const sortedLm = [...lm].sort((a,b)=> (a.item||'').localeCompare(b.item||'', undefined, {sensitivity:'base'}));
+      const factorNames = Object.keys(sortedLm[0]).filter(k=> k !== 'item');
+      if (factorNames.length){
+        const widths = { item: Math.max(4, ...sortedLm.map(r=> (r.item||'').length)) };
+        factorNames.forEach(fn=> widths[fn] = Math.max(fn.length, 5));
+        const formattedRows = sortedLm.map(r=>{
+          const row = { item: r.item };
+          factorNames.forEach(fn=>{
+            const val = r[fn];
+            if (val==null || val===''){ row[fn]=''; return; }
+            const num = Number(val);
+            if (!isFinite(num) || Math.abs(num) < cutoff){ row[fn]=''; return; }
+            const txt = num.toFixed(2);
+            row[fn] = txt;
+            widths[fn] = Math.max(widths[fn], txt.length);
+          });
+          widths.item = Math.max(widths.item, (r.item||'').length);
+          return row;
+        });
+        const pad = (s,w)=>{ s = s==null? '' : String(s); return s.length>=w? s : s + ' '.repeat(w-s.length); };
+        lines.push('\nLoadings Matrix (cutoff=0.30):');
+        const header = [pad('', widths.item)];
+        factorNames.forEach(fn=> header.push(pad(fn, widths[fn])));
+        lines.push('  '+header.join('  '));
+        formattedRows.forEach(r=>{
+          const rowPieces = [pad(r.item, widths.item)];
+            factorNames.forEach(fn=> rowPieces.push(pad(r[fn], widths[fn])));
+            lines.push('  '+rowPieces.join('  '));
+        });
+      }
+    }
+    outEl.textContent = lines.join('\n');
+  }
+
+  function numFmt(v){ if (v==null||v==='') return 'NA'; const n=Number(v); return isFinite(n)? (Math.abs(n)<1e-4||Math.abs(n)>=1e4? n.toExponential(2): n.toFixed(3)) : String(v); }
 
   function renderCFAResults(resp){
     if (!cfaResultsEl){ return; }
