@@ -1,0 +1,268 @@
+#!/usr/bin/env Rscript
+
+# CFA analysis script using lavaan. Accepts:
+#   Rscript custom_analysis.R <data_json> <model_txt> <output_json>
+
+# Ensure user library path (non-root installs)
+user_lib <- file.path(Sys.getenv("HOME"), "R", "libs")
+if (!dir.exists(user_lib)) dir.create(user_lib, recursive = TRUE, showWarnings = FALSE)
+.libPaths(c(user_lib, .libPaths()))
+
+quiet_pkg <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg, repos = "https://cloud.r-project.org", lib = user_lib)
+  }
+  suppressPackageStartupMessages(library(pkg, character.only = TRUE))
+}
+
+quiet_pkg("jsonlite")   # always
+
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) < 3) stop("Expected three arguments: <data_json> <model_txt> <output_json>")
+data_path  <- args[1]
+model_path <- args[2]
+output_path <- args[3]
+
+safe_read_json <- function(path) {
+  if (!file.exists(path)) return(list())
+  txt <- readLines(path, warn = FALSE)
+  if (!length(txt)) return(list())
+  jsonlite::fromJSON(paste(txt, collapse = "\n"))
+}
+safe_read_text <- function(path) {
+  if (!file.exists(path)) return("")
+  paste(readLines(path, warn = FALSE), collapse = "\n")
+}
+
+data_list <- safe_read_json(data_path)
+df <- tryCatch({ as.data.frame(data_list, stringsAsFactors = FALSE) }, error = function(e) data.frame())
+model_syntax <- safe_read_text(model_path)
+
+# Clean model syntax (remove comments/empties) to avoid lavaan parsing hiccups
+if (nchar(model_syntax) > 0) {
+  lines <- unlist(strsplit(model_syntax, "\n", fixed = TRUE))
+  lines <- gsub("\r", "", lines, fixed = TRUE)
+  lines <- chartr('“”’', '"""', lines)
+  lines <- sub("#.*$", "", lines)
+  lines <- trimws(lines)
+  lines <- lines[nzchar(lines)]
+  cleaned_model_syntax <- paste(lines, collapse = "\n")
+} else {
+  cleaned_model_syntax <- model_syntax
+}
+
+numeric_cols <- names(df)[vapply(df, is.numeric, logical(1))]
+column_means <- if (length(numeric_cols)) {
+  m <- vapply(df[numeric_cols], function(x) mean(x, na.rm = TRUE), numeric(1))
+  as.list(m)
+} else list()
+
+result <- list(
+  status = "ok",
+  n_rows = nrow(df),
+  n_cols = ncol(df),
+  numeric_columns = numeric_cols,
+  column_means = column_means,
+  model_provided = nchar(trimws(model_syntax)) > 0
+)
+
+# ---------- Step 6 helper: auto-detect structure and compute purification metrics ----------
+# Thresholds per MacKenzie Step 6: AVE >= .50, CR >= .70; MI > 3.84; VIF pref < 3 (tolerate < 10). 
+step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pref = 3, vif_cut = 10) {
+  stopifnot(inherits(fit, "lavaan"))
+  ss <- lavaan::standardizedSolution(fit)
+  pe <- lavaan::parameterEstimates(fit, standardized = TRUE)
+  mi <- lavaan::modificationIndices(fit)
+  ov <- lavaan::lavNames(fit, type = "ov")
+  lv <- lavaan::lavNames(fit, type = "lv")
+
+  # try factor scores (some models—esp. non-identified formative—may fail)
+  scores <- tryCatch(as.data.frame(lavaan::lavPredict(fit, type = "lv")),
+                     error = function(e) NULL)
+
+  # Identify blocks
+  refl_items <- subset(ss, op == "=~" & lhs %in% lv & rhs %in% ov)         # first-order reflective
+  refl_first_order <- unique(refl_items$lhs)
+
+  so_paths <- subset(ss, op == "=~" & lhs %in% lv & rhs %in% lv)            # second-order reflective
+  so_reflective <- unique(so_paths$lhs)
+  so_children   <- if (nrow(so_paths)) split(so_paths$rhs, so_paths$lhs) else list()
+
+  form_rows <- subset(pe, op == "~" & lhs %in% lv)                          # regressions onto indicators
+  first_form <- second_form <- character(0)
+  if (nrow(form_rows)) {
+    by_latent <- split(form_rows, form_rows$lhs)
+    for (LHS in names(by_latent)) {
+      RHS <- by_latent[[LHS]]$rhs
+      if (all(RHS %in% ov)) first_form <- c(first_form, LHS)                # first-order formative
+      if (all(RHS %in% lv)) second_form <- c(second_form, LHS)              # second-order formative
+    }
+    first_form  <- unique(first_form)
+    second_form <- unique(second_form)
+  }
+
+  # Helpers
+  item_err_var <- function(item) subset(ss, op == "~~" & lhs == item & rhs == item)$est.std
+  ave_cr_one <- function(f, items) {
+    L <- subset(ss, op == "=~" & lhs == f & rhs %in% items)
+    if (!nrow(L)) return(data.frame(factor = f, AVE = NA_real_, CR = NA_real_))
+    lam <- L$est.std
+    theta <- sapply(L$rhs, item_err_var)
+    AVE <- mean(lam^2)
+    CR  <- (sum(lam))^2 / ((sum(lam))^2 + sum(theta))
+    data.frame(factor = f, AVE = AVE, CR = CR)
+  }
+
+  # Global fit
+  global_fit <- data.frame(
+    chisq = lavaan::fitMeasures(fit, "chisq"),
+    df    = lavaan::fitMeasures(fit, "df"),
+    p     = lavaan::fitMeasures(fit, "pvalue"),
+    cfi   = lavaan::fitMeasures(fit, "cfi"),
+    tli   = lavaan::fitMeasures(fit, "tli"),
+    rmsea = lavaan::fitMeasures(fit, "rmsea"),
+    srmr  = lavaan::fitMeasures(fit, "srmr")
+  )
+
+  # First-order reflective: AVE/CR; item flags; MI flags
+  refl_constructs <- if (length(refl_first_order)) {
+    do.call(rbind, lapply(refl_first_order, function(f) {
+      items <- subset(refl_items, lhs == f)$rhs
+      ave_cr_one(f, items)
+    }))
+  } else data.frame()
+
+  refl_items_df <- if (length(refl_first_order)) {
+    out <- within(subset(refl_items, select = c(lhs, rhs, est.std, z)),
+                  lambda2 <- est.std^2)
+    names(out)[1:2] <- c("factor","item")
+    out$flag_weak <- (is.na(out$z) | out$z <= 1.96 | out$lambda2 < loading_cut)
+    out
+  } else data.frame()
+
+  errcov_MIs <- if (length(refl_first_order)) {
+    do.call(rbind, lapply(refl_first_order, function(f) {
+      items <- subset(refl_items, lhs == f)$rhs
+      subset(mi, op == "~~" & lhs %in% items & rhs %in% items & mi > mi_cut)
+    }))
+  } else data.frame()
+
+  xload_MIs <- if (length(refl_first_order)) {
+    do.call(rbind, lapply(refl_first_order, function(f) {
+      items <- subset(refl_items, lhs == f)$rhs
+      subset(mi, op == "=~" & rhs %in% items & lhs != f & mi > mi_cut)
+    }))
+  } else data.frame()
+
+  # First-order formative: R²_a and VIF (needs car)
+  form1_table <- data.frame()
+  if (length(first_form) && !is.null(scores)) {
+    quiet_pkg("car")
+    form1_table <- do.call(rbind, lapply(first_form, function(f) {
+      rhs <- subset(pe, op == "~" & lhs == f)$rhs
+      r2a <- tryCatch(mean(cor(scores[[f]], dat[, rhs, drop = FALSE],
+                               use = "pairwise.complete.obs")^2), error = function(e) NA_real_)
+      vifs <- tryCatch(car::vif(lm(scores[[f]] ~ ., data = dat[, rhs, drop = FALSE])),
+                       error = function(e) NA)
+      data.frame(factor = f,
+                 R2a = r2a,
+                 VIF_max = if (is.numeric(vifs)) max(vifs, na.rm = TRUE) else NA_real_,
+                 VIF_pref_pass = if (is.numeric(vifs)) all(vifs < vif_pref) else NA,
+                 VIF_10_pass   = if (is.numeric(vifs)) all(vifs < vif_cut) else NA,
+                 n_indicators = length(rhs))
+    }))
+  }
+
+  # Second-order reflective: mean R² of first-order kids (as AVE_2nd); min loading²
+  so_reflect_table <- data.frame()
+  if (length(so_reflective)) {
+    r2 <- lavaan::lavInspect(fit, "r2")
+    so_reflect_table <- do.call(rbind, lapply(so_reflective, function(s2) {
+      kids <- so_children[[s2]]
+      ave2 <- tryCatch(mean(unlist(r2[kids])), error = function(e) NA_real_)
+      L <- subset(ss, op == "=~" & lhs == s2 & rhs %in% kids, select = c(rhs, est.std))
+      minl <- if (nrow(L)) min(L$est.std) else NA_real_
+      data.frame(second_order = s2,
+                 n_first_order = length(kids),
+                 AVE_2nd = ave2,
+                 min_loading = minl,
+                 min_loading_sq = minl^2)
+    }))
+  }
+
+  # Second-order formative: R²_a and VIF across subdimensions
+  so_form_table <- data.frame()
+  if (length(second_form) && !is.null(scores)) {
+    quiet_pkg("car")
+    so_form_table <- do.call(rbind, lapply(second_form, function(s2) {
+      preds <- subset(pe, op == "~" & lhs == s2)$rhs
+      r2a <- tryCatch(mean(cor(scores[[s2]], scores[, preds, drop = FALSE],
+                               use = "pairwise.complete.obs")^2), error = function(e) NA_real_)
+      vifs <- tryCatch(car::vif(lm(scores[[s2]] ~ ., data = scores[, preds, drop = FALSE])),
+                       error = function(e) NA)
+      data.frame(second_order = s2,
+                 R2a = r2a,
+                 VIF_max = if (is.numeric(vifs)) max(vifs, na.rm = TRUE) else NA_real_,
+                 VIF_pref_pass = if (is.numeric(vifs)) all(vifs < vif_pref) else NA,
+                 VIF_10_pass   = if (is.numeric(vifs)) all(vifs < 10) else NA,
+                 n_subdims = length(preds))
+    }))
+  }
+
+  flags <- list(
+    reflective_constructs_fail_AVE = subset(refl_constructs, AVE < .50),
+    reflective_constructs_fail_CR  = subset(refl_constructs, CR  < .70),
+    reflective_items_weak          = subset(refl_items_df, flag_weak),
+    error_covariance_MIs           = errcov_MIs[order(-errcov_MIs$mi), ],
+    cross_loading_MIs              = xload_MIs[order(-xload_MIs$mi), ],
+    second_order_reflective_weak   = if (nrow(so_reflect_table)) subset(so_reflect_table, AVE_2nd < .50 | min_loading_sq < .50) else data.frame(),
+    formative_first_VIF_issues     = if (nrow(form1_table)) subset(form1_table, !VIF_10_pass %in% TRUE) else data.frame(),
+    second_order_form_VIF_issues   = if (nrow(so_form_table)) subset(so_form_table, !VIF_10_pass %in% TRUE) else data.frame()
+  )
+
+  list(
+    global_fit = global_fit,
+    reflective_constructs = refl_constructs,
+    reflective_items = refl_items_df,
+    formative_first_order = form1_table,
+    second_order_reflective = so_reflect_table,
+    second_order_formative = so_form_table,
+    flags = flags
+  )
+}
+# ---------- end Step 6 helper ----------
+
+if (result$model_provided) {
+  quiet_pkg("lavaan")
+  cfa_out <- tryCatch({
+    fit <- lavaan::cfa(cleaned_model_syntax, data = df, std.lv = FALSE)
+
+    fm <- lavaan::fitMeasures(fit, c("chisq","df","pvalue","cfi","tli","rmsea","srmr"))
+    pe <- lavaan::parameterEstimates(fit, standardized = TRUE)
+    loadings <- subset(pe, op == "=~", select = c("lhs","rhs","est","std.all"))
+
+    # Step 6: compute purification metrics (auto-detects model structure)
+    step6 <- step6_auto_report(fit, df)
+
+    list(
+      fit_measures = as.list(fm),
+      loadings = lapply(seq_len(nrow(loadings)), function(i) {
+        list(latent = loadings$lhs[i],
+             indicator = loadings$rhs[i],
+             estimate = loadings$est[i],
+             std_all = loadings$std.all[i])
+      }),
+      step6 = step6
+    )
+  }, error = function(e) {
+    result$status <<- "cfa_error"
+    list(error = as.character(e))
+  }, warning = function(w) {
+    result$warning <<- as.character(w)
+    invokeRestart("muffleWarning")
+  })
+  result <- c(result, cfa_out)
+}
+
+jsonlite::write_json(result, output_path, auto_unbox = TRUE, pretty = FALSE)
+invisible(NULL)

@@ -68,7 +68,7 @@ result <- list(
   model_provided = nchar(trimws(model_syntax)) > 0
 )
 
-# ---------- Step 6 helper: auto-detect structure and compute purification + reliability + item/subdim checks ----------
+# ---------- Step 6 helper: auto-detect structure and compute purification + reliability ----------
 # Thresholds: AVE >= .50, CR >= .70; MI > 3.84; VIF pref < 3 (tolerate < 10).
 step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pref = 3, vif_cut = 10) {
   stopifnot(inherits(fit, "lavaan"))
@@ -116,14 +116,6 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     CR  <- (sum(lam))^2 / ((sum(lam))^2 + sum(theta))
     data.frame(factor = f, AVE = AVE, CR = CR)
   }
-  safe_vif_vec <- function(model) {
-    out <- tryCatch({
-      mm <- model.matrix(model)
-      if (ncol(mm) <= 2) return(NA)  # intercept + 1 predictor
-      car::vif(model)
-    }, error = function(e) NA)
-    out
-  }
 
   # Global fit
   global_fit <- data.frame(
@@ -145,7 +137,7 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
   } else data.frame()
 
   # Item-level diagnostics (z, lambda^2) from parameterEstimates
-  L_pe <- subset(pe, op == "=~", select = c("lhs","rhs","std.all","z","pvalue"))
+  L_pe <- subset(pe, op == "=~", select = c("lhs","rhs","std.all","z"))
   refl_items_df <- if (nrow(L_pe)) {
     out <- transform(L_pe, lambda2 = std.all^2)
     names(out)[1:2] <- c("factor","item")
@@ -222,49 +214,27 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     }))
   }
 
-  # ---------- 2B) First-order formative diagnostics ----------
+  # First-order formative: R^2_a and VIF
   form1_table <- data.frame()
-  formative_weights <- data.frame()
-  formative_vif_detail <- data.frame()
   if (length(first_form) && !is.null(scores)) {
     quiet_pkg("car")
     form1_table <- do.call(rbind, lapply(first_form, function(f) {
       rhs <- subset(pe, op == "~" & lhs == f)$rhs
       r2a <- tryCatch(mean(cor(scores[[f]], dat[, rhs, drop = FALSE],
                                use = "pairwise.complete.obs")^2), error = function(e) NA_real_)
-      model <- lm(scores[[f]] ~ ., data = dat[, rhs, drop = FALSE])
-      vifs <- tryCatch(safe_vif_vec(model), error = function(e) NA)
-      VIF_max <- if (is.numeric(vifs)) max(vifs, na.rm = TRUE) else NA_real_
+      vifs <- tryCatch(car::vif(lm(scores[[f]] ~ ., data = dat[, rhs, drop = FALSE])),
+                       error = function(e) NA)
       data.frame(factor = f,
                  R2a = r2a,
-                 VIF_max = VIF_max,
+                 VIF_max = if (is.numeric(vifs)) max(vifs, na.rm = TRUE) else NA_real_,
                  VIF_pref_pass = if (is.numeric(vifs)) all(vifs < vif_pref) else NA,
                  VIF_10_pass   = if (is.numeric(vifs)) all(vifs < vif_cut) else NA,
                  n_indicators = length(rhs))
     }))
-    # per-indicator weights (std) and z
-    fw <- subset(pe, op == "~" & lhs %in% first_form & rhs %in% ov, select = c("lhs","rhs","std.all","z","pvalue"))
-    if (nrow(fw)) {
-      names(fw)[1:2] <- c("factor","indicator")
-      fw$nonsignificant <- (!is.finite(fw$z) | fw$z <= 1.96)
-      formative_weights <- fw
-    }
-    # per-indicator VIFs as rows
-    vifs_detailed <- do.call(rbind, lapply(first_form, function(f) {
-      rhs <- subset(pe, op == "~" & lhs == f)$rhs
-      model <- tryCatch(lm(scores[[f]] ~ ., data = dat[, rhs, drop = FALSE]), error = function(e) NULL)
-      if (is.null(model)) return(NULL)
-      v <- tryCatch(safe_vif_vec(model), error = function(e) NA)
-      if (all(is.na(v))) return(NULL)
-      data.frame(factor = f, indicator = names(v), VIF = as.numeric(v), row.names = NULL)
-    }))
-    if (!is.null(vifs_detailed) && nrow(vifs_detailed)) formative_vif_detail <- vifs_detailed
   }
 
-  # ---------- 2C) Second-order reflective diagnostics ----------
-  # AVE_2nd via mean squared loadings; min loading^2 (already below), plus per-subdimension loadings
+  # Second-order reflective: AVE_2nd via mean squared loadings; min loading^2
   so_reflect_table <- data.frame()
-  second_order_reflective_loadings <- data.frame()
   if (length(so_reflective)) {
     so_reflect_table <- do.call(rbind, lapply(so_reflective, function(s2) {
       kids <- so_children[[s2]]
@@ -277,68 +247,27 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
                  min_loading = minl,
                  min_loading_sq = minl^2)
     }))
-    # per-subdimension z and lambda^2 from parameterEstimates
-    L2 <- subset(pe, op == "=~" & lhs %in% so_reflective & rhs %in% lv, select = c("lhs","rhs","std.all","z","pvalue"))
-    if (nrow(L2)) {
-      names(L2)[1:2] <- c("second_order","subdimension")
-      L2$lambda2 <- L2$std.all^2
-      second_order_reflective_loadings <- L2
-    }
   }
 
-  # ---------- 2D) Second-order formative diagnostics ----------
+  # Second-order formative: R^2_a and VIF across subdimensions
   so_form_table <- data.frame()
-  second_order_formative_weights <- data.frame()
-  second_order_formative_vif_detail <- data.frame()
-  second_order_formative_unique_R2 <- data.frame()
   if (length(second_form) && !is.null(scores)) {
     quiet_pkg("car")
     so_form_table <- do.call(rbind, lapply(second_form, function(s2) {
       preds <- subset(pe, op == "~" & lhs == s2)$rhs
       r2a <- tryCatch(mean(cor(scores[[s2]], scores[, preds, drop = FALSE],
                                use = "pairwise.complete.obs")^2), error = function(e) NA_real_)
-      model <- lm(scores[[s2]] ~ ., data = scores[, preds, drop = FALSE])
-      vifs <- tryCatch(safe_vif_vec(model), error = function(e) NA)
-      VIF_max <- if (is.numeric(vifs)) max(vifs, na.rm = TRUE) else NA_real_
+      vifs <- tryCatch(car::vif(lm(scores[[s2]] ~ ., data = scores[, preds, drop = FALSE])),
+                       error = function(e) NA)
       data.frame(second_order = s2,
                  R2a = r2a,
-                 VIF_max = VIF_max,
+                 VIF_max = if (is.numeric(vifs)) max(vifs, na.rm = TRUE) else NA_real_,
                  VIF_pref_pass = if (is.numeric(vifs)) all(vifs < vif_pref) else NA,
                  VIF_10_pass   = if (is.numeric(vifs)) all(vifs < 10) else NA,
                  n_subdims = length(preds))
     }))
-    # per-subdimension weights (std) and z
-    sw <- subset(pe, op == "~" & lhs %in% second_form & rhs %in% lv, select = c("lhs","rhs","std.all","z","pvalue"))
-    if (nrow(sw)) {
-      names(sw)[1:2] <- c("second_order","subdimension")
-      sw$nonsignificant <- (!is.finite(sw$z) | sw$z <= 1.96)
-      second_order_formative_weights <- sw
-    }
-    # per-subdimension VIF details
-    vifs2 <- do.call(rbind, lapply(second_form, function(s2) {
-      preds <- subset(pe, op == "~" & lhs == s2)$rhs
-      model <- tryCatch(lm(scores[[s2]] ~ ., data = scores[, preds, drop = FALSE]), error = function(e) NULL)
-      if (is.null(model)) return(NULL)
-      v <- tryCatch(safe_vif_vec(model), error = function(e) NA)
-      if (all(is.na(v))) return(NULL)
-      data.frame(second_order = s2, subdimension = names(v), VIF = as.numeric(v), row.names = NULL)
-    }))
-    if (!is.null(vifs2) && nrow(vifs2)) second_order_formative_vif_detail <- vifs2
-
-    # unique variance shares per subdimension (lmg)
-    quiet_pkg("relaimpo")
-    lmg_rows <- do.call(rbind, lapply(second_form, function(s2) {
-      preds <- subset(pe, op == "~" & lhs == s2)$rhs
-      mod <- tryCatch(lm(scores[[s2]] ~ ., data = scores[, preds, drop = FALSE]), error = function(e) NULL)
-      if (is.null(mod)) return(NULL)
-      rel <- tryCatch(relaimpo::calc.relimp(mod, type = "lmg"), error = function(e) NULL)
-      if (is.null(rel)) return(NULL)
-      data.frame(second_order = s2, subdimension = rownames(rel$lmg), lmg = as.numeric(rel$lmg), row.names = NULL)
-    }))
-    if (!is.null(lmg_rows) && nrow(lmg_rows)) second_order_formative_unique_R2 <- lmg_rows
   }
 
-  # Flags (actionable)
   flags <- list(
     reflective_constructs_fail_AVE = subset(refl_constructs, AVE < .50),
     reflective_constructs_fail_CR  = subset(refl_constructs, CR  < .70),
@@ -352,24 +281,15 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
 
   list(
     global_fit = global_fit,
-    reflective_constructs = refl_constructs,                # includes CR for 1st-order reflective
-    reflective_items = refl_items_df,                       # per-item λ, z, λ²
+    reflective_constructs = refl_constructs,      # includes CR for 1st-order reflective
+    reflective_items = refl_items_df,
     reliability = list(
-      reflective_alpha = reflective_alpha,                  # Cronbach's alpha per 1st-order reflective factor
-      second_order_reflective_CR = second_order_reflective_CR
+      reflective_alpha = reflective_alpha,        # Cronbach's alpha per 1st-order reflective factor
+      second_order_reflective_CR = second_order_reflective_CR  # CR for 2nd-order reflective
     ),
-    # 2B
-    formative_first_order = form1_table,                    # R^2_a + VIF summary
-    formative_weights = formative_weights,                  # per-indicator weights (std, z)
-    formative_vif_detail = formative_vif_detail,            # per-indicator VIFs
-    # 2C
-    second_order_reflective = so_reflect_table,             # AVE_2nd + min loading
-    second_order_reflective_loadings = second_order_reflective_loadings,  # per-subdimension λ, z, λ²
-    # 2D
-    second_order_formative = so_form_table,                 # R^2_a + VIF summary
-    second_order_formative_weights = second_order_formative_weights,      # per-subdimension weights (std, z)
-    second_order_formative_vif_detail = second_order_formative_vif_detail,# per-subdimension VIFs
-    second_order_formative_unique_R2 = second_order_formative_unique_R2,  # lmg unique shares
+    formative_first_order = form1_table,
+    second_order_reflective = so_reflect_table,
+    second_order_formative = so_form_table,
     flags = flags
   )
 }
@@ -384,7 +304,7 @@ if (result$model_provided) {
     pe <- lavaan::parameterEstimates(fit, standardized = TRUE)
     loadings <- subset(pe, op == "=~", select = c("lhs","rhs","est","std.all"))
 
-    # Step 6 metrics + reliability + item/subdimension evaluation
+    # Step 6 metrics + reliability
     step6 <- step6_auto_report(fit, df)
 
     list(
