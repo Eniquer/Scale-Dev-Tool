@@ -60,8 +60,19 @@
                     <div class="text-muted">No data loaded yet.</div>
                 </div>
                 <div class="form-text mt-2">Check items that are reverse-keyed (semantic opposite). They will be transformed using: new = (Min + Max) - old.</div>
+                    
+                <div class="d-flex align-items-center gap-2 my-3">
+                    <button type="button" class="btn btn-info btn-sm" id="btnSuggestReverse" title="Get AI-based model suggestions"><i class="bi bi-lightbulb"></i></button>
+                </div>
+                <div id="aiReverseSuggestionCard" class="card d-none my-3 text-bg-light" data-bs-theme="light">
+                    <div class="card-body p-2">
+                        <strong class="small">AI Suggestion</strong>
+                        <div class="small" id="aiReverseSuggestionBody"><span class="text-muted">No suggestion yet.</span></div>
+                    </div>
+                </div>
                 <hr class="my-3" />
-                <h4 class="card-title mb-3">Data Preview</h4>
+                <h4 class="card-title mb-0">Data Preview</h4>
+                <h4 class="visually-hidden">Hidden</h4>
                                 <div class="d-flex flex-wrap gap-2 mb-2">
                                         <button id="showOriginalBtn" class="btn btn-sm btn-outline-secondary" disabled>Show Original</button>
                                         <button id="showReversedBtn" class="btn btn-sm btn-outline-secondary" disabled>Show Reversed</button>

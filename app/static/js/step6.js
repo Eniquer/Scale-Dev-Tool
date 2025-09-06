@@ -2,8 +2,8 @@
 (function(){
   document.addEventListener('DOMContentLoaded', init);
   let rawData = []; // current working data (may be reversed)
-  let originalData = []; // pristine original load (simulated or uploaded)
   let reversedData = []; // last reversed version stored
+  let originalData = []; // pristine original load (simulated or uploaded)
   let columns = []; // item codes
   let reverseSet = new Set();
   let source = 'simulated';
@@ -15,6 +15,7 @@
    let lavaanOriginalSnapshot = ''; // last loaded auto-generated spec from Step 4
    let lavaanActiveView = 'original'; // 'original' | 'edited'
   let analyzeBtn = null; let cfaStatusEl = null; let cfaResultsEl = null;
+  let aiReverseSuggestion = null; // persisted AI suggestion for reverse candidates
 
   async function init(){
     bindUI();
@@ -64,6 +65,9 @@
       updateViewButtons();
       persistState();
     });
+  // AI suggestion for reverse columns
+  id('btnSuggestReverse')?.addEventListener('click', ()=>{ getReverseSuggestions(); });
+  id('closeAiReverseCard')?.addEventListener('click', ()=>{ const card=id('aiReverseSuggestionCard'); card && card.classList.add('d-none'); });
   id('scaleMinInput')?.addEventListener('input', e=>{ scaleMin = parseNumber(e.target.value,1); userAdjustedScale = true; persistState(); });
   id('scaleMaxInput')?.addEventListener('input', e=>{ scaleMax = parseNumber(e.target.value,5); userAdjustedScale = true; persistState(); });
   id('showOriginalBtn')?.addEventListener('click', ()=>{ viewMode='original'; rawData = clone(originalData); setStatus('Showing original data.'); updateViewButtons(); renderTable(); });
@@ -117,6 +121,103 @@
   cfaStatusEl = id('cfaStatus');
   cfaResultsEl = id('cfaResults');
   analyzeBtn && analyzeBtn.addEventListener('click', runCFAAnalysis);
+  }
+
+  async function getReverseSuggestions(retry=0){
+    const btn = id('btnSuggestReverse');
+    const card = id('aiReverseSuggestionCard');
+    const body = id('aiReverseSuggestionBody');
+    if (!columns.length){ window.displayInfo?.('info','Load data first.'); return; }
+    // Gather context from prior steps
+    let constructName='', items=[], definitions=[];
+    try {
+      const step1 = await window.dataStorage.getData('data_step_1');
+      const step2 = await window.dataStorage.getData('data_step_2');
+      const step3 = await window.dataStorage.getData('data_step_3');
+      const step4 = await window.dataStorage.getData('data_step_4');
+      const step5 = await window.dataStorage.getData('data_step_5');
+
+      constructName = step1?.panel1?.constructName || '';
+      definition = step1?.panel2.savedDefinition || '';
+      // Items might exist in step4 structure or items array
+      const step5Items = step5?.questionnaireItems || [];
+      items = Array.isArray(step5Items)? step5Items.map(it=>({ code: it.code || '' , text: it.text ||'' })) : [];
+    } catch(e){}
+    // Fallback: derive items from columns if missing texts
+    const prompt = `You are an expert in survey methodology. Goal: identify which items are likely reverse-keyed (semantic polarity opposite) for a psychological/management construct.
+
+Context:
+Construct Name: ${constructName||'N/A'}
+Construct Definition: ${definition||'N/A'}
+Item Codes and Texts:
+${items.map(it=>`- ${it.code}: ${it.text}`).join('\n')}
+
+Instructions:
+1. Provide an array reverseCandidates with item codes you strongly believe should be reverse-keyed.
+2. Provide reasoning (≤15 words per item) in a map reasons.
+3. Provide a short overall rationale (≤35 words).
+4. If unsure, return empty arrays.
+
+Output format (strict JSON):
+{
+  "reverseCandidates": ["ITEM_CODE", ...],
+  "reasons": { "ITEM_CODE": "short reason", ... },
+  "overallRationale": "text"
+}`;
+    btn && (btn.disabled = true);
+    try {
+      window.showLoading()
+      const resp = await window.sendChat(prompt,[{"role":"system","content":"You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
+      card && card.classList.remove('d-none');
+      let raw = window.cleanAIRespond ? window.cleanAIRespond(resp[0]) : (resp[0]?.content || resp[0] || '');
+      let parsed = null;
+      try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch(parseErr){
+        if (retry < 2){ window.displayInfo?.('warning','Retrying AI reverse suggestion...'); return await getReverseSuggestions(retry+1); }
+        throw parseErr;
+      }
+      if (!parsed || typeof parsed !== 'object'){ throw new Error('Empty AI response'); }
+      const candidates = Array.isArray(parsed.reverseCandidates)? parsed.reverseCandidates.filter(c=> columns.includes(c)) : [];
+      aiReverseSuggestion = { reverseCandidates: candidates, reasons: parsed.reasons||{}, overallRationale: parsed.overallRationale||'' };
+      persistState();
+      renderAiReverseSuggestion();
+    } catch(err){
+      if (retry<2){ 
+        window.displayInfo?.('warning','Retrying AI reverse suggestion...');
+        return await getReverseSuggestions(retry+1); } 
+      console.error('AI reverse suggestion error', err);
+      body && (body.innerHTML = `<span class='text-danger small'>Failed: ${escapeHtml(err.message||err)}</span>`);
+      window.displayInfo?.('danger','Reverse suggestion failed.');
+    } finally {
+      btn && (btn.disabled = false);
+      window.hideLoading()
+    }
+  }
+
+  function renderAiReverseSuggestion(){
+    const card = id('aiReverseSuggestionCard');
+    const body = id('aiReverseSuggestionBody');
+    if (!card || !body) return;
+    if (!aiReverseSuggestion){ card.classList.add('d-none'); return; }
+    const { reverseCandidates=[], reasons={}, overallRationale='' } = aiReverseSuggestion;
+    const candidates = reverseCandidates.filter(c=> columns.includes(c));
+    const htmlParts = [];
+    htmlParts.push(`<div class="small mb-1"><strong>Suggested Reverse Items (${candidates.length})</strong></div>`);
+    if (candidates.length){
+      htmlParts.push(`<div class="mb-2 small">${candidates.map(c=>`<span class='badge bg-warning text-dark me-1'>${c}</span>`).join('')}</div>`);
+    } else {
+      htmlParts.push('<div class="text-muted small mb-2">No clear reverse candidates identified.</div>');
+    }
+    if (reasons && Object.keys(reasons).length){
+      htmlParts.push('<div class="small"><strong>Reasons</strong></div>');
+      htmlParts.push('<ul class="small mb-2 ps-3">'+ Object.entries(reasons).filter(([k])=> candidates.includes(k)).map(([k,v])=>`<li><code>${k}</code>: ${escapeHtml(String(v))}</li>`).join('') +'</ul>');
+    }
+    if (overallRationale){
+      htmlParts.push(`<div class="small fst-italic text-muted">${escapeHtml(overallRationale)}</div>`);
+    }
+    htmlParts.push(`<div class="mt-2"><button type="button" class="btn btn-sm btn-outline-primary" id="applyAiReverseBtn">Apply Suggested</button></div>`);
+    body.innerHTML = htmlParts.join('');
+    card.classList.remove('d-none');
+    setTimeout(()=>{ const applyBtn = id('applyAiReverseBtn'); applyBtn && applyBtn.addEventListener('click', ()=>{ reverseSet = new Set(candidates); renderColumns(); applyReverse(); window.displayInfo?.('success','Applied AI suggested reverse items.'); }); },0);
   }
 
   function switchSource(val){
@@ -358,7 +459,8 @@
         originalData,
   reversedData,
   userAdjustedScale: userAdjustedScale || persistedUserAdjusted,
-  lavaanEdited
+  lavaanEdited,
+  aiReverseSuggestion
       }, false);
     } catch(e){ console.warn('[Step6] persistState failed', e); }
   }
@@ -401,9 +503,10 @@
         if (rUpload) rUpload.checked = false;
         switchSource('simulated');
       }
-      renderColumns();
+  renderColumns();
       renderTable();
       setStatus(`Restored prior session (${rawData.length} rows).`);
+  if (stored.aiReverseSuggestion){ aiReverseSuggestion = stored.aiReverseSuggestion; renderAiReverseSuggestion(); }
     } catch(e){ console.warn('[Step6] restorePersisted failed', e); }
   updateAnalyzeButton();
   }
