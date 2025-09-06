@@ -11,8 +11,9 @@
   let viewMode = 'original'; // 'original' | 'reversed'
   let userAdjustedScale = false; // track if user manually changed scale inputs
   let persistedUserAdjusted = false; // persisted flag
-  let lavaanEdited = ''; // stored edited lavaan syntax
-  let lavaanOriginalSnapshot = ''; // last loaded auto-generated spec from step4
+   let lavaanEdited = ''; // user-edited lavaan syntax (persisted when saved)
+   let lavaanOriginalSnapshot = ''; // last loaded auto-generated spec from Step 4
+   let lavaanActiveView = 'original'; // 'original' | 'edited'
   let analyzeBtn = null; let cfaStatusEl = null; let cfaResultsEl = null;
 
   async function init(){
@@ -50,7 +51,19 @@
     id('loadCsvBtn')?.addEventListener('click', async ()=>{ await loadCsv(fileInput.files[0]); });
   id('applyReverseBtn')?.addEventListener('click', applyReverse);
     id('selectAllReverseBtn')?.addEventListener('click', ()=>{ reverseSet = new Set(columns); renderColumns(); });
-    id('clearReverseSelectionBtn')?.addEventListener('click', ()=>{ reverseSet.clear(); renderColumns(); });
+    id('clearReverseSelectionBtn')?.addEventListener('click', ()=>{ 
+      reverseSet.clear(); 
+      reversedData = []; // remove stored reversed dataset
+      if (viewMode === 'reversed') {
+        viewMode = 'original';
+        rawData = clone(originalData);
+        setStatus('Showing original data.');
+      }
+      renderColumns();
+      renderTable();
+      updateViewButtons();
+      persistState();
+    });
   id('scaleMinInput')?.addEventListener('input', e=>{ scaleMin = parseNumber(e.target.value,1); userAdjustedScale = true; persistState(); });
   id('scaleMaxInput')?.addEventListener('input', e=>{ scaleMax = parseNumber(e.target.value,5); userAdjustedScale = true; persistState(); });
   id('showOriginalBtn')?.addEventListener('click', ()=>{ viewMode='original'; rawData = clone(originalData); setStatus('Showing original data.'); updateViewButtons(); renderTable(); });
@@ -59,7 +72,7 @@
     // Lavaan editor handlers
     const lavaTA = id('lavaanStep6Textarea');
     const saveBtn = id('btnSaveEditedLavaan');
-    const reloadBtn = id('btnReloadLavaanFromStep4');
+  const deleteEditedBtn = id('btnDeleteEditedLavaan');
     lavaTA?.addEventListener('input', ()=>{
       if (!lavaTA) return;
       const dirty = lavaTA.value !== lavaanEdited;
@@ -70,23 +83,34 @@
     saveBtn?.addEventListener('click', async ()=>{
       if (!lavaTA) return;
       lavaanEdited = lavaTA.value;
+      lavaanActiveView = 'edited';
       await persistState();
       if (saveBtn) saveBtn.disabled = true;
-      const status = id('lavaanStep6Status');
-      if (status) status.textContent = 'Saved';
-      window.displayInfo?.('success','Lavaan specification saved for Step 6.');
+      updateLavaanViewButtons();
+      setLavaanStatus();
+      window.displayInfo?.('success','Edited lavaan specification saved.');
     });
-    reloadBtn?.addEventListener('click', async ()=>{
-      const proceed = await (window.customConfirm ? window.customConfirm({
-        title:'Reload lavaan',
-        message:'Discard current edits and reload auto-generated spec from Step 4?',
-        confirmText:'Reload',
+    deleteEditedBtn?.addEventListener('click', async ()=>{
+      if (!lavaanEdited) return;
+      const confirmDelete = await (window.customConfirm ? window.customConfirm({
+        title:'Delete Edited Version',
+        message:'This will remove your saved edited lavaan model and revert to the original. Continue?',
+        confirmText:'Delete',
         cancelText:'Cancel'
-      }) : Promise.resolve(confirm('Reload from Step 4?')));
-      if (!proceed) return;
-      await loadLavaanFromStep4(true);
-      window.displayInfo?.('info','Reloaded model specification from Step 4.');
+      }) : Promise.resolve(confirm('Delete edited lavaan specification?')));
+      if (!confirmDelete) return;
+      lavaanEdited = '';
+      lavaanActiveView = 'original';
+      await persistState();
+      applyLavaanView('original');
+      updateLavaanViewButtons();
+      setLavaanStatus();
+      window.displayInfo?.('info','Edited lavaan specification deleted. Showing original.');
     });
+
+    // Toggle view buttons
+    id('btnShowOriginalLavaan')?.addEventListener('click', ()=>{ applyLavaanView('original'); });
+    id('btnShowEditedLavaan')?.addEventListener('click', ()=>{ if (lavaanEdited) applyLavaanView('edited'); });
 
   // CFA analysis elements (may not exist if card removed)
   analyzeBtn = id('btnRunCFA');
@@ -148,15 +172,23 @@
       // If preserving reverse selections, keep set & recompute reversedData; else clear
       if (preserveReverse){
         reverseSet = prevReverseSet;
-        if (reverseSet.size){
-          // recompute reversedData from new original
-          const min = Number(scaleMin); const max = Number(scaleMax);
-          reversedData = originalData.map(r=>{ const o={...r}; reverseSet.forEach(col=>{ const val=o[col]; if (val==null||val==='') return; const num=Number(val); if (!isFinite(num)) return; o[col]=(min+max)-num; }); return o; });
-        } else {
-          reversedData = [];
-        }
-        viewMode = preserveView ? prevView : 'original';
-        rawData = clone(viewMode==='reversed' && reversedData.length ? reversedData : originalData);
+       if (forceOverwrite){
+         lavaanEdited = auto; // working text resets to original
+         const ta = id('lavaanStep6Textarea');
+         if (ta) ta.value = auto;
+         const status = id('lavaanStep6Status');
+         if (status) status.textContent = 'Original';
+         const saveBtn = id('btnSaveEditedLavaan');
+         if (saveBtn) saveBtn.disabled = true;
+       } else if (!lavaanEdited){
+         lavaanEdited = auto;
+         const ta = id('lavaanStep6Textarea');
+         if (ta) ta.value = auto;
+         const status = id('lavaanStep6Status');
+         if (status) status.textContent = 'Original';
+         const saveBtn = id('btnSaveEditedLavaan');
+         if (saveBtn) saveBtn.disabled = true;
+       }
       } else {
         rawData = clone(originalData);
         reverseSet = new Set();
@@ -238,12 +270,19 @@
     if (!rangeValid){ setStatus('Invalid scale range.'); return; }
     // Generate reversed dataset from ORIGINAL each time for idempotence
     if (!originalData.length){ setStatus('Original data not available.'); return; }
-    const newReversed = originalData.map(r=>{ const o={...r}; reverseSet.forEach(col=>{ const val=o[col]; if (val==null||val==='') return; const num=Number(val); if (!isFinite(num)) return; o[col]=(min+max)-num; }); return o; });
-    reversedData = newReversed; rawData = clone(viewMode==='reversed'? reversedData : originalData);
     if (reverseSet.size){
-      setStatus(`Applied reverse scoring to ${reverseSet.size} columns. Stored reversed version.`);
+      const newReversed = originalData.map(r=>{ const o={...r}; reverseSet.forEach(col=>{ const val=o[col]; if (val==null||val==='') return; const num=Number(val); if (!isFinite(num)) return; o[col]=(min+max)-num; }); return o; });
+      reversedData = newReversed;
+      // Switch to reversed view automatically
+      viewMode = 'reversed';
+      rawData = clone(reversedData);
+      setStatus(`Applied reverse scoring to ${reverseSet.size} column${reverseSet.size>1?'s':''}.`);
     } else {
-      setStatus('No columns selected—reversed version now matches original (effectively unreversed).');
+      // Clearing reversal: drop reversedData and show original
+      reversedData = [];
+      viewMode = 'original';
+      rawData = clone(originalData);
+      setStatus('No columns selected. Showing original data.');
     }
     persistState();
     renderColumns();
@@ -333,15 +372,23 @@
   persistedUserAdjusted = !!stored.userAdjustedScale;
   userAdjustedScale = persistedUserAdjusted; // only mark as adjusted if user had changed previously
       source = stored.source || source;
-      viewMode = stored.viewMode || viewMode;
+      // Determine view mode: if reversed data exists prefer reversed unless stored explicitly says original
+      if (stored.viewMode){
+        viewMode = stored.viewMode;
+      }
       reverseSet = new Set(stored.reverseColumns||[]);
       columns = stored.columns || [];
       originalData = Array.isArray(stored.originalData)? stored.originalData : [];
       reversedData = Array.isArray(stored.reversedData)? stored.reversedData : [];
+      // If reversed data exists and current (stored) viewMode is original but user had reversed columns, switch to reversed by default
+      if (reversedData.length && viewMode !== 'reversed'){
+        viewMode = 'reversed';
+      }
       rawData = clone(viewMode==='reversed' && reversedData.length? reversedData : originalData);
       id('scaleMinInput') && (id('scaleMinInput').value = scaleMin);
       id('scaleMaxInput') && (id('scaleMaxInput').value = scaleMax);
-  lavaanEdited = stored.lavaanEdited || '';
+  // Restore edited model if previously saved
+  if (stored.lavaanEdited) { lavaanEdited = stored.lavaanEdited; lavaanActiveView = 'edited'; }
       // Apply radio button states explicitly instead of click (ensures consistent UI)
       const rUpload = id('srcUpload');
       const rSim = id('srcSimulated');
@@ -366,11 +413,26 @@
     const revBtn = id('showReversedBtn');
     const label = id('viewModeLabel');
     const hasReversed = reversedData.length>0;
-    if (origBtn){ origBtn.disabled = !originalData.length || viewMode==='original'; }
-    if (revBtn){ revBtn.disabled = !hasReversed || viewMode==='reversed'; }
+    // If no reversed available but viewMode still indicates reversed, revert to original
+    if (!hasReversed && viewMode==='reversed'){
+      viewMode='original';
+      rawData = clone(originalData);
+    }
+    if (origBtn){
+      const active = viewMode==='original';
+      origBtn.classList.toggle('btn-primary', active);
+      origBtn.classList.toggle('btn-outline-secondary', !active);
+      origBtn.disabled = !originalData.length; // only disable if no data
+    }
+    if (revBtn){
+      const active = viewMode==='reversed';
+      revBtn.classList.toggle('btn-primary', active);
+      revBtn.classList.toggle('btn-outline-secondary', !active);
+      revBtn.disabled = !hasReversed; // disable if reversed unavailable
+    }
     if (label){ label.textContent = `View: ${viewMode}${hasReversed? '' : ' (no reversed stored yet)'}`; }
-  const resetBtn = id('resetStep6Btn');
-  if (resetBtn){ resetBtn.disabled = !originalData.length; }
+    const resetBtn = id('resetStep6Btn');
+    if (resetBtn){ resetBtn.disabled = !originalData.length; }
   }
 
   function clone(arr){ return (arr||[]).map(o=>({ ...o })); }
@@ -426,16 +488,17 @@
 
   async function initLavaanEditor(){
     const ta = id('lavaanStep6Textarea');
-    if (!ta) return; // card not present
-    if (!lavaanEdited){
-      await loadLavaanFromStep4(false);
+    if (!ta) return;
+    await loadLavaanFromStep4(true);
+    // If we have an edited version persisted, show edited view; else original
+    if (lavaanEdited){
+      applyLavaanView('edited');
     } else {
-      ta.value = lavaanEdited;
-      const status = id('lavaanStep6Status');
-      if (status) status.textContent = 'Saved (edited)';
-      id('btnSaveEditedLavaan') && (id('btnSaveEditedLavaan').disabled = true);
+      applyLavaanView('original');
     }
-  updateAnalyzeButton();
+    updateLavaanViewButtons();
+    setLavaanStatus();
+    updateAnalyzeButton();
   }
 
   async function loadLavaanFromStep4(forceOverwrite){
@@ -443,14 +506,12 @@
       const step4 = await window.dataStorage.getData('data_step_4') || {};
       const auto = (step4.lavaanSpec && step4.lavaanSpec.syntax) ? step4.lavaanSpec.syntax : '# No lavaan spec found in Step 4.';
       lavaanOriginalSnapshot = auto;
-      if (!lavaanEdited || forceOverwrite){
-        lavaanEdited = auto;
-        const ta = id('lavaanStep6Textarea');
-        if (ta) ta.value = lavaanEdited;
-        const status = id('lavaanStep6Status');
-        if (status) status.textContent = forceOverwrite ? 'Loaded (fresh)' : 'Loaded';
-        id('btnSaveEditedLavaan') && (id('btnSaveEditedLavaan').disabled = true);
-        await persistState();
+      if (forceOverwrite){
+        // Refresh only the original snapshot, keep edited separate
+        const activeWasOriginal = lavaanActiveView === 'original';
+        if (activeWasOriginal){ applyLavaanView('original', auto); }
+      } else if (!lavaanOriginalSnapshot){
+        applyLavaanView('original', auto);
       }
     } catch(e){
       console.warn('[Step6] loadLavaanFromStep4 failed', e);
@@ -460,10 +521,58 @@
     updateAnalyzeButton();
   }
 
+  function applyLavaanView(mode, overrideOriginalText){
+    const ta = id('lavaanStep6Textarea');
+    if (!ta) return;
+    if (mode === 'original'){
+      lavaanActiveView = 'original';
+      const text = overrideOriginalText != null ? overrideOriginalText : lavaanOriginalSnapshot;
+      if (text != null) ta.value = text;
+      id('btnSaveEditedLavaan') && (id('btnSaveEditedLavaan').disabled = true);
+    } else if (mode === 'edited'){
+      lavaanActiveView = 'edited';
+      ta.value = lavaanEdited || lavaanOriginalSnapshot;
+      // Enable save only when textarea diverges (handled by input listener)
+    }
+    updateLavaanViewButtons();
+    setLavaanStatus();
+  updateAnalyzeButton();
+  }
+
+  function updateLavaanViewButtons(){
+    const origBtn = id('btnShowOriginalLavaan');
+    const editBtn = id('btnShowEditedLavaan');
+    const deleteBtn = id('btnDeleteEditedLavaan');
+    const hasEdited = !!lavaanEdited;
+    if (origBtn){
+      origBtn.classList.toggle('btn-primary', lavaanActiveView==='original');
+      origBtn.classList.toggle('btn-outline-secondary', lavaanActiveView!=='original');
+    }
+    if (editBtn){
+      editBtn.disabled = !hasEdited;
+      editBtn.classList.toggle('btn-primary', lavaanActiveView==='edited');
+      editBtn.classList.toggle('btn-outline-secondary', lavaanActiveView!=='edited');
+    }
+    if (deleteBtn){
+      deleteBtn.disabled = !hasEdited;
+    }
+  }
+
+  function setLavaanStatus(){
+    const status = id('lavaanStep6Status');
+    if (!status) return;
+    if (lavaanActiveView === 'original'){
+      status.textContent = 'Viewing Original';
+    } else {
+      status.textContent = lavaanEdited ? 'Viewing Edited (saved)' : 'Edited (unsaved)';
+    }
+  }
+
   function updateAnalyzeButton(){
     if (!analyzeBtn) return;
     const hasData = Array.isArray(rawData) && rawData.length>0;
-    const modelText = lavaanEdited && lavaanEdited.trim();
+  const activeModel = (lavaanActiveView==='edited' ? lavaanEdited : lavaanOriginalSnapshot) || '';
+  const modelText = activeModel.trim();
     analyzeBtn.disabled = !(hasData && modelText);
     if (cfaStatusEl){
       if (analyzeBtn.disabled){
@@ -476,7 +585,8 @@
 
   async function runCFAAnalysis(){
     if (!analyzeBtn || analyzeBtn.disabled) return;
-    const modelText = lavaanEdited && lavaanEdited.trim();
+  const activeModel = (lavaanActiveView==='edited' ? lavaanEdited : lavaanOriginalSnapshot) || '';
+  const modelText = activeModel.trim();
     if (!modelText){ return; }
     analyzeBtn.disabled = true;
     if (cfaStatusEl) cfaStatusEl.textContent = 'Running…';
