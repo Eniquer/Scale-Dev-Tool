@@ -68,7 +68,7 @@ result <- list(
   model_provided = nchar(trimws(model_syntax)) > 0
 )
 
-# ---------- Step 6 helper: auto-detect structure and compute purification metrics ----------
+# ---------- Step 6 helper: auto-detect structure and compute purification + reliability ----------
 # Thresholds: AVE >= .50, CR >= .70; MI > 3.84; VIF pref < 3 (tolerate < 10).
 step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pref = 3, vif_cut = 10) {
   stopifnot(inherits(fit, "lavaan"))
@@ -162,6 +162,58 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
   } else data.frame()
   if (nrow(xload_MIs)) xload_MIs <- xload_MIs[order(-xload_MIs$mi), ]
 
+  # ---------- 3) Reliability at the construct level ----------
+  # A) First-order reflective: Cronbach's alpha per factor (raw + standardized)
+  reflective_alpha <- data.frame()
+  if (length(refl_first_order)) {
+    quiet_pkg("psych")
+    reflective_alpha <- do.call(rbind, lapply(refl_first_order, function(f) {
+      items <- subset(refl_items, lhs == f)$rhs
+      items <- intersect(items, colnames(dat))
+      X <- dat[, items, drop = FALSE]
+      # keep numeric columns only
+      if (ncol(X)) {
+        is_num <- vapply(X, is.numeric, logical(1))
+        X <- X[, is_num, drop = FALSE]
+      }
+      if (!ncol(X) || ncol(X) < 2) {
+        data.frame(factor = f, n_items = length(items), alpha_raw = NA_real_, alpha_std = NA_real_)
+      } else {
+        # drop rows with all NA across these items
+        X <- X[rowSums(is.na(X)) < ncol(X), , drop = FALSE]
+        a <- tryCatch(psych::alpha(X, warnings = FALSE), error = function(e) NULL)
+        if (is.null(a)) {
+          data.frame(factor = f, n_items = ncol(X), alpha_raw = NA_real_, alpha_std = NA_real_)
+        } else {
+          data.frame(factor = f, n_items = ncol(X),
+                     alpha_raw = unname(a$total$raw_alpha),
+                     alpha_std = unname(a$total$std.alpha))
+        }
+      }
+    }))
+  }
+
+  # B) First-order formative: alpha/CR not applicable (documented by omission)
+
+  # C) Second-order reflective: CR for each higher-order factor
+  second_order_reflective_CR <- data.frame()
+  if (length(so_reflective)) {
+    second_order_reflective_CR <- do.call(rbind, lapply(so_reflective, function(s2) {
+      kids <- so_children[[s2]]
+      L <- subset(ss, op == "=~" & lhs == s2 & rhs %in% kids)
+      if (!nrow(L)) {
+        data.frame(second_order = s2, CR_2nd = NA_real_)
+      } else {
+        lambda <- L$est.std
+        subs <- L$rhs
+        theta <- sapply(subs, function(s)
+          subset(pe, op == "~~" & lhs == s & rhs == s)$std.all)
+        CR2 <- (sum(lambda))^2 / ((sum(lambda))^2 + sum(theta))
+        data.frame(second_order = s2, CR_2nd = CR2)
+      }
+    }))
+  }
+
   # First-order formative: R^2_a and VIF
   form1_table <- data.frame()
   if (length(first_form) && !is.null(scores)) {
@@ -229,8 +281,12 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
 
   list(
     global_fit = global_fit,
-    reflective_constructs = refl_constructs,
+    reflective_constructs = refl_constructs,      # includes CR for 1st-order reflective
     reflective_items = refl_items_df,
+    reliability = list(
+      reflective_alpha = reflective_alpha,        # Cronbach's alpha per 1st-order reflective factor
+      second_order_reflective_CR = second_order_reflective_CR  # CR for 2nd-order reflective
+    ),
     formative_first_order = form1_table,
     second_order_reflective = so_reflect_table,
     second_order_formative = so_form_table,
@@ -248,7 +304,7 @@ if (result$model_provided) {
     pe <- lavaan::parameterEstimates(fit, standardized = TRUE)
     loadings <- subset(pe, op == "=~", select = c("lhs","rhs","est","std.all"))
 
-    # Step 6 metrics
+    # Step 6 metrics + reliability
     step6 <- step6_auto_report(fit, df)
 
     list(
