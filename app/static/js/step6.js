@@ -191,6 +191,8 @@
     return Array.from(set).filter(k=>k!=='_idx');
   }
 
+
+  // todo get AI suggestion what to revert
   function renderColumns(){
     const host = id('columnsList');
     if (!host) return;
