@@ -147,25 +147,27 @@ async def chat_endpoint(chat_req: ChatRequest):
 
 @router.post("/r/run")
 async def run_r_script(payload: dict):
-    """Execute an R script with a datatable sent from the frontend.
+        """Execute an R script with datatable + optional lavaan model.
 
-    Expected JSON payload shape:
-      {
-        "data": [ { ...row objects... } ],
-        "script": "optional/relative/path/to/script.R"  (defaults to custom_analysis.R)
-      }
-    """
-    data = payload.get("data", [])
-    if not isinstance(data, list):
-        raise HTTPException(status_code=400, detail="'data' must be a list of row objects")
-    script_rel = payload.get("script", "analysis/scripts/custom_analysis.R")
-    try:
-        result = run_r_subprocess(data, script_rel)
-        return result
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        Expected JSON payload shape:
+            {
+                "data": [ { ...row objects ... } ],
+                "model": "latent1 =~ var1 + var2\nlatent2 =~ var3 + var4" (optional lavaan syntax),
+                "script": "analysis/scripts/custom_analysis.R" (optional override)
+            }
+        """
+        data = payload.get("data", [])
+        if not isinstance(data, list):
+                raise HTTPException(status_code=400, detail="'data' must be a list of row objects")
+        model_syntax = payload.get("model")
+        script_rel = payload.get("script", "analysis/scripts/custom_analysis.R")
+        try:
+                result = run_r_subprocess(data, script_rel, model_syntax=model_syntax)
+                return result
+        except FileNotFoundError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/personaGen")
 async def generate_personas_endpoint(gen_req: PersonaGenRequest):

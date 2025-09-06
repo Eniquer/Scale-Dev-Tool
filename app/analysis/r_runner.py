@@ -27,7 +27,7 @@ from typing import List, Dict, Any, Optional
 class RExecutionError(RuntimeError):
     pass
 
-def run_r_subprocess(data: List[Dict[str, Any]], script_path: str) -> Dict[str, Any]:
+def run_r_subprocess(data: List[Dict[str, Any]], script_path: str, model_syntax: Optional[str] = None) -> Dict[str, Any]:
     # Allow override via env var (useful for deployment / testing)
     script_path = os.getenv("R_SCRIPT_PATH", script_path)
     if not os.path.isabs(script_path):
@@ -48,13 +48,20 @@ def run_r_subprocess(data: List[Dict[str, Any]], script_path: str) -> Dict[str, 
 
     tmp_dir = tempfile.mkdtemp(prefix="rjob_")
     in_path = os.path.join(tmp_dir, "input.json")
+    model_path = os.path.join(tmp_dir, "model.txt")
     out_path = os.path.join(tmp_dir, "output.json")
 
     try:
         with open(in_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
 
-        cmd = [rscript_bin, script_path, in_path, out_path]
+        # Write model syntax (can be empty file if not provided) so R script always gets a path
+        with open(model_path, "w", encoding="utf-8") as mf:
+            if model_syntax:
+                mf.write(model_syntax)
+
+        # Updated invocation includes model path before output path
+        cmd = [rscript_bin, script_path, in_path, model_path, out_path]
         proc = subprocess.run(
             cmd,
             capture_output=True,

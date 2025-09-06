@@ -13,6 +13,7 @@
   let persistedUserAdjusted = false; // persisted flag
   let lavaanEdited = ''; // stored edited lavaan syntax
   let lavaanOriginalSnapshot = ''; // last loaded auto-generated spec from step4
+  let analyzeBtn = null; let cfaStatusEl = null; let cfaResultsEl = null;
 
   async function init(){
     bindUI();
@@ -53,6 +54,7 @@
   id('scaleMinInput')?.addEventListener('input', e=>{ scaleMin = parseNumber(e.target.value,1); userAdjustedScale = true; persistState(); });
   id('scaleMaxInput')?.addEventListener('input', e=>{ scaleMax = parseNumber(e.target.value,5); userAdjustedScale = true; persistState(); });
   id('showOriginalBtn')?.addEventListener('click', ()=>{ viewMode='original'; rawData = clone(originalData); setStatus('Showing original data.'); updateViewButtons(); renderTable(); });
+  // todo always show reversed
   id('showReversedBtn')?.addEventListener('click', ()=>{ if (!reversedData.length){ setStatus('No reversed version stored yet.'); return; } viewMode='reversed'; rawData = clone(reversedData); setStatus('Showing reversed data.'); updateViewButtons(); renderTable(); });
     // Lavaan editor handlers
     const lavaTA = id('lavaanStep6Textarea');
@@ -85,6 +87,12 @@
       await loadLavaanFromStep4(true);
       window.displayInfo?.('info','Reloaded model specification from Step 4.');
     });
+
+  // CFA analysis elements (may not exist if card removed)
+  analyzeBtn = id('btnRunCFA');
+  cfaStatusEl = id('cfaStatus');
+  cfaResultsEl = id('cfaResults');
+  analyzeBtn && analyzeBtn.addEventListener('click', runCFAAnalysis);
   }
 
   function switchSource(val){
@@ -271,6 +279,7 @@
       // simple fallback
       host.innerHTML = `<pre class="small" style="max-height:240px;overflow:auto;">${JSON.stringify(tableRows.slice(0,30),null,2)}${tableRows.length>30?'\n... (truncated)':''}</pre>`;
     }
+  updateAnalyzeButton();
   }
 
   function setStatus(msg){
@@ -349,6 +358,7 @@
       renderTable();
       setStatus(`Restored prior session (${rawData.length} rows).`);
     } catch(e){ console.warn('[Step6] restorePersisted failed', e); }
+  updateAnalyzeButton();
   }
 
   function updateViewButtons(){
@@ -425,6 +435,7 @@
       if (status) status.textContent = 'Saved (edited)';
       id('btnSaveEditedLavaan') && (id('btnSaveEditedLavaan').disabled = true);
     }
+  updateAnalyzeButton();
   }
 
   async function loadLavaanFromStep4(forceOverwrite){
@@ -446,5 +457,91 @@
       const ta = id('lavaanStep6Textarea');
       if (ta && !lavaanEdited) ta.value = '# Failed loading lavaan spec.';
     }
+    updateAnalyzeButton();
+  }
+
+  function updateAnalyzeButton(){
+    if (!analyzeBtn) return;
+    const hasData = Array.isArray(rawData) && rawData.length>0;
+    const modelText = lavaanEdited && lavaanEdited.trim();
+    analyzeBtn.disabled = !(hasData && modelText);
+    if (cfaStatusEl){
+      if (analyzeBtn.disabled){
+        cfaStatusEl.textContent = hasData ? 'Provide model syntax.' : 'Load data first.';
+      } else {
+        cfaStatusEl.textContent = 'Ready';
+      }
+    }
+  }
+
+  async function runCFAAnalysis(){
+    if (!analyzeBtn || analyzeBtn.disabled) return;
+    const modelText = lavaanEdited && lavaanEdited.trim();
+    if (!modelText){ return; }
+    analyzeBtn.disabled = true;
+    if (cfaStatusEl) cfaStatusEl.textContent = 'Running…';
+    if (cfaResultsEl) cfaResultsEl.innerHTML = '<span class="text-muted">Submitting to backend…</span>';
+    try {
+      // Use current view (rawData) so user sees exactly what is analyzed
+      const payload = { data: rawData, model: modelText };
+      const res = await fetch('/api/r/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json().catch(()=>({ status:'client_parse_error'}));
+      if (!res.ok){
+        throw new Error(json.detail || `HTTP ${res.status}`);
+      }
+      renderCFAResults(json);
+      if (cfaStatusEl) cfaStatusEl.textContent = 'Done';
+    } catch(err){
+      if (cfaResultsEl) cfaResultsEl.innerHTML = `<span class="text-danger">Error: ${escapeHtml(err.message||err)}</span>`;
+      if (cfaStatusEl) cfaStatusEl.textContent = 'Error';
+    } finally {
+      analyzeBtn.disabled = false;
+    }
+  }
+
+  function renderCFAResults(resp){
+    if (!cfaResultsEl){ return; }
+    const out = resp.output || {};
+    if (resp.status && resp.status !== 'ok' && !out.fit_measures){
+      cfaResultsEl.innerHTML = `<span class="text-danger">R Error (status=${resp.status}): ${escapeHtml(resp.stderr || resp.error || 'Unknown')}</span>`;
+      return;
+    }
+    const fm = out.fit_measures || {};
+    const loadings = out.loadings || [];
+    let lines = [];
+    if (Object.keys(fm).length){
+      lines.push('Fit Measures:');
+      Object.entries(fm).forEach(([k,v])=>{ lines.push(`  ${k}: ${formatNum(v)}`); });
+      lines.push('');
+    } else {
+      lines.push('No fit measures returned.');
+    }
+    if (loadings.length){
+      lines.push('Loadings: latent -> indicator (est | std)');
+      loadings.forEach(l=>{
+        lines.push(`  ${l.latent} -> ${l.indicator} (${formatNum(l.estimate)} | ${formatNum(l.std_all)})`);
+      });
+    } else {
+      lines.push('No loadings returned.');
+    }
+    if (out.error){
+      lines.push('\nCFA Error: ' + out.error);
+    }
+    cfaResultsEl.textContent = lines.join('\n');
+  }
+
+  function formatNum(v){
+    if (v==null || v==='') return 'NA';
+    if (typeof v !== 'number') return String(v).substring(0,20);
+    if (!isFinite(v)) return String(v);
+    return (Math.abs(v) < 0.0001 || Math.abs(v) >= 10000) ? v.toExponential(2) : v.toFixed(4);
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>'"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;' }[c]));
   }
 })();
