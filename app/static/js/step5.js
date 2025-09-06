@@ -12,6 +12,7 @@
 	let decidedUpper = null;
 	let questionnaireItemList = []; // holds the final items included in questionnaire (id, code, text, subdimension)
 	let extraItems = []; // user-added additional items (code,text)
+	let questionnaireMismatch = false; // flag if stored answers hash differs
 	async function init(){
 		try {
 			const [step2, step1, step5, step4] = await Promise.all([
@@ -339,11 +340,11 @@ let personas = [];
 			const existing = await window.dataStorage.getData(STORAGE_KEY) || {};
 			if (!Array.isArray(existing.likertAnswers)) return null;
 			const currentHash = computeQuestionnaireHash();
-			if (existing.likertAnswersQuestionnaireHash && existing.likertAnswersQuestionnaireHash !== currentHash){
-				console.info('[Step5] Stored likert answers discarded due to questionnaire change.');
-				return null;
+			if (existing.likertAnswersQuestionnaireHash && existing.likertAnswersQuestionnaireHash !== currentHash) {
+				questionnaireMismatch = true; // keep answers but mark mismatch
+				console.info('[Step5] Questionnaire definition changed; keeping stored likert answers with warning.');
 			}
-			return existing.likertAnswers;
+			return existing.likertAnswers;	
 		} catch(e){ console.warn('[Step5] Failed to load likert answers', e); return null; }
 	}
 
@@ -411,9 +412,10 @@ let personas = [];
 		const out = document.getElementById('participantsDisplay');
 		const numInput = document.getElementById('numPersonas');
 		const appendCheckbox = document.getElementById('appendPersonasCheckbox');
-        const likertSim = document.getElementById('likertSim')
-        const minLikertScale = document.getElementById('minLikertScale')
-        const maxLikertScale = document.getElementById('maxLikertScale')
+		const likertSim = document.getElementById('likertSim')
+		const minLikertScale = document.getElementById('minLikertScale')
+		const maxLikertScale = document.getElementById('maxLikertScale')
+		const numLikertRows = document.getElementById('numLikertRows');
 		const maxIterations = 10;
 
 		await loadStoredPersonas();
@@ -442,6 +444,23 @@ let personas = [];
 				renderLikertTable(storedLikert, true);
 			} catch(e){ console.warn('[Step5] Failed to render stored likert answers', e); }
 		}
+		if (questionnaireMismatch) {
+			showQuestionnaireMismatchWarning();
+			window.displayInfo && window.displayInfo('warning','Questionnaire changed since responses were saved. Review item alignment.');
+		}
+	function showQuestionnaireMismatchWarning(){
+		const host = document.getElementById('answersTable');
+		if (!host) return;
+		let warn = document.getElementById('likertMismatchWarning');
+		if (!warn) {
+			warn = document.createElement('div');
+			warn.id = 'likertMismatchWarning';
+			warn.className = 'alert alert-warning py-1 px-2 small mt-2';
+			warn.style.width = 'fit-content';
+			warn.innerHTML = '<strong>Warning:</strong> The questionnaire structure changed after these responses were stored. Item codes may be misaligned.';
+			host.parentNode.parentNode && host.parentNode.parentNode.insertBefore(warn, host.parentNode);
+		}
+	}
 
 
 		// Sanitize & clamp user input
@@ -564,7 +583,8 @@ let personas = [];
 			positionLikertCancelButton();
 			// Pre-build code map for simulation & incremental persistence
 			const codeById = Object.fromEntries((window.step5QuestionnaireItems || []).map(it => [String(it.id), it.code]));
-			const answers = await likertSimulation(minLikertScale.value,maxLikertScale.value, codeById);
+			const requestedRows = Math.max(1, Math.min(2000, parseInt(numLikertRows?.value,10) || personas.length || 1));
+			const answers = await likertSimulation(minLikertScale.value,maxLikertScale.value, codeById, requestedRows);
 			// answers already ID-keyed; convert once more defensively
 			const tableData = (answers || []).map(row => {
 				const conv={}; Object.entries(row).forEach(([id,val])=>{ const c=codeById[id]||id; conv[c]=val; }); return conv; });
@@ -618,85 +638,54 @@ let personas = [];
 })();
 
 
-async function likertSimulation(min=1,max=5, codeMap) {
-    if (min == max) {
-        displayInfo("info",`Only one point scale selected: ${min}.`);
-        return
-    }
-    if (min > max) {
-        minCopy = max;
-        max = min;
-        min = minCopy;
-    }
-    
-    const generatedPersonas = personas || [];
-    const likerRange = max - min + 1;
-    const randomizedQuestionaire = shuffle(step5QuestionnaireItems.map(item => ({ id: item.id, text: item.text })));
-	// Exclude non-likert extras from simulation
-	const simulationItems = randomizedQuestionaire.filter(q => {
-		const meta = (window.step5QuestionnaireItems||[]).find(it=>it.id===q.id);
-		return !meta || meta.responseType!=='open';
-	});
-    const openItems = randomizedQuestionaire.filter(q => {
-		const meta = (window.step5QuestionnaireItems||[]).find(it=>it.id===q.id);
-		return meta && meta.responseType==='open';
-	});
-    console.log(openItems);
-    
-    const results = [];
+async function likertSimulation(min=1,max=5, codeMap, requestedRows=0) {
+	if (min == max) { displayInfo("info",`Only one point scale selected: ${min}.`); return }
+	if (min > max) { const tmp = max; max = min; min = tmp; }
+	const generatedPersonas = personas || [];
+	if (!generatedPersonas.length && (!requestedRows || requestedRows < 1)) { displayInfo('warning','No personas available to simulate.'); return []; }
+	const likerRange = max - min + 1;
+	const questionnaire = (window.step5QuestionnaireItems||[]).map(item => ({ id: item.id, text: item.text, responseType: item.responseType||'likert' }));
+	const randomizedQuestionaire = shuffle(questionnaire);
+	const simulationItems = randomizedQuestionaire.filter(q => q.responseType !== 'open').map(q=>({id:q.id,text:q.text}));
+	const openItems = randomizedQuestionaire.filter(q => q.responseType === 'open').map(q=>({id:q.id,text:q.text}));
+	const totalRows = requestedRows && requestedRows>0 ? requestedRows : generatedPersonas.length;
+	const results = [];
 	try {
-		window.showLoading()
-		for (const persona of generatedPersonas) {
+		window.showLoading && window.showLoading();
+		let rowCount=0; let personaIndex=0;
+		while (rowCount < totalRows) {
+			const persona = generatedPersonas.length ? generatedPersonas[personaIndex % generatedPersonas.length] : `Participant ${personaIndex+1}`;
 			if (window._likertSimCancelled) {
-					displayInfo('warning', `Cancelled. Generated ${results.length}/${generatedPersonas.length} so far.`);
-					// Persist what we have before breaking
-					try { if (codeMap){ const mapped = mapResultsToCodes(results, codeMap); await (window.saveLikertAnswers && window.saveLikertAnswers(mapped)); } } catch(e){ console.warn('[Step5] Incremental save (cancel) failed', e); }
-					break;
+				displayInfo('warning', `Cancelled. Generated ${results.length}/${totalRows} so far.`);
+				try { if (codeMap){ const mapped = mapResultsToCodes(results, codeMap); await (window.saveLikertAnswers && window.saveLikertAnswers(mapped)); } } catch(e){ console.warn('[Step5] Incremental save (cancel) failed', e); }
+				break;
 			}
-            const messages = [{
-                                role: "system",
-                                content: "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."
-                            },
-                            {
-                                role: "system", 
-                                content: `This is a persona: ${persona}. From now on and based on this information, act as the Persona i gave you.`
-                            }]
-            const openItemsPrompt = openItems.length > 0 ? `Also, answer the following open-ended questions briefly and in character: ${JSON.stringify(openItems)}.` : '';
-			const prompt = `
-				Answer each of the following statements: ${JSON.stringify(simulationItems)}. 
-                Only Answer with a number using a ${likerRange} point response scale: ${min} Very Inaccurate to ${max} Very Accurate. 
-
-                ${openItemsPrompt}
-
-                Output schema (JSON only, no extra text, no markdown):
-                    {
-                        "ITEM-ID": NUMBER/ANSWER,
-                        "ITEM-ID": NUMBER/ANSWER,
-                        ...,
-                    }`
-            const allAnswersNumbers = await window.sendChat(prompt,messages)
-
-			const data = cleanAIRespond(allAnswersNumbers[0]);
+			const messages = [
+				{ role: 'system', content: 'You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers.' },
+				{ role: 'system', content: `This is a persona: ${persona}. From now on, act fully in character.` }
+			];
+			const openItemsPrompt = openItems.length ? `Also, answer these open questions briefly in character: ${JSON.stringify(openItems)}.` : '';
+			const prompt = `Answer each of the following statements: ${JSON.stringify(simulationItems)}.\nUse ONLY a ${likerRange}-point scale: ${min}=Very Inaccurate ... ${max}=Very Accurate.\n${openItemsPrompt}\nReturn JSON ONLY as {"ITEM-ID": answer, ...}`;
+			const allAnswers = await window.sendChat(prompt, messages);
+			const data = cleanAIRespond(allAnswers[0]);
 			results.push(data);
-			// Incremental persistence each persona (code-keyed)
 			try { if (results.length === 1 || results.length % 3 === 0){ if (codeMap){ const mapped = mapResultsToCodes(results, codeMap); await (window.saveLikertAnswers && window.saveLikertAnswers(mapped)); } } } catch(e){ console.warn('[Step5] Incremental save failed', e); }
-			if (!window._likertSimCancelled && results.length % 5 === 0 && results.length < generatedPersonas.length) {
-                displayInfo("info",`Simulated responses for ${results.length}/${generatedPersonas.length} personas so far...`);
-            }
-        }
-		if (!window._likertSimCancelled) {
-			displayInfo("success",`Simulated responses for ${results.length} personas.`);
+			if (!window._likertSimCancelled && results.length % 25 === 0 && results.length < totalRows) {
+				displayInfo('info', `Simulated ${results.length}/${totalRows} rows...`);
+			}
+			rowCount++; personaIndex++;
 		}
-    } catch (err) {
-        console.error('Generate AI responses error', err);
-        window.displayInfo && window.displayInfo('danger', 'Could not generate AI responses.');
-    } finally {
-        window.hideLoading && window.hideLoading();
-		// Final persistence of whatever we ended with (code-keyed)
+		if (!window._likertSimCancelled) {
+			displayInfo('success', `Simulated ${results.length} rows.`);
+		}
+	} catch(err) {
+		console.error('Generate AI responses error', err);
+		window.displayInfo && window.displayInfo('danger', 'Could not generate AI responses.');
+	} finally {
+		window.hideLoading && window.hideLoading();
 		try { if (codeMap){ const mapped = mapResultsToCodes(results, codeMap); await (window.saveLikertAnswers && window.saveLikertAnswers(mapped)); } } catch(e){ console.warn('[Step5] Final save failed', e); }
-		return results;
-    }
-
+	}
+	return results;
 }
 
 function mapResultsToCodes(resultRows, codeMap){
