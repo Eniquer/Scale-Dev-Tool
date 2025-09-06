@@ -108,7 +108,7 @@ function makeHxPostRequest(url, data) {
 
     xhr.send(JSON.stringify(data));
 }
-
+window.makeHxPostRequest = makeHxPostRequest;
 
 async function sendChat(input, history = [], model=undefined) {
     if (model === "search") {

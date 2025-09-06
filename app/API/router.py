@@ -3,6 +3,7 @@ from pydantic import BaseModel
 import os, base64, openai, json
 import numpy as np
 from API.functions import *
+from analysis.r_runner import run_r_subprocess
 from openai._exceptions import (
     AuthenticationError,
     PermissionDeniedError,
@@ -142,9 +143,29 @@ async def chat_endpoint(chat_req: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
     return {"reply": reply[0], "history": reply[1]}
+
+@router.post("/r/run")
+async def run_r_script(payload: dict):
+    """Execute an R script with a datatable sent from the frontend.
+
+    Expected JSON payload shape:
+      {
+        "data": [ { ...row objects... } ],
+        "script": "optional/relative/path/to/script.R"  (defaults to custom_analysis.R)
+      }
+    """
+    data = payload.get("data", [])
+    if not isinstance(data, list):
+        raise HTTPException(status_code=400, detail="'data' must be a list of row objects")
+    script_rel = payload.get("script", "analysis/scripts/custom_analysis.R")
+    try:
+        result = run_r_subprocess(data, script_rel)
+        return result
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/personaGen")
 async def generate_personas_endpoint(gen_req: PersonaGenRequest):
