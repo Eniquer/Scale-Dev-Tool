@@ -3,7 +3,7 @@
 # CFA analysis script using lavaan. Accepts:
 #   Rscript custom_analysis.R <data_json> <model_txt> <output_json>
 # - If model_txt is empty: only descriptive stats are returned.
-# - If model_txt is provided: runs CFA and returns Step-6 diagnostics (purification, reliability,
+# - If model_txt is provided: runs SEM/CFA and returns Step-6 diagnostics (purification, reliability,
 #   per-item/subdimension checks), plus Fornell–Larcker and HTMT.
 
 # Ensure user library path (non-root installs)
@@ -393,32 +393,38 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
 
 if (result$model_provided) {
   quiet_pkg("lavaan")
-  cfa_out <- tryCatch({
-    fit <- lavaan::cfa(cleaned_model_syntax, data = df, std.lv = FALSE)
+  cfa_out <- tryCatch(
+    withCallingHandlers({
+      # Use sem() so formative (~) is allowed; works for pure CFA too
+      fit <- lavaan::sem(cleaned_model_syntax, data = df, std.lv = FALSE)
 
-    fm <- lavaan::fitMeasures(fit, c("chisq","df","pvalue","cfi","tli","rmsea","srmr"))
-    pe <- lavaan::parameterEstimates(fit, standardized = TRUE)
-    loadings <- subset(pe, op == "=~", select = c("lhs","rhs","est","std.all"))
+      fm <- lavaan::fitMeasures(fit, c("chisq","df","pvalue","cfi","tli","rmsea","srmr"))
+      pe <- lavaan::parameterEstimates(fit, standardized = TRUE)
+      loadings <- subset(pe, op == "=~", select = c("lhs","rhs","est","std.all"))
 
-    step6 <- step6_auto_report(fit, df)
+      # Step 6 metrics + reliability + item/subdimension evaluation
+      step6 <- step6_auto_report(fit, df)
 
-    list(
-      fit_measures = as.list(fm),
-      loadings = lapply(seq_len(nrow(loadings)), function(i) {
-        list(latent = loadings$lhs[i],
-             indicator = loadings$rhs[i],
-             estimate = loadings$est[i],
-             std_all = loadings$std.all[i])
-      }),
-      step6 = step6
-    )
-  }, error = function(e) {
-    result$status <<- "cfa_error"
-    list(error = as.character(e))
-  }, warning = function(w) {
-    result$warning <<- as.character(w)
-    invokeRestart("muffleWarning")
-  })
+      list(
+        fit_measures = as.list(fm),
+        loadings = lapply(seq_len(nrow(loadings)), function(i) {
+          list(latent = loadings$lhs[i],
+               indicator = loadings$rhs[i],
+               estimate = loadings$est[i],
+               std_all = loadings$std.all[i])
+        }),
+        step6 = step6
+      )
+    },
+    warning = function(w) {
+      if (is.null(result$warning)) result$warning <<- conditionMessage(w)
+      invokeRestart("muffleWarning")  # valid here (withCallingHandlers)
+    }),
+    error = function(e) {
+      result$status <<- "cfa_error"
+      list(error = conditionMessage(e))
+    }
+  )
   result <- c(result, cfa_out)
 }
 
