@@ -13,6 +13,8 @@
 	let questionnaireItemList = []; // holds the final items included in questionnaire (id, code, text, subdimension)
 	let extraItems = []; // user-added additional items (code,text)
 	let questionnaireMismatch = false; // flag if stored answers hash differs
+	// Expose for external checks (e.g., append mode logic outside IIFE scope expectations)
+	Object.defineProperty(window,'step5QuestionnaireMismatch',{ get: ()=>questionnaireMismatch, set: v=>{ questionnaireMismatch=!!v; try { window.dispatchEvent(new CustomEvent('step5:mismatchChanged',{ detail:{ value: questionnaireMismatch }})); } catch(e){} }, configurable:true });
 	async function init(){
 		try {
 			const [step2, step1, step5, step4] = await Promise.all([
@@ -341,7 +343,7 @@ let personas = [];
 			if (!Array.isArray(existing.likertAnswers)) return null;
 			const currentHash = computeQuestionnaireHash();
 			if (existing.likertAnswersQuestionnaireHash && existing.likertAnswersQuestionnaireHash !== currentHash) {
-				questionnaireMismatch = true; // keep answers but mark mismatch
+				window.step5QuestionnaireMismatch = true; // keep answers but mark mismatch
 				console.info('[Step5] Questionnaire definition changed; keeping stored likert answers with warning.');
 			}
 			return existing.likertAnswers;	
@@ -416,7 +418,25 @@ let personas = [];
 		const minLikertScale = document.getElementById('minLikertScale')
 		const maxLikertScale = document.getElementById('maxLikertScale')
 		const numLikertRows = document.getElementById('numLikertRows');
+		const appendLikertRowsWrapper = document.getElementById('appendLikertRowsWrapper');
+		const appendLikertRowsCheckbox = document.getElementById('appendLikertRowsCheckbox');
 		const maxIterations = 10;
+
+		function enforceAppendEligibility(){
+			const mismatch = !!window.step5QuestionnaireMismatch || !!document.getElementById('likertMismatchWarning');
+			if (!appendLikertRowsWrapper || !appendLikertRowsCheckbox) return;
+			if (mismatch){
+				appendLikertRowsCheckbox.checked = false;
+				appendLikertRowsCheckbox.disabled = true;
+				appendLikertRowsWrapper.classList.add('opacity-50');
+				appendLikertRowsWrapper.title = 'Disabled: questionnaire structure changed.';
+			} else {
+				appendLikertRowsCheckbox.disabled = false;
+				appendLikertRowsWrapper.classList.remove('opacity-50');
+				appendLikertRowsWrapper.title = '';
+			}
+		}
+		window.addEventListener('step5:mismatchChanged', enforceAppendEligibility);
 
 		await loadStoredPersonas();
 		const storedLikert = await loadLikertAnswers();
@@ -443,11 +463,14 @@ let personas = [];
 			try {
 				renderLikertTable(storedLikert, true);
 			} catch(e){ console.warn('[Step5] Failed to render stored likert answers', e); }
+			// Show append option if no mismatch warning
+			setTimeout(()=>{ if (!document.getElementById('likertMismatchWarning') && appendLikertRowsWrapper){ appendLikertRowsWrapper.classList.remove('d-none'); } }, 50);
 		}
-		if (questionnaireMismatch) {
+		if (window.step5QuestionnaireMismatch) {
 			showQuestionnaireMismatchWarning();
 			window.displayInfo && window.displayInfo('warning','Questionnaire changed since responses were saved. Review item alignment.');
 		}
+		enforceAppendEligibility();
 	function showQuestionnaireMismatchWarning(){
 		const host = document.getElementById('answersTable');
 		if (!host) return;
@@ -458,7 +481,8 @@ let personas = [];
 			warn.className = 'alert alert-warning py-1 px-2 small mt-2';
 			warn.style.width = 'fit-content';
 			warn.innerHTML = '<strong>Warning:</strong> The questionnaire structure changed after these responses were stored. Item codes may be misaligned.';
-			host.parentNode.parentNode && host.parentNode.parentNode.insertBefore(warn, host.parentNode);
+			const container = host.parentNode && host.parentNode.parentNode ? host.parentNode.parentNode : host.parentNode || host;
+			container.insertBefore(warn, container.firstChild);
 		}
 	}
 
@@ -562,7 +586,8 @@ let personas = [];
 			// If existing simulated data present, confirm before proceeding
 			try {
 				const existingCount = (window.answersTable && typeof window.answersTable.getData === 'function') ? window.answersTable.getData().length : 0;
-				if (existingCount > 0 && !window._likertSimRunning) {
+				const appendMode = appendLikertRowsCheckbox && appendLikertRowsCheckbox.checked && !document.getElementById('likertMismatchWarning') && !window.step5QuestionnaireMismatch;
+				if (existingCount > 0 && !window._likertSimRunning && !appendMode) {
 					const proceed = await (window.customConfirm ? window.customConfirm({
 						title: 'Simulated data exists',
 						message: `There are already ${existingCount} simulated response rows. Run another simulation? (New simulation replaces table view but previously stored data will be updated.)`,
@@ -584,10 +609,21 @@ let personas = [];
 			// Pre-build code map for simulation & incremental persistence
 			const codeById = Object.fromEntries((window.step5QuestionnaireItems || []).map(it => [String(it.id), it.code]));
 			const requestedRows = Math.max(1, Math.min(2000, parseInt(numLikertRows?.value,10) || personas.length || 1));
-			const answers = await likertSimulation(minLikertScale.value,maxLikertScale.value, codeById, requestedRows);
+			const existingCount = (window.answersTable && typeof window.answersTable.getData === 'function') ? window.answersTable.getData().length : 0;
+			const appendMode = appendLikertRowsCheckbox && appendLikertRowsCheckbox.checked && !appendLikertRowsCheckbox.disabled && !document.getElementById('likertMismatchWarning') && !window.step5QuestionnaireMismatch;
+			const startOffset = appendMode ? (personas.length ? (existingCount % personas.length) : 0) : 0;
+			// Capture existing rows (raw) before simulation for append persistence
+			let existingRawRows = [];
+			if (appendMode && window.answersTable && typeof window.answersTable.getData === 'function') {
+				try { existingRawRows = window.answersTable.getData().map(r=>{ const { _idx, ...rest } = r; return rest; }); } catch(e){ existingRawRows=[]; }
+			}
+			const answers = await likertSimulation(minLikertScale.value,maxLikertScale.value, codeById, requestedRows, startOffset, existingRawRows, appendMode);
 			// answers already ID-keyed; convert once more defensively
-			const tableData = (answers || []).map(row => {
-				const conv={}; Object.entries(row).forEach(([id,val])=>{ const c=codeById[id]||id; conv[c]=val; }); return conv; });
+			const newData = (answers || []).map(row => { const conv={}; Object.entries(row).forEach(([id,val])=>{ const c=codeById[id]||id; conv[c]=val; }); return conv; });
+			let tableData = newData;
+			if (appendMode && window.answersTable){
+				try { const oldData = window.answersTable.getData().map(r=>{ const { _idx, ...rest } = r; return rest; }); tableData = oldData.concat(newData); } catch(e){ console.warn('[Step5] append merge failed', e); }
+			}
 
 			// Build Tabulator columns dynamically from union of keys
 			const allKeys = new Set();
@@ -638,7 +674,7 @@ let personas = [];
 })();
 
 
-async function likertSimulation(min=1,max=5, codeMap, requestedRows=0) {
+async function likertSimulation(min=1,max=5, codeMap, requestedRows=0, startOffset=0, existingRowsBefore=[], appendMode=false) {
 	if (min == max) { displayInfo("info",`Only one point scale selected: ${min}.`); return }
 	if (min > max) { const tmp = max; max = min; min = tmp; }
 	const generatedPersonas = personas || [];
@@ -652,12 +688,18 @@ async function likertSimulation(min=1,max=5, codeMap, requestedRows=0) {
 	const results = [];
 	try {
 		window.showLoading && window.showLoading();
-		let rowCount=0; let personaIndex=0;
+		let rowCount=0; let personaIndex=startOffset||0;
 		while (rowCount < totalRows) {
 			const persona = generatedPersonas.length ? generatedPersonas[personaIndex % generatedPersonas.length] : `Participant ${personaIndex+1}`;
 			if (window._likertSimCancelled) {
 				displayInfo('warning', `Cancelled. Generated ${results.length}/${totalRows} so far.`);
-				try { if (codeMap){ const mapped = mapResultsToCodes(results, codeMap); await (window.saveLikertAnswers && window.saveLikertAnswers(mapped)); } } catch(e){ console.warn('[Step5] Incremental save (cancel) failed', e); }
+				try {
+					if (codeMap){
+						const mappedNew = mapResultsToCodes(results, codeMap);
+						const toStore = appendMode ? (existingRowsBefore.concat(mappedNew)) : mappedNew;
+						await (window.saveLikertAnswers && window.saveLikertAnswers(toStore));
+					}
+				} catch(e){ console.warn('[Step5] Incremental save (cancel) failed', e); }
 				break;
 			}
 			const messages = [
@@ -669,9 +711,17 @@ async function likertSimulation(min=1,max=5, codeMap, requestedRows=0) {
 			const allAnswers = await window.sendChat(prompt, messages);
 			const data = cleanAIRespond(allAnswers[0]);
 			results.push(data);
-			try { if (results.length === 1 || results.length % 3 === 0){ if (codeMap){ const mapped = mapResultsToCodes(results, codeMap); await (window.saveLikertAnswers && window.saveLikertAnswers(mapped)); } } } catch(e){ console.warn('[Step5] Incremental save failed', e); }
-			if (!window._likertSimCancelled && results.length % 25 === 0 && results.length < totalRows) {
-				displayInfo('info', `Simulated ${results.length}/${totalRows} rows...`);
+			try {
+				if (results.length === 1 || results.length % 3 === 0){
+					if (codeMap){
+						const mappedNew = mapResultsToCodes(results, codeMap); // all new rows so far (new only)
+						const toStore = appendMode ? (existingRowsBefore.concat(mappedNew)) : mappedNew;
+						await (window.saveLikertAnswers && window.saveLikertAnswers(toStore));
+					}
+				}
+			} catch(e){ console.warn('[Step5] Incremental save failed', e); }
+			if (!window._likertSimCancelled && (results.length === 1 || (results.length % 5 === 0 && results.length < totalRows))) {
+					displayInfo('info', `Simulated ${results.length}/${totalRows} rows...`);
 			}
 			rowCount++; personaIndex++;
 		}
@@ -683,7 +733,13 @@ async function likertSimulation(min=1,max=5, codeMap, requestedRows=0) {
 		window.displayInfo && window.displayInfo('danger', 'Could not generate AI responses.');
 	} finally {
 		window.hideLoading && window.hideLoading();
-		try { if (codeMap){ const mapped = mapResultsToCodes(results, codeMap); await (window.saveLikertAnswers && window.saveLikertAnswers(mapped)); } } catch(e){ console.warn('[Step5] Final save failed', e); }
+		try {
+			if (codeMap){
+				const mappedNew = mapResultsToCodes(results, codeMap);
+				const toStore = appendMode ? (existingRowsBefore.concat(mappedNew)) : mappedNew;
+				await (window.saveLikertAnswers && window.saveLikertAnswers(toStore));
+			}
+		} catch(e){ console.warn('[Step5] Final save failed', e); }
 	}
 	return results;
 }

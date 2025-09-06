@@ -71,12 +71,16 @@
                 <div class="card-body">
                     <h4 class="card-title">Simulate Results</h4>
                     <p class="mb-2">Let the Participants answer the questionnaire.</p>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
                         <label for="numPersonas" class="form-label small mb-0">Likert range</label>
                         <input type="number" id="minLikertScale" class="form-control form-control-sm w-auto" style="width:90px" min="0" max="10" value="1" /> -
                         <input type="number" id="maxLikertScale" class="form-control form-control-sm w-auto" style="width:90px" min="0" max="10" value="5" />
                         <label for="numLikertRows" class="form-label small mb-0 ms-3"># Rows</label>
                         <input type="number" id="numLikertRows" class="form-control form-control-sm w-auto" style="width:90px" min="1" max="2000" value="50" />
+                        <div class="form-check form-check-inline ms-2" id="appendLikertRowsWrapper">
+                            <input class="form-check-input" type="checkbox" id="appendLikertRowsCheckbox" />
+                            <label class="form-check-label small" for="appendLikertRowsCheckbox">Append rows</label>
+                        </div>
                         <button id="likertSimBtn" class="btn btn-info btn-sm ms-auto">Simulate</button>
                     </div>
                     <div class="row">
