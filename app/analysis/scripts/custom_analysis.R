@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# CFA analysis script using lavaan. Accepts:
+# CFA/SEM analysis script using lavaan. Accepts:
 #   Rscript custom_analysis.R <data_json> <model_txt> <output_json>
 # - If model_txt is empty: only descriptive stats are returned.
 # - If model_txt is provided: runs SEM/CFA and returns Step-6 diagnostics (purification, reliability,
@@ -91,14 +91,17 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
   so_reflective <- unique(so_paths$lhs)
   so_children   <- if (nrow(so_paths)) split(so_paths$rhs, so_paths$lhs) else list()
 
-  form_rows <- subset(pe, op == "~" & lhs %in% lv)                   # regressions onto indicators
+  # --- recognize both "~" and "<~" for formative ---
+  form_ops  <- c("~", "<~")
+  form_rows <- subset(pe, op %in% form_ops & lhs %in% lv)            # regressions onto indicators/subdims
+
   first_form <- second_form <- character(0)
   if (nrow(form_rows)) {
     by_latent <- split(form_rows, form_rows$lhs)
     for (LHS in names(by_latent)) {
       RHS <- by_latent[[LHS]]$rhs
-      if (all(RHS %in% ov)) first_form <- c(first_form, LHS)         # first-order formative
-      if (all(RHS %in% lv)) second_form <- c(second_form, LHS)       # second-order formative
+      if (all(RHS %in% ov)) first_form <- c(first_form, LHS)         # first-order formative (latent ~ indicators)
+      if (all(RHS %in% lv)) second_form <- c(second_form, LHS)       # second-order formative (latent ~ subdims)
     }
     first_form  <- unique(first_form)
     second_form <- unique(second_form)
@@ -218,35 +221,60 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     }))
   }
 
-  # 2B) First-order formative diagnostics
+  # 2B) First-order formative diagnostics (recognize "~" and "<~")
   form1_table <- data.frame()
   formative_weights <- data.frame()
   formative_vif_detail <- data.frame()
-  if (length(first_form) && !is.null(scores)) {
+  if (length(first_form)) {
     quiet_pkg("car")
     form1_table <- do.call(rbind, lapply(first_form, function(f) {
-      rhs <- subset(pe, op == "~" & lhs == f)$rhs
-      r2a <- tryCatch(mean(cor(scores[[f]], dat[, rhs, drop = FALSE],
-                               use = "pairwise.complete.obs")^2), error = function(e) NA_real_)
-      model <- lm(scores[[f]] ~ ., data = dat[, rhs, drop = FALSE])
-      vifs <- tryCatch(safe_vif_vec(model), error = function(e) NA)
-      VIF_max <- if (is.numeric(vifs)) max(vifs, na.rm = TRUE) else NA_real_
-      data.frame(factor = f,
-                 R2a = r2a,
-                 VIF_max = VIF_max,
-                 VIF_pref_pass = if (is.numeric(vifs)) all(vifs < vif_pref) else NA,
-                 VIF_10_pass   = if (is.numeric(vifs)) all(vifs < vif_cut) else NA,
-                 n_indicators = length(rhs))
+      rhs <- subset(pe, op %in% form_ops & lhs == f)$rhs
+      rhs <- intersect(rhs, colnames(dat))
+      X   <- dat[, rhs, drop = FALSE]
+      if (ncol(X)) X <- X[, vapply(X, is.numeric, logical(1)), drop = FALSE]
+
+      # R^2_a uses latent scores if available
+      r2a <- tryCatch({
+        if (!is.null(scores) && f %in% colnames(scores) && ncol(X))
+          mean(cor(scores[[f]], X, use = "pairwise.complete.obs")^2)
+        else NA_real_
+      }, error = function(e) NA_real_)
+
+      # VIF among formative indicators (does not need scores)
+      vif_val <- tryCatch({
+        if (ncol(X) >= 2) {
+          y_dummy <- rowMeans(X, na.rm = TRUE)  # any y works; VIF uses X only
+          car::vif(lm(y_dummy ~ ., data = X))
+        } else NA
+      }, error = function(e) NA)
+
+      data.frame(
+        factor = f,
+        R2a = r2a,
+        VIF_max = if (is.numeric(vif_val)) max(vif_val, na.rm = TRUE) else NA_real_,
+        VIF_pref_pass = if (is.numeric(vif_val)) all(vif_val < vif_pref) else NA,
+        VIF_10_pass   = if (is.numeric(vif_val)) all(vif_val < vif_cut) else NA,
+        n_indicators  = ncol(X)
+      )
     }))
-    fw <- subset(pe, op == "~" & lhs %in% first_form & rhs %in% ov, select = c("lhs","rhs","std.all","z","pvalue"))
+
+    # per-indicator formative weights (std, z)
+    fw <- subset(pe, op %in% form_ops & lhs %in% first_form & rhs %in% ov,
+                 select = c("lhs","rhs","std.all","z","pvalue"))
     if (nrow(fw)) {
       names(fw)[1:2] <- c("factor","indicator")
       fw$nonsignificant <- (!is.finite(fw$z) | fw$z <= 1.96)
       formative_weights <- fw
     }
+
+    # detailed VIF per indicator
     vifs_detailed <- do.call(rbind, lapply(first_form, function(f) {
-      rhs <- subset(pe, op == "~" & lhs == f)$rhs
-      model <- tryCatch(lm(scores[[f]] ~ ., data = dat[, rhs, drop = FALSE]), error = function(e) NULL)
+      rhs <- subset(pe, op %in% form_ops & lhs == f)$rhs
+      rhs <- intersect(rhs, colnames(dat))
+      X   <- dat[, rhs, drop = FALSE]
+      if (ncol(X)) X <- X[, vapply(X, is.numeric, logical(1)), drop = FALSE]
+      if (ncol(X) < 2) return(NULL)
+      model <- tryCatch(lm(rowMeans(X, na.rm = TRUE) ~ ., data = X), error = function(e) NULL)
       if (is.null(model)) return(NULL)
       v <- tryCatch(safe_vif_vec(model), error = function(e) NA)
       if (all(is.na(v))) return(NULL)
@@ -278,7 +306,7 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     }
   }
 
-  # 2D) Second-order formative diagnostics
+  # 2D) Second-order formative diagnostics (needs latent scores)
   so_form_table <- data.frame()
   second_order_formative_weights <- data.frame()
   second_order_formative_vif_detail <- data.frame()
@@ -286,7 +314,7 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
   if (length(second_form) && !is.null(scores)) {
     quiet_pkg("car"); quiet_pkg("relaimpo")
     so_form_table <- do.call(rbind, lapply(second_form, function(s2) {
-      preds <- subset(pe, op == "~" & lhs == s2)$rhs
+      preds <- subset(pe, op %in% form_ops & lhs == s2)$rhs
       r2a <- tryCatch(mean(cor(scores[[s2]], scores[, preds, drop = FALSE],
                                use = "pairwise.complete.obs")^2), error = function(e) NA_real_)
       model <- lm(scores[[s2]] ~ ., data = scores[, preds, drop = FALSE])
@@ -299,14 +327,15 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
                  VIF_10_pass   = if (is.numeric(vifs)) all(vifs < 10) else NA,
                  n_subdims = length(preds))
     }))
-    sw <- subset(pe, op == "~" & lhs %in% second_form & rhs %in% lv, select = c("lhs","rhs","std.all","z","pvalue"))
+    sw <- subset(pe, op %in% form_ops & lhs %in% second_form & rhs %in% lv,
+                 select = c("lhs","rhs","std.all","z","pvalue"))
     if (nrow(sw)) {
       names(sw)[1:2] <- c("second_order","subdimension")
       sw$nonsignificant <- (!is.finite(sw$z) | sw$z <= 1.96)
       second_order_formative_weights <- sw
     }
     vifs2 <- do.call(rbind, lapply(second_form, function(s2) {
-      preds <- subset(pe, op == "~" & lhs == s2)$rhs
+      preds <- subset(pe, op %in% form_ops & lhs == s2)$rhs
       model <- tryCatch(lm(scores[[s2]] ~ ., data = scores[, preds, drop = FALSE]), error = function(e) NULL)
       if (is.null(model)) return(NULL)
       v <- tryCatch(safe_vif_vec(model), error = function(e) NA)
@@ -316,7 +345,7 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     if (!is.null(vifs2) && nrow(vifs2)) second_order_formative_vif_detail <- vifs2
 
     lmg_rows <- do.call(rbind, lapply(second_form, function(s2) {
-      preds <- subset(pe, op == "~" & lhs == s2)$rhs
+      preds <- subset(pe, op %in% form_ops & lhs == s2)$rhs
       mod <- tryCatch(lm(scores[[s2]] ~ ., data = scores[, preds, drop = FALSE]), error = function(e) NULL)
       if (is.null(mod)) return(NULL)
       rel <- tryCatch(relaimpo::calc.relimp(mod, type = "lmg"), error = function(e) NULL)
@@ -395,7 +424,7 @@ if (result$model_provided) {
   quiet_pkg("lavaan")
   cfa_out <- tryCatch(
     withCallingHandlers({
-      # Use sem() so formative (~) is allowed; works for pure CFA too
+      # Use sem() so formative (~ or <~) is allowed; works for pure CFA too
       fit <- lavaan::sem(cleaned_model_syntax, data = df, std.lv = FALSE)
 
       fm <- lavaan::fitMeasures(fit, c("chisq","df","pvalue","cfi","tli","rmsea","srmr"))
