@@ -29,7 +29,11 @@
                     <div class="mb-2 small fw-bold">Upload CSV</div>
                     <input id="csvInput" type="file" accept=".csv" class="form-control form-control-sm mb-2">
                     <div class="small text-muted mb-2">First row should contain column headers (item codes). Values must be numeric for Likert items.</div>
-                    <button id="loadCsvBtn" class="btn btn-sm btn-primary" disabled>Load CSV</button>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button id="loadCsvBtn" class="btn btn-sm btn-primary" disabled>Load CSV</button>
+                        <button id="downloadTemplateBtn" type="button" class="btn btn-sm btn-outline-secondary" title="Download a CSV template with item headers">Download Template</button>
+                    </div>
+                    <div class="small text-muted">Template uses current or prior step item codes (if available) and inserts two example rows.</div>
                 </div>
                 <div class="mt-2">
                     <button id="loadSimBtn" class="btn btn-sm btn-outline-primary">Refresh Simulated Data</button>

@@ -81,6 +81,39 @@
     const fileInput = id('csvInput');
     fileInput?.addEventListener('change', ()=>{ id('loadCsvBtn').disabled = !fileInput.files?.length; });
     id('loadCsvBtn')?.addEventListener('click', async ()=>{ await loadCsv(fileInput.files[0]); });
+    // CSV template download
+    id('downloadTemplateBtn')?.addEventListener('click', async ()=>{
+      try {
+        let headerCols = [...columns];
+        if (!headerCols.length){
+          try {
+            const step5 = await window.dataStorage.getData('data_step_5') || {};
+            const qItems = Array.isArray(step5.questionnaireItems)? step5.questionnaireItems : [];
+            headerCols = qItems.map(it=> it.code || it.id).filter(Boolean);
+          } catch(e){}
+        }
+        if (!headerCols.length){ headerCols = ['ITEM1','ITEM2','ITEM3']; }
+        const minLik = Number(scaleMin)||1; const maxLik = Number(scaleMax)||5;
+        const midVal = Math.round((minLik + maxLik)/2) || 3;
+        const clamp = v=> Math.min(maxLik, Math.max(minLik, v));
+        const row1 = headerCols.map(()=> midVal);
+        const row2 = headerCols.map((_,i)=> clamp(midVal + (i%2? 1 : -1)));
+        const csvLines = [headerCols.join(','), row1.join(','), row2.join(',')];
+        const blob = new Blob([csvLines.join('\n')+'\n'], { type:'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const ts = new Date().toISOString().replace(/[:T]/g,'-').slice(0,16);
+        a.download = `scale_template_${ts}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 120);
+        window.displayInfo?.('success','Template downloaded.');
+      } catch(err){
+        console.warn('Template download failed', err);
+        window.displayInfo?.('danger','Template download failed.');
+      }
+    });
   id('applyReverseBtn')?.addEventListener('click', applyReverse);
     id('selectAllReverseBtn')?.addEventListener('click', ()=>{ reverseSet = new Set(columns); renderColumns(); });
     id('clearReverseSelectionBtn')?.addEventListener('click', ()=>{ 
@@ -310,23 +343,7 @@ Output format (strict JSON):
       // If preserving reverse selections, keep set & recompute reversedData; else clear
       if (preserveReverse){
         reverseSet = prevReverseSet;
-       if (forceOverwrite){
-         lavaanEdited = auto; // working text resets to original
-         const ta = id('lavaanStep6Textarea');
-         if (ta) ta.value = auto;
-         const status = id('lavaanStep6Status');
-         if (status) status.textContent = 'Original';
-         const saveBtn = id('btnSaveEditedLavaan');
-         if (saveBtn) saveBtn.disabled = true;
-       } else if (!lavaanEdited){
-         lavaanEdited = auto;
-         const ta = id('lavaanStep6Textarea');
-         if (ta) ta.value = auto;
-         const status = id('lavaanStep6Status');
-         if (status) status.textContent = 'Original';
-         const saveBtn = id('btnSaveEditedLavaan');
-         if (saveBtn) saveBtn.disabled = true;
-       }
+  // Preserve existing lavaanEdited as-is; no force overwrite logic defined here.
       } else {
         rawData = clone(originalData);
         reverseSet = new Set();
