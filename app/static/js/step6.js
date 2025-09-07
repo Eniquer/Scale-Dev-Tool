@@ -1,4 +1,5 @@
 // Step 6 Data Handling: load simulated or uploaded data, manage reverse scoring
+
 (function(){
   document.addEventListener('DOMContentLoaded', init);
   let rawData = []; // current working data (may be reversed)
@@ -28,13 +29,33 @@
     updateViewButtons();
     // Auto-set default EFA factor count to theorized subdimensions (if available) instead of 'auto'
     try {
-      const step1 = await window.dataStorage.getData('data_step_1');
-      const subs = step1?.panel5?.subdimensions || [];
-      const distinct = Array.isArray(subs)? subs.filter(sd=> sd && sd.name)?.length : 0;
+
+      const step4 = await window.dataStorage.getData('data_step_4');
+      const subs = Object.values(step4?.facetModes) || [];
+      const distinct = Array.isArray(subs)? subs.filter(sd=> sd)?.length : 0;
       const efaInput = document.getElementById('efaNFactors');
-      if (efaInput && (efaInput.value.trim().toLowerCase()==='auto' || !efaInput.value.trim()) && distinct>0){
-        efaInput.value = String(distinct);
+      if(id('checkOnlyIncludeRef').checked){
+        setEfaInput(true);
+      }else{
+        if (efaInput && (efaInput.value.trim().toLowerCase()==='auto' || !efaInput.value.trim()) && distinct>0){
+          efaInput.value = String(distinct);
+        }
       }
+      async function setEfaInput(checked) {
+        if (checked) {
+          // Include only reflective columns
+          const distinctRef = Array.isArray(subs)? subs.filter(sd=> sd === "reflective")?.length : 0;
+          if (efaInput){
+            efaInput.value = String(distinctRef);
+          }
+        } else {
+          efaInput.value = String(distinct);
+        }
+      }
+      id('checkOnlyIncludeRef').addEventListener('change', async (e) => {
+        await setEfaInput(e.target.checked);
+      });
+
     } catch(e){ /* silent */ }
   }
 
@@ -735,7 +756,7 @@ Output format (strict JSON):
     }
   }
 
-  // todo check how to handle disabled items in R
+
 
   async function runEFA(){
     const btn = id('btnRunEFA');
@@ -743,7 +764,39 @@ Output format (strict JSON):
     const outEl = id('efaResults');
     if (!btn || btn.disabled) return;
     if (!Array.isArray(rawData) || !rawData.length){ return; }
-    
+    let inputData = [...rawData]; // shallow copy to avoid mutation
+
+    const onlyIncludeRef = id("checkOnlyIncludeRef");
+
+    if (onlyIncludeRef && onlyIncludeRef.checked){
+      const step4 = await dataStorage.getData("data_step_4")
+      const reflectiveItems = step4.indicators.filter(i=>i.direction=="out").map(i=>i.itemId)
+      const refWithoutGlobals = reflectiveItems.map(i=>step4.itemCustomIds[i]).filter(i=>i!=undefined) 
+
+      let colToDel = []
+      if(inputData.length>0){
+        colToDel = Object.keys(inputData[0]).filter(col => !refWithoutGlobals.includes(col))
+      }
+
+      console.log("columns removed, because not reflective:", colToDel);
+
+      const delFrom = (arr,col) => {
+        if (!Array.isArray(arr)) return;
+        for (const row of arr){
+          if (row && Object.prototype.hasOwnProperty.call(row,col)){
+            delete row[col];
+          }
+        }
+      };
+
+      if(colToDel.length>0){
+        colToDel.forEach(col => {
+          delFrom(inputData,col);
+        });
+      }
+
+    }
+
     const nFactorsVal = (id('efaNFactors')?.value || 'auto').trim() || 'auto';
     const rotation = (id('efaRotation')?.value || 'oblimin');
     btn.disabled = true;
@@ -753,7 +806,7 @@ Output format (strict JSON):
       const res = await fetch('/api/r/efa', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ data: rawData, n_factors: nFactorsVal, rotation })
+        body: JSON.stringify({ data: inputData, n_factors: nFactorsVal, rotation })
       });
       const json = await res.json().catch(()=>({status:'client_parse_error'}));
       if (!res.ok){ throw new Error(json.detail || ('HTTP '+res.status)); }
@@ -881,3 +934,35 @@ Output format (strict JSON):
     return String(str).replace(/[&<>'"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;' }[c]));
   }
 })();
+
+
+// todo make R results persistent
+
+  // todo check how to handle disabled items in R
+
+function removeColumn(col){
+  if (!col) return;
+  if (!columns.includes(col)) return;
+  // Remove from column list
+  columns = columns.filter(c=> c !== col);
+  // Remove from reverse selection
+  if (reverseSet.has(col)) reverseSet.delete(col);
+  // Delete from all data copies
+  const delFrom = arr => {
+  if (!Array.isArray(arr)) return;
+    for (const row of arr){
+      if (row && Object.prototype.hasOwnProperty.call(row,col)){
+        delete row[col];
+      }
+    }
+  };
+  delFrom(originalData);
+  delFrom(reversedData);
+  delFrom(rawData);
+  // Re-render UI
+  renderColumns();
+  renderTable();
+  updateViewButtons();
+  persistState();
+  setStatus(`Removed column ${col}.`);
+}
