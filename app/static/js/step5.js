@@ -233,6 +233,40 @@
 				await window.dataStorage.storeData('data_step_5', { ...existing, questionnaireItems: questionnaireItemList, questionnaireGeneratedAt: new Date().toISOString() }, false);
 			} catch(e){ console.warn('[Step5] Failed to persist questionnaire items', e); }
 		})();
+
+		// Re-evaluate mismatch warning whenever questionnaire definition changes (e.g., extra item add/remove)
+		reEvalQuestionnaireMismatch();
+	}
+
+	async function reEvalQuestionnaireMismatch(){
+		try {
+			const stored = await window.dataStorage.getData('data_step_5') || {};
+			// Recompute current questionnaire hash (duplicate of computeQuestionnaireHash logic)
+			const currentHash = (()=>{
+				try { return 'q'+(function(str){ let h=0; for (let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return h; })( (questionnaireItemList||[]).map(i=>`${i.code}|${i.responseType||'likert'}`).sort().join('||') ); } catch(e){ return 'q0'; }
+			})();
+			const storedHash = stored.likertAnswersQuestionnaireHash;
+			const hasAnswers = Array.isArray(stored.likertAnswers) && stored.likertAnswers.length>0;
+			const mismatch = !!storedHash && storedHash !== currentHash && hasAnswers;
+			window.step5QuestionnaireMismatch = mismatch; // triggers event listener for append eligibility
+			const host = document.getElementById('answersTable');
+			if (host){
+				let warn = document.getElementById('likertMismatchWarning');
+				if (mismatch){
+					if (!warn){
+						warn = document.createElement('div');
+						warn.id = 'likertMismatchWarning';
+						warn.className = 'alert alert-warning py-1 px-2 small mt-2';
+						warn.style.width = 'fit-content';
+						warn.innerHTML = '<strong>Warning:</strong> The questionnaire structure changed after these responses were stored. Item codes may be misaligned.';
+						const container = host.parentNode && host.parentNode.parentNode ? host.parentNode.parentNode : host.parentNode || host;
+						container.insertBefore(warn, container.firstChild);
+					}
+				} else if (warn){
+					warn.remove();
+				}
+			}
+		} catch(e){ console.warn('[Step5] reEvalQuestionnaireMismatch failed', e); }
 	}
 	function clean(t){
 		return String(t||'').replace(/\s+/g,' ').trim();
