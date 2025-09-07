@@ -916,28 +916,531 @@ Output format (strict JSON):
       cfaResultsEl.innerHTML = `<span class="text-danger">R Error (status=${resp.status}): ${escapeHtml(resp.stderr || resp.error || 'Unknown')}</span>`;
       return;
     }
+    // Switch to rich HTML mode
+  cfaResultsEl.classList.add('cfa-rich','fs-6');
+
+    const step6 = out.step6 || {};
     const fm = out.fit_measures || {};
     const loadings = out.loadings || [];
-    let lines = [];
-    if (Object.keys(fm).length){
-      lines.push('Fit Measures:');
-      Object.entries(fm).forEach(([k,v])=>{ lines.push(`  ${k}: ${formatNum(v)}`); });
-      lines.push('');
-    } else {
-      lines.push('No fit measures returned.');
+    const reflConstructs = step6.reflective_constructs || [];
+    const reflAlpha = (step6.reliability && step6.reliability.reflective_alpha) || [];
+    const reflAlphaMap = Object.fromEntries(reflAlpha.map(r=> [r.factor, r]));
+    const reflItems = step6.reflective_items || [];
+    const formBlocks = step6.formative_first_order || [];
+    const formWeights = step6.formative_weights || [];
+    const formVifDetail = step6.formative_vif_detail || [];
+    const soReflect = step6.second_order_reflective || [];
+    const soReflectLoad = step6.second_order_reflective_loadings || [];
+    const soForm = step6.second_order_formative || [];
+    const soFormWeights = step6.second_order_formative_weights || [];
+    const soFormVifDetail = step6.second_order_formative_vif_detail || [];
+    const soFormUniqueR2 = step6.second_order_formative_unique_R2 || [];
+    const flags = step6.flags || {};
+  // New discriminant validity structure: fornell_larcker is a matrix (rows with 'construct' + construct columns)
+  const flMatrix = step6.discriminant_validity && step6.discriminant_validity.fornell_larcker;
+  const htmtMatrix = step6.discriminant_validity && step6.discriminant_validity.htmt;
+
+    // Threshold helpers
+    const badge = (txt, cls) => `<span class="badge ${cls} ms-1">${escapeHtml(txt)}</span>`;
+    const fmt = v => formatNum(v);
+    const classifyFit = () => {
+      const cfi = fm.cfi, tli = fm.tli, rmsea = fm.rmsea, srmr = fm.srmr;
+      if ([cfi,tli,rmsea,srmr].some(v=> v==null)) return 'Incomplete';
+      if (cfi>=.95 && tli>=.95 && rmsea<=.06 && srmr<=.08) return 'Good';
+      if (cfi>=.90 || tli>=.90 || rmsea<=.08 || srmr<=.10) return 'Acceptable';
+      return 'Poor';
+    };
+    const fitClass = classifyFit();
+    const fitBadge = fitClass === 'Good'? badge('Good fit','bg-success') : fitClass==='Acceptable'? badge('Acceptable','bg-info') : badge('Poor fit','bg-danger');
+
+    const metricTooltipMap = {
+      'CFI':'Comparative Fit Index – incremental fit vs independence (≥ .95 good, ≥ .90 acceptable)',
+      'TLI':'Tucker–Lewis Index – non‑normed fit penalizing complexity (≥ .95 good, ≥ .90 acceptable)',
+      'RMSEA':'Approximation error per df (≤ .06 good, ≤ .08 acceptable)',
+      'SRMR':'Average standardized residual (≤ .08 good, ≤ .10 acceptable)',
+      'Chi-Square (p)':'Overall model χ² test p-value (sensitive to N; > .05 often desired)',
+      'AVE':'Average Variance Extracted – convergent validity (≥ .50)',
+      'CR':'Composite Reliability – internal consistency (≥ .70)',
+      'CR_2nd':'Composite Reliability (2nd-order latent, ≥ .70)',
+      'Alpha':'Cronbach’s Alpha (≥ .70)',
+      'Alpha (std)':'Cronbach’s Alpha standardized (≥ .70)',
+      'Alpha (raw)':'Cronbach’s Alpha raw (≥ .70)',
+      'R²ₐ':'Average indicator variance explained (formative redundancy proxy)',
+      'Max VIF':'Maximum collinearity ( <3 ideal, <10 tolerable )',
+      'VIF':'Variance Inflation Factor ( <3 ideal, <10 tolerable )',
+      'Min λ':'Lowest standardized loading (want ≥ .50)',
+      'Est':'Unstandardized estimate',
+      'Std':'Standardized loading/weight (≥ .50 reflective)',
+      'Std weight':'Standardized formative weight',
+      'λ²':'Squared loading (indicator reliability, ≥ .50)',
+      'z':'Wald z (>|1.96| for p<.05)',
+      'p':'Two-tailed p-value',
+      'MI':'Modification Index (expected χ² drop if freed; >3.84 notable, >10 strong)',
+      'Unique R²':'Relative importance (lmg unique contribution)',
+      '#Ind':'Number of indicators',
+      '#Items':'Number of items',
+      '#Subdims':'Number of first-order subdimensions',
+      '#Subs':'Number of subdimensions'
+    };
+
+    function table(cols, rows, emptyMsg){
+      rows = Array.isArray(rows)? rows : [];
+      if (!rows.length) return `<div class="text-muted">${emptyMsg||'(none)'}\n</div>`;
+      const labelRow = '<tr>'+ cols.map(c=> {
+        const labelKey = c.label || c.key;
+        let ttTxt = '';
+        if (c.tooltip){
+          ttTxt = c.tooltip;
+        } else {
+          const base = metricTooltipMap[labelKey] || metricTooltipMap[c.key];
+          if (base){ ttTxt = base; }
+          if (!ttTxt && c.desc){
+            const raw = String(c.desc).trim();
+            const hasThresh = /[≥≤<>]|\d/.test(raw);
+            if (!hasThresh && raw === labelKey){
+              // Special case: Fornell–Larcker / HTMT facet columns where desc repeats label
+              ttTxt = `Facet: ${labelKey}`;
+            } else {
+              ttTxt = hasThresh ? `${labelKey} threshold ${raw}` : `${labelKey} ${raw}`;
+            }
+          }
+        }
+        const spanAttr = ttTxt? ` data-bs-toggle="tooltip" data-bs-placement="top" title="${escapeHtml(ttTxt)}"` : '';
+        return `<th class="text-nowrap"><span class="metric-label"${spanAttr}>${escapeHtml(c.label)}</span></th>`;
+      }).join('') + '</tr>';
+      const head = `<thead>${labelRow}</thead>`;
+      const body = '<tbody>'+ rows.map(r=> '<tr>'+ cols.map(c=> {
+        let val = (typeof c.render === 'function')? c.render(r) : r[c.key];
+        if (val==null || val==='') val = '<span class="text-muted">NA</span>';
+        return `<td>${val}</td>`;
+      }).join('') + '</tr>').join('') + '</tbody>';
+      return `<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-2">${head}${body}</table></div>`;
     }
-    if (loadings.length){
-      lines.push('Loadings: latent -> indicator (est | std)');
-      loadings.forEach(l=>{
-        lines.push(`  ${l.latent} -> ${l.indicator} (${formatNum(l.estimate)} | ${formatNum(l.std_all)})`);
+
+    // Build table with vertical merging (rowspan) for repeated consecutive values in mergeCols
+    function mergedTable(cols, rows, mergeCols){
+      rows = Array.isArray(rows)? rows : [];
+      if (!rows.length) return '<div class="text-muted">(none)</div>';
+      mergeCols = Array.isArray(mergeCols)? mergeCols : [];
+      // Precompute spans
+      const spans = {}; // spans[col][rowIndex] = rowspan or 0 (skip)
+      mergeCols.forEach(col=> { spans[col] = {}; });
+      mergeCols.forEach(col=>{
+        for (let i=0;i<rows.length;){
+          const val = rows[i][col];
+            let len=1; let j=i+1; while (j<rows.length && rows[j][col]===val){ len++; j++; }
+          spans[col][i] = len; // starting cell
+          for (let k=i+1;k<j;k++){ spans[col][k] = 0; }
+          i = j;
+        }
       });
+      const head = '<thead><tr>'+ cols.map(c=> `<th>${escapeHtml(c.label)}</th>`).join('') + '</tr></thead>';
+      const bodyRows = rows.map((r,rowIdx)=>{
+        const tds = cols.map(c=>{
+          let val = (typeof c.render === 'function')? c.render(r) : r[c.key];
+          if (val==null || val==='') val = '<span class="text-muted">NA</span>';
+          if (mergeCols.includes(c.key)){
+            const span = spans[c.key][rowIdx];
+            if (!span) return ''; // skip
+            const rs = span>1? ` rowspan="${span}"` : '';
+            return `<td${rs}>${val}</td>`;
+          }
+          return `<td>${val}</td>`;
+        }).join('');
+        return `<tr>${tds}</tr>`;
+      }).join('');
+      return `<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-2">${head}<tbody>${bodyRows}</tbody></table></div>`;
+    }
+
+    function warnCell(value, rule, config){
+      if (value==null || value==='') return '<span class="text-muted">NA</span>';
+      const num = Number(value);
+      if (!isFinite(num)) return escapeHtml(String(value));
+      let status = rule(num); // 'ok' | 'warn' | 'issue'
+      let cls='bg-success'; let label='OK';
+      if (status==='issue'){ cls='bg-danger'; label='Issue'; }
+      else if (status==='warn'){ cls='bg-warning text-dark'; label='Warn'; }
+      // Build reason only for warn/issue and only if config provided
+      let reasonHtml='';
+      if ((status==='warn' || status==='issue') && config){
+        let reason='';
+        const dir = config.dir; // 'gte'|'lte'|'vif'|'z'
+        if (dir==='gte'){
+          if (status==='warn' && config.good!=null) reason = `Below good (${config.good})`;
+          else if (status==='issue') reason = `Below ${config.accept!=null? 'acceptable': 'required'} (${config.accept!=null? config.accept: (config.single!=null? config.single: config.good)})`;
+        } else if (dir==='lte'){
+          if (status==='warn' && config.good!=null) reason = `Above good (${config.good})`;
+          else if (status==='issue') reason = `Above ${config.accept!=null? 'acceptable': 'required'} (${config.accept!=null? config.accept: (config.single!=null? config.single: config.good)})`;
+        } else if (dir==='vif'){
+          if (status==='warn') reason = `Above low target (<${config.good})`;
+          else if (status==='issue') reason = `High collinearity (≥${config.accept})`;
+        } else if (dir==='z'){
+          if (status==='issue') reason = `Not significant (≤ ${config.single})`;
+        } else if (dir==='custom' && typeof config.reason === 'function'){
+          reason = config.reason(num,status);
+        }
+        if (reason){
+          const color = status==='issue'? 'text-danger' : 'text-warning';
+          reasonHtml = `<div class="${color}" style="line-height:1.1;">${escapeHtml(reason)}</div>`;
+        }
+      }
+      if (reasonHtml){
+        return `<div class="d-flex flex-column align-items-start">${reasonHtml}<div>${fmt(num)} ${badge(label, cls)}</div></div>`;
+      }
+      return `${fmt(num)} ${badge(label, cls)}`;
+    }
+
+    // 1) Goodness of Fit
+  let section1 = `<h5 class="mb-1">1) Goodness of Fit of the Measurement Model ${fitBadge}</h5>`;
+    if (Object.keys(fm).length){
+      section1 += table([
+    { key:'metric', label:'Metric', desc:'Fit index' },
+    { key:'value', label:'Value', desc:'Observed & status' },
+    { key:'rule', label:'Guideline', desc:'Threshold reference' }
+      ], [
+    { metric:'CFI', value: warnCell(fm.cfi, v=> v>=.95? 'ok' : v>=.90? 'warn':'issue', {dir:'gte', good:.95, accept:.90}), rule:'≥ .95 good (≥ .90 acceptable)' },
+    { metric:'TLI', value: warnCell(fm.tli, v=> v>=.95? 'ok' : v>=.90? 'warn':'issue', {dir:'gte', good:.95, accept:.90}), rule:'≥ .95 good (≥ .90 acceptable)' },
+    { metric:'RMSEA', value: warnCell(fm.rmsea, v=> v<=.06? 'ok' : v<=.08? 'warn':'issue', {dir:'lte', good:.06, accept:.08}), rule:'≤ .06 good (≤ .08 acceptable)' },
+    { metric:'SRMR', value: warnCell(fm.srmr, v=> v<=.08? 'ok' : v<=.10? 'warn':'issue', {dir:'lte', good:.08, accept:.10}), rule:'≤ .08 good (≤ .10 acceptable)' },
+        { metric:'Chi-Square (p)', value: (fm.pvalue!=null? fmt(fm.pvalue):'NA'), rule:'> .05 often desired; sensitive to N' }
+      ]);
     } else {
-      lines.push('No loadings returned.');
+      section1 += '<div class="text-muted">No fit measures returned.</div>';
     }
-    if (out.error){
-      lines.push('\nCFA Error: ' + out.error);
+    section1 += '<div class="text-secondary mb-2">Interpret with sample size & theoretical specification.</div>';
+
+    // 2) Construct validity (AVE / CR / FL / Formative collinearity)
+  let section2 = '<h5 class="mt-3 mb-1">2) Construct-Level Validity</h5>';
+    if (reflConstructs.length){
+      section2 += table([
+    { key:'factor', label:'Construct', desc:'Latent variable' },
+    { key:'AVE', label:'AVE', desc:'≥ .50', render:r=> warnCell(r.AVE, v=> v>=.50? 'ok':'issue', {dir:'gte', single:.50}) },
+    { key:'CR', label:'CR', desc:'≥ .70', render:r=> warnCell(r.CR, v=> v>=.70? 'ok':'issue', {dir:'gte', single:.70}) },
+    { key:'Alpha', label:'Alpha', desc:'≥ .70', render:r=> { const a = reflAlphaMap[r.factor]; const val = a? (a.alpha_std ?? a.alpha_raw): null; return warnCell(val, v=> v>=.70? 'ok':'issue', {dir:'gte', single:.70}); } }
+      ], reflConstructs);
+    } else {
+      section2 += '<div class="text-muted">No reflective constructs detected.</div>';
     }
-    cfaResultsEl.textContent = lines.join('\n');
+    // Fornell-Larcker matrix rendering
+    if (Array.isArray(flMatrix) && flMatrix.length && typeof flMatrix[0]==='object'){
+      section2 += '<div class="fw-bold mt-2">Fornell–Larcker Matrix (diag = sqrt(AVE))</div>';
+      try {
+        const constructs = flMatrix.map(r=> r.construct).filter(Boolean);
+        const colKeys = Object.keys(flMatrix[0]).filter(k=> k !== 'construct');
+        // Dynamic columns
+        const colsDyn = [{ key:'construct', label:'Construct', desc:'Row' }, ...colKeys.map(k=> ({ key:k, label:k, desc:k }))];
+        section2 += table(colsDyn, flMatrix);
+        // Derive pairwise pass/fail summary
+        const diagMap = {};
+        flMatrix.forEach(r=>{ if (r.construct && r[r.construct]!=null) diagMap[r.construct]= Number(r[r.construct]); });
+        const pairIssues = [];
+        for (let i=0;i<constructs.length;i++){
+          for (let j=i+1;j<constructs.length;j++){
+            const a = constructs[i]; const b = constructs[j];
+            const rowA = flMatrix.find(r=> r.construct===a) || {};
+            const r_ab = Number(rowA[b]);
+            if (!isFinite(r_ab)) continue;
+            const sa = diagMap[a]; const sb = diagMap[b];
+            if (isFinite(sa) && isFinite(sb)){
+              const pass = (sa > Math.abs(r_ab)) && (sb > Math.abs(r_ab));
+              if (!pass){ pairIssues.push({ a,b, r: r_ab, sa, sb }); }
+            }
+          }
+        }
+        if (pairIssues.length){
+          section2 += '<div class="text-danger small">Pairs failing FL criterion (sqrt(AVE) > |r| for both):</div>';
+          section2 += '<ul class="small mb-2">'+ pairIssues.map(p=> `<li>${escapeHtml(p.a)}–${escapeHtml(p.b)}: |r|=${fmt(Math.abs(p.r))}, sqrtAVE(${escapeHtml(p.a)})=${fmt(p.sa)}, sqrtAVE(${escapeHtml(p.b)})=${fmt(p.sb)}</li>`).join('') + '</ul>';
+        } else {
+          section2 += '<div class="small text-success">All construct pairs satisfy Fornell–Larcker criterion.</div>';
+        }
+      } catch(err){ section2 += `<div class='text-warning small'>Fornell–Larcker parse error: ${escapeHtml(err.message||err)}</div>`; }
+    }
+    // HTMT matrix (optional)
+    if (htmtMatrix && typeof htmtMatrix === 'object' && !Array.isArray(htmtMatrix)){
+      const rows = Object.keys(htmtMatrix);
+      if (rows.length){
+        section2 += '<div class="fw-bold mt-2">HTMT (Heterotrait-Monotrait) Ratios</div>';
+        try {
+          const colsSet = new Set();
+            rows.forEach(rn=>{ const row = htmtMatrix[rn]; if (row && typeof row==='object'){ Object.keys(row).forEach(k=> colsSet.add(k)); } });
+          const colKeys = Array.from(colsSet).filter(k=> rows.includes(k));
+          const htmtRows = rows.map(rn=>{ const rowObj = { construct: rn }; const row = htmtMatrix[rn] || {}; colKeys.forEach(k=>{ const v = row[k]; rowObj[k] = (v==null||rn===k)? (rn===k? 1: '') : Number(v).toFixed(3); }); return rowObj; });
+          const colsDyn = [{ key:'construct', label:'Construct', desc:'Row' }, ...colKeys.map(k=> ({ key:k, label:k, desc:k }))];
+          section2 += table(colsDyn, htmtRows);
+          // Flag high HTMT
+          const highPairs = [];
+          rows.forEach(a=> rows.forEach(b=>{ if (a<b){ const val = htmtMatrix[a] && htmtMatrix[a][b]; if (isFinite(val) && val>0.85) highPairs.push({a,b,val}); } }));
+          if (highPairs.length){
+            section2 += '<div class="text-danger small">Pairs with HTMT > .85:</div><ul class="small mb-2">'+ highPairs.map(p=> `<li>${escapeHtml(p.a)}–${escapeHtml(p.b)}: ${fmt(p.val)}</li>`).join('') + '</ul>';
+          } else {
+            section2 += '<div class="small text-success">All HTMT ratios ≤ .85.</div>';
+          }
+        } catch(err){ section2 += `<div class='text-warning small'>HTMT parse error: ${escapeHtml(err.message||err)}</div>`; }
+      }
+    }
+    if (formBlocks.length){
+  section2 += '<div class="fw-bold mt-2">Formative Blocks (Collinearity & Variance)</div>';
+      section2 += table([
+    { key:'factor', label:'Composite', desc:'Formative' },
+    { key:'n_indicators', label:'#Ind', desc:'Indicators' },
+    { key:'R2a', label:'R²ₐ', desc:'Adj. variance' , render:r=> fmt(r.R2a) },
+    { key:'VIF_max', label:'Max VIF', desc:'<3 good (<10 ok)', render:r=> warnCell(r.VIF_max, v=> v<3? 'ok' : v<10? 'warn':'issue', {dir:'vif', good:3, accept:10}) }
+      ], formBlocks);
+    }
+    if (soReflect.length){
+  section2 += '<div class="fw-bold mt-2">Second-Order Reflective</div>';
+      section2 += table([
+    { key:'second_order', label:'2nd-Order', desc:'Higher-level' },
+    { key:'n_first_order', label:'#Subdims', desc:'First-order' },
+    { key:'AVE_2nd', label:'AVE (λ²)', desc:'≥ .50', render:r=> warnCell(r.AVE_2nd, v=> v>=.50? 'ok':'issue', {dir:'gte', single:.50}) },
+    { key:'min_loading', label:'Min λ', desc:'Smallest loading', render:r=> fmt(r.min_loading) }
+      ], soReflect);
+    }
+    if (soForm.length){
+  section2 += '<div class="fw-bold mt-2">Second-Order Formative</div>';
+      section2 += table([
+    { key:'second_order', label:'2nd-Order', desc:'Higher-level' },
+    { key:'n_subdims', label:'#Subs', desc:'Subdimensions' },
+    { key:'R2a', label:'R²ₐ', desc:'Adj. variance', render:r=> fmt(r.R2a) },
+    { key:'VIF_max', label:'Max VIF', desc:'<3 good (<10 ok)', render:r=> warnCell(r.VIF_max, v=> v<3? 'ok' : v<10? 'warn':'issue', {dir:'vif', good:3, accept:10}) }
+      ], soForm);
+    }
+
+    // 3) Reliability
+  let section3 = '<h5 class="mt-3 mb-1">3) Construct-Level Reliability</h5>';
+    if (reflAlpha.length){
+      section3 += table([
+    { key:'factor', label:'Factor', desc:'Latent variable' },
+    { key:'n_items', label:'#Items', desc:'Indicators' },
+    { key:'alpha_std', label:'Alpha (std)', desc:'≥ .70', render:r=> warnCell(r.alpha_std, v=> v>=.70? 'ok':'issue', {dir:'gte', single:.70}) },
+    { key:'alpha_raw', label:'Alpha (raw)', desc:'≥ .70', render:r=> warnCell(r.alpha_raw, v=> v>=.70? 'ok':'issue', {dir:'gte', single:.70}) }
+      ], reflAlpha);
+    } else {
+      section3 += '<div class="text-muted small">No alpha values.</div>';
+    }
+    if (step6.reliability && step6.reliability.second_order_reflective_CR && step6.reliability.second_order_reflective_CR.length){
+  section3 += '<div class="fw-bold mt-2">Second-Order CR</div>' +
+        table([
+      { key:'second_order', label:'2nd-Order', desc:'Higher-level' },
+      { key:'CR_2nd', label:'CR', desc:'≥ .70', render:r=> warnCell(r.CR_2nd, v=> v>=.70? 'ok':'issue', {dir:'gte', single:.70}) }
+        ], step6.reliability.second_order_reflective_CR);
+    }
+    section3 += '<div class="small text-secondary">Alpha complements CR; low alpha with adequate CR may suggest heterogeneous but valid indicators.</div>';
+
+    // 4) Indicator diagnostics
+  let section4 = '<h5 class="mt-3 mb-1">4) Indicator / Subdimension Diagnostics</h5>';
+    if (loadings.length){
+  section4 += '<div class="fw-bold">Loadings (raw & std)</div>';
+      section4 += table([
+    { key:'latent', label:'Latent', desc:'Construct' },
+    { key:'indicator', label:'Indicator', desc:'Item' },
+    { key:'estimate', label:'Est', desc:'Unstd.' , render:r=> fmt(r.estimate) },
+    { key:'std_all', label:'Std', desc:'≥ .50', render:r=> warnCell(r.std_all, v=> v>=.50? 'ok':'issue', {dir:'gte', single:.50}) }
+      ], loadings);
+    }
+    if (reflItems.length){
+      const weak = reflItems.filter(r=> r.flag_weak);
+  section4 += '<div class="fw-bold mt-2">Reflective Items</div>';
+      section4 += table([
+    { key:'factor', label:'Factor', desc:'Construct' },
+    { key:'item', label:'Item', desc:'Indicator' },
+    { key:'std.all', label:'Loading', desc:'≥ .50', render:r=> warnCell(r['std.all'], v=> v>=.50? 'ok':'issue', {dir:'gte', single:.50}) },
+    { key:'lambda2', label:'λ²', desc:'≥ .50', render:r=> warnCell(r.lambda2, v=> v>=.50? 'ok':'issue', {dir:'gte', single:.50}) },
+    { key:'z', label:'z', desc:'> 1.96', render:r=> warnCell(r.z, v=> v>1.96? 'ok':'issue', {dir:'z', single:1.96}) }
+      ], reflItems);
+      if (weak.length){
+        section4 += `<div class="small text-danger">${weak.length} weak item(s) flagged (z ≤ 1.96 or λ² < .50).</div>`;
+      }
+    }
+    if (formWeights.length){
+  section4 += '<div class="fw-bold mt-2">Formative Weights</div>';
+      section4 += table([
+    { key:'factor', label:'Composite', desc:'Formative' },
+    { key:'indicator', label:'Indicator', desc:'Item' },
+    { key:'std.all', label:'Std weight', desc:'Loading', render:r=> fmt(r['std.all']) },
+    { key:'z', label:'z', desc:'> 1.96', render:r=> warnCell(r.z, v=> v>1.96? 'ok':'issue', {dir:'z', single:1.96}) },
+    { key:'pvalue', label:'p', desc:'Sig.' , render:r=> fmt(r.pvalue) }
+      ], formWeights);
+    }
+    if (formVifDetail.length){
+  section4 += '<div class="fw-bold mt-2">Formative Indicator VIF</div>';
+      section4 += table([
+    { key:'factor', label:'Composite', desc:'Formative' },
+    { key:'indicator', label:'Indicator', desc:'Item' },
+    { key:'VIF', label:'VIF', desc:'<3 good (<10 ok)', render:r=> warnCell(r.VIF, v=> v<3? 'ok' : v<10? 'warn':'issue', {dir:'vif', good:3, accept:10}) }
+      ], formVifDetail);
+    }
+    if (soReflectLoad.length){
+  section4 += '<div class="fw-bold mt-2">Second-Order Reflective Loadings</div>' + table([
+    { key:'second_order', label:'2nd-Order', desc:'Higher-level' },
+    { key:'subdimension', label:'Subdimension', desc:'First-order' },
+    { key:'std.all', label:'Loading', desc:'≥ .50', render:r=> warnCell(r['std.all'], v=> v>=.50? 'ok':'issue', {dir:'gte', single:.50}) },
+    { key:'lambda2', label:'λ²', desc:'≥ .50', render:r=> warnCell(r.lambda2, v=> v>=.50? 'ok':'issue', {dir:'gte', single:.50}) },
+    { key:'z', label:'z', desc:'> 1.96', render:r=> warnCell(r.z, v=> v>1.96? 'ok':'issue', {dir:'z', single:1.96}) }
+      ], soReflectLoad);
+    }
+    if (soFormWeights.length){
+  section4 += '<div class="fw-bold mt-2">Second-Order Formative Weights</div>' + table([
+    { key:'second_order', label:'2nd-Order', desc:'Higher-level' },
+    { key:'subdimension', label:'Subdimension', desc:'First-order' },
+    { key:'std.all', label:'Std weight', desc:'Loading', render:r=> fmt(r['std.all']) },
+    { key:'z', label:'z', desc:'> 1.96', render:r=> warnCell(r.z, v=> v>1.96? 'ok':'issue', {dir:'z', single:1.96}) },
+    { key:'pvalue', label:'p', desc:'Sig.', render:r=> fmt(r.pvalue) }
+      ], soFormWeights);
+    }
+    if (soFormVifDetail.length){
+  section4 += '<div class="fw-bold mt-2">Second-Order Formative VIF</div>' + table([
+    { key:'second_order', label:'2nd-Order', desc:'Higher-level' },
+    { key:'subdimension', label:'Subdimension', desc:'First-order' },
+    { key:'VIF', label:'VIF', desc:'<3 good (<10 ok)', render:r=> warnCell(r.VIF, v=> v<3? 'ok' : v<10? 'warn':'issue', {dir:'vif', good:3, accept:10}) }
+      ], soFormVifDetail);
+    }
+    if (soFormUniqueR2.length){
+  section4 += '<div class="fw-bold mt-2">Second-Order Unique R² (lmg)</div>' + table([
+    { key:'second_order', label:'2nd-Order', desc:'Higher-level' },
+    { key:'subdimension', label:'Subdimension', desc:'First-order' },
+    { key:'lmg', label:'Unique R²', desc:'Relative importance', render:r=> fmt(r.lmg) }
+      ], soFormUniqueR2);
+    }
+    if ((flags.error_covariance_MIs||[]).length){
+  section4 += '<div class="fw-bold mt-2">Error Covariance Modification Indices (MI > 3.84)</div>' + table([
+    { key:'lhs', label:'lhs', desc:'Item 1' }, { key:'op', label:'op', desc:'' }, { key:'rhs', label:'rhs', desc:'Item 2' }, { key:'mi', label:'MI', desc:'>3.84', render:r=> warnCell(r.mi, v=> v>10? 'issue':'warn', {dir:'custom', reason:(num,st)=> st==='issue'? 'Very high MI (>10)': 'Suggest add cov.'}) }
+      ], flags.error_covariance_MIs);
+    }
+    if ((flags.cross_loading_MIs||[]).length){
+  section4 += '<div class="fw-bold mt-2">Cross-Loading Modification Indices (MI > 3.84)</div>' + table([
+    { key:'lhs', label:'Alt Factor', desc:'Other factor' }, { key:'op', label:'op', desc:'' }, { key:'rhs', label:'Item', desc:'Indicator' }, { key:'mi', label:'MI', desc:'>3.84', render:r=> warnCell(r.mi, v=> v>10? 'issue':'warn', {dir:'custom', reason:(num,st)=> st==='issue'? 'Very high MI (>10)': 'Potential cross-load'}) }
+      ], flags.cross_loading_MIs);
+    }
+    section4 += '<div class="small text-secondary">Consider theoretical justification before pruning flagged items; avoid overfitting by chasing MIs.</div>';
+
+    // Flags summary
+    const flagEntries = Object.entries(flags).filter(([,v])=> v && ((Array.isArray(v)&&v.length) || (typeof v==='object' && Object.keys(v).length)));
+    let summary = '<h5 class="mt-3 mb-1">Flags Summary</h5>';
+    if (flagEntries.length){
+      summary += '<ul class="small mb-2">'+ flagEntries.map(([k,v])=> `<li><code>${escapeHtml(k)}</code>: ${(Array.isArray(v)? v.length : Object.keys(v).length)} issue(s)</li>`).join('') + '</ul>';
+    } else {
+      summary += '<div class="small text-success">No threshold violations detected.</div>';
+    }
+
+    // 5) Revision recommendations (MacKenzie Step 6 final)
+    const revisionRows = [];
+    // Helper to push unique keys
+    const pushRev = (key, row) => { if (!row || !key) return; revisionRows.push(row); };
+    const fmtP = v => (v==null||v==='')? 'NA' : Number(v).toFixed(3);
+    // Reflective weak items
+    (reflItems||[]).forEach(r=>{
+      if (!r.flag_weak) return;
+      const issues=[];
+      if (!isFinite(r.z) || r.z <= 1.96) issues.push(`z≤1.96 (${fmt(r.z)})`);
+      if (isFinite(r.lambda2) && r.lambda2 < .50) issues.push(`λ²<.50 (${fmt(r.lambda2)})`);
+      // std.all < .50 is implicit; mention if so
+      if (isFinite(r['std.all']) && r['std.all'] < .50) issues.push(`Loading<.50 (${fmt(r['std.all'])})`);
+      const suggestion = 'Consider rewording for clarity/specificity or remove if construct domain remains covered.';
+      pushRev(r.factor+':'+r.item, { type:'Reflective Item', factor:r.factor, target:r.item, issues: issues.join('; '), suggestion });
+    });
+    // Error covariance MIs
+    (flags.error_covariance_MIs||[]).forEach(mi=>{
+      const key = `ERRCOV:${mi.lhs}-${mi.rhs}`;
+      const level = mi.mi>10? 'Very high' : 'High';
+      const suggestion = 'Investigate shared wording/content; if theory justifies, allow correlated errors; else revise one item.';
+      pushRev(key, { type:'Error Covariance', factor: mi.lhs + '↔' + mi.rhs, target:'Pair', issues:`MI=${fmt(mi.mi)} (${level})`, suggestion });
+    });
+    // Cross-loading MIs
+    (flags.cross_loading_MIs||[]).forEach(mi=>{
+      const key = `XLOAD:${mi.lhs}->${mi.rhs}`;
+      const level = mi.mi>10? 'Very high' : 'High';
+      const suggestion = 'Potential ambiguity; clarify wording to anchor to intended construct or consider removal.';
+      pushRev(key, { type:'Cross-Loading', factor: mi.lhs, target: mi.rhs, issues:`MI=${fmt(mi.mi)} (${level})`, suggestion });
+    });
+    // Formative indicators: nonsignificant + high VIF
+    const vifMapForm = {};
+    (formVifDetail||[]).forEach(v=>{ vifMapForm[v.factor+':'+v.indicator] = v.VIF; });
+    (formWeights||[]).forEach(w=>{
+      const key = w.factor+':'+w.indicator;
+      const vif = vifMapForm[key];
+      const issues=[];
+      if (w.nonsignificant || (!isFinite(w.z) || w.z <= 1.96)) issues.push(`z≤1.96 (${fmt(w.z)})`);
+      if (isFinite(vif) && vif >=10) issues.push(`VIF≥10 (${fmt(vif)})`); else if (isFinite(vif) && vif >=3) issues.push(`VIF≥3 (${fmt(vif)})`);
+      if (!issues.length) return;
+      const suggestion = 'Assess conceptual uniqueness; drop only if redundant and domain coverage maintained.';
+      pushRev('FORM:'+key, { type:'Formative Indicator', factor:w.factor, target:w.indicator, issues: issues.join('; '), suggestion });
+    });
+    // Second-order reflective loadings
+    (soReflectLoad||[]).forEach(r=>{
+      const issues=[];
+      if (isFinite(r['std.all']) && r['std.all'] < .50) issues.push(`Loading<.50 (${fmt(r['std.all'])})`);
+      if (isFinite(r.lambda2) && r.lambda2 < .50) issues.push(`λ²<.50 (${fmt(r.lambda2)})`);
+      if (isFinite(r.z) && r.z <= 1.96) issues.push(`z≤1.96 (${fmt(r.z)})`);
+      if (!issues.length) return;
+      const suggestion = 'Evaluate necessity of subdimension; remove only if theoretical breadth preserved.';
+      pushRev('SORE:'+(r.second_order+':'+r.subdimension), { type:'2nd-Order Reflective', factor:r.second_order, target:r.subdimension, issues: issues.join('; '), suggestion });
+    });
+    // Second-order formative weights
+    const vifMapSOForm = {};
+    (soFormVifDetail||[]).forEach(v=>{ vifMapSOForm[v.second_order+':'+v.subdimension] = v.VIF; });
+    (soFormWeights||[]).forEach(w=>{
+      const key = w.second_order+':'+w.subdimension;
+      const vif = vifMapSOForm[key];
+      const issues=[];
+      if (w.nonsignificant || (!isFinite(w.z) || w.z <= 1.96)) issues.push(`z≤1.96 (${fmt(w.z)})`);
+      if (isFinite(vif) && vif >=10) issues.push(`VIF≥10 (${fmt(vif)})`); else if (isFinite(vif) && vif >=3) issues.push(`VIF≥3 (${fmt(vif)})`);
+      if (!issues.length) return;
+      const suggestion = 'Check conceptual distinctiveness of subdimension; drop only if overlapping and coverage retained.';
+      pushRev('SOFORM:'+key, { type:'2nd-Order Formative', factor:w.second_order, target:w.subdimension, issues: issues.join('; '), suggestion });
+    });
+
+    // Fornell-Larcker / HTMT issues (already flagged earlier) - add as conceptual overlap suggestions
+    // Pair issues computed in FL step added to DOM already; we can include again for consolidated view if we stored them
+    // (Recompute quickly if needed)
+    try {
+      if (Array.isArray(flMatrix) && flMatrix.length){
+        const constructs = flMatrix.map(r=> r.construct).filter(Boolean);
+        const diagMap = {}; flMatrix.forEach(r=>{ if (r.construct && r[r.construct]!=null) diagMap[r.construct]= Number(r[r.construct]); });
+        for (let i=0;i<constructs.length;i++){
+          for (let j=i+1;j<constructs.length;j++){
+            const a=constructs[i], b=constructs[j];
+            const rowA = flMatrix.find(r=> r.construct===a) || {}; const r_ab = Number(rowA[b]);
+            if (!isFinite(r_ab)) continue; const sa=diagMap[a]; const sb=diagMap[b];
+            if (isFinite(sa)&&isFinite(sb)){
+              const pass = (sa > Math.abs(r_ab)) && (sb > Math.abs(r_ab));
+              if (!pass){ pushRev('FLPAIR:'+a+'-'+b, { type:'Discriminant (FL)', factor: a+'–'+b, target:'Pair', issues:`|r|=${fmt(Math.abs(r_ab))} ≥ sqrtAVE for one/both`, suggestion:'Refine items to sharpen conceptual boundaries; consider merging constructs only if theory supports.' }); }
+            }
+          }
+        }
+      }
+      if (htmtMatrix && typeof htmtMatrix==='object'){
+        Object.keys(htmtMatrix).forEach(a=>{ Object.keys(htmtMatrix[a]||{}).forEach(b=>{ if (a<b){ const v=htmtMatrix[a][b]; if (isFinite(v) && v>0.85){ pushRev('HTMT:'+a+'-'+b, { type:'Discriminant (HTMT)', factor:a+'–'+b, target:'Pair', issues:`HTMT=${fmt(v)}`, suggestion:'Revise or remove overlapping indicators; ensure constructs are theoretically distinct.' }); } } }); });
+      }
+    } catch(e){ /* silent */ }
+
+    let revisionSection = '<h5 class="mt-3 mb-1">Revision Recommendations (MacKenzie Step 6)</h5>';
+    if (!revisionRows.length){
+      revisionSection += '<div class="small text-success">No items currently flagged for revision under operational rules.</div>';
+    } else {
+      revisionSection += mergedTable([
+        { key:'type', label:'Type' },
+        { key:'factor', label:'Factor' },
+        { key:'target', label:'Target' },
+        { key:'issues', label:'Issue(s)' },
+        { key:'suggestion', label:'Suggestion' }
+      ], revisionRows, ['type','factor','suggestion']);
+      revisionSection += '<div class="small text-secondary">Apply judgment: retain indicators essential for content validity even if flagged.</div>';
+    }
+
+    let html = section1 + section2 + section3 + section4 + summary + revisionSection;
+    if (out.warning){ html = `<div class='alert alert-warning small py-1 mb-2'><strong>R Warning:</strong> ${escapeHtml(out.warning)}</div>` + html; }
+    if (out.error){ html += `<div class='alert alert-danger small py-1 mt-2 mb-0'>CFA Error: ${escapeHtml(out.error)}</div>`; }
+    cfaResultsEl.innerHTML = html;
+    // Init tooltips if Bootstrap available
+    try {
+      const ttEls = cfaResultsEl.querySelectorAll('[data-bs-toggle="tooltip"]');
+      if (window.bootstrap && window.bootstrap.Tooltip){
+        ttEls.forEach(el=>{ try { new window.bootstrap.Tooltip(el); } catch(e){} });
+      } else if (window.$ && window.$.fn && window.$.fn.tooltip){
+        window.$(ttEls).tooltip();
+      }
+    } catch(e){ /* silent */ }
   }
 
   function formatNum(v){

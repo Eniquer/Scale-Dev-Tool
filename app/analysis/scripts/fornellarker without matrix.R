@@ -4,7 +4,7 @@
 #   Rscript custom_analysis.R <data_json> <model_txt> <output_json>
 # - If model_txt is empty: only descriptive stats are returned.
 # - If model_txt is provided: runs SEM/CFA and returns Step-6 diagnostics (purification, reliability,
-#   per-item/subdimension checks), plus Fornell–Larcker (classical matrix) and HTMT.
+#   per-item/subdimension checks), plus Fornell–Larcker and HTMT.
 
 # Ensure user library path (non-root installs)
 user_lib <- file.path(Sys.getenv("HOME"), "R", "libs")
@@ -71,7 +71,7 @@ result <- list(
   model_provided = nchar(trimws(model_syntax)) > 0
 )
 
-# ---------- Step 6 helper: purification + reliability + item/subdim + discriminant validity ----------
+# ---------- Step 6 helper (CFA path): purification + reliability + item/subdim + discriminant validity ----------
 # Thresholds: AVE >= .50, CR >= .70; MI > 3.84; VIF pref < 3 (tolerate < 10).
 step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pref = 3, vif_cut = 10) {
   stopifnot(inherits(fit, "lavaan"))
@@ -84,16 +84,16 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
   scores <- tryCatch(as.data.frame(lavaan::lavPredict(fit, type = "lv")), error = function(e) NULL)
 
   # Identify blocks
-  refl_items <- subset(ss, op == "=~" & lhs %in% lv & rhs %in% ov)   # first-order reflective items
+  refl_items <- subset(ss, op == "=~" & lhs %in% lv & rhs %in% ov)   # first-order reflective
   refl_first_order <- unique(refl_items$lhs)
 
   so_paths <- subset(ss, op == "=~" & lhs %in% lv & rhs %in% lv)     # second-order reflective
   so_reflective <- unique(so_paths$lhs)
   so_children   <- if (nrow(so_paths)) split(so_paths$rhs, so_paths$lhs) else list()
 
-  # recognize both "~" and "<~" for formative
+  # --- recognize both "~" and "<~" for formative ---
   form_ops  <- c("~", "<~")
-  form_rows <- subset(pe, op %in% form_ops & lhs %in% lv)
+  form_rows <- subset(pe, op %in% form_ops & lhs %in% lv)            # regressions onto indicators/subdims
 
   first_form <- second_form <- character(0)
   if (nrow(form_rows)) {
@@ -149,7 +149,7 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     }))
   } else data.frame()
 
-  # Item-level diagnostics (z, lambda^2)
+  # Item-level diagnostics (z, lambda^2) from parameterEstimates
   L_pe <- subset(pe, op == "=~", select = c("lhs","rhs","std.all","z","pvalue"))
   refl_items_df <- if (nrow(L_pe)) {
     out <- transform(L_pe, lambda2 = std.all^2)
@@ -158,7 +158,7 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     out
   } else data.frame()
 
-  # Error-covariance MIs and cross-loading MIs
+  # Error-covariance MIs within factors; cross-loading MIs
   errcov_MIs <- if (length(refl_first_order)) {
     do.call(rbind, lapply(refl_first_order, function(f) {
       items <- subset(refl_items, lhs == f)$rhs
@@ -221,7 +221,7 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     }))
   }
 
-  # 2B) First-order formative diagnostics
+  # 2B) First-order formative diagnostics (recognize "~" and "<~")
   form1_table <- data.frame()
   formative_weights <- data.frame()
   formative_vif_detail <- data.frame()
@@ -243,7 +243,7 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
       # VIF among formative indicators (does not need scores)
       vif_val <- tryCatch({
         if (ncol(X) >= 2) {
-          y_dummy <- rowMeans(X, na.rm = TRUE)
+          y_dummy <- rowMeans(X, na.rm = TRUE)  # any y works; VIF uses X only
           car::vif(lm(y_dummy ~ ., data = X))
         } else NA
       }, error = function(e) NA)
@@ -355,8 +355,9 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     if (!is.null(lmg_rows) && nrow(lmg_rows)) second_order_formative_unique_R2 <- lmg_rows
   }
 
-  # Discriminant validity: Fornell–Larcker (classical matrix) + HTMT
-  fl_table <- NULL
+  # Discriminant validity: Fornell–Larcker + HTMT
+  fl_matrix <- matrix(numeric(0), 0, 0)
+  fl_pairs  <- data.frame()
   htmt_vals <- NULL
   if (length(refl_first_order) >= 2) {
     AVE <- setNames(refl_constructs$AVE, refl_constructs$factor)
@@ -364,12 +365,17 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     if (!is.null(LatCor)) {
       targets <- intersect(refl_first_order, rownames(LatCor))
       if (length(targets) >= 2) {
-        M <- LatCor[targets, targets, drop = FALSE]
-        diag(M) <- sqrt(AVE[targets])  # classical FL: diag = sqrt(AVE)
-        # labeled table for JSON (keeps row/col names)
-        fl_table <- data.frame(construct = rownames(M),
-                               as.data.frame(M, check.names = FALSE),
-                               row.names = NULL)
+        fl_matrix <- LatCor[targets, targets, drop = FALSE]
+        diag(fl_matrix) <- sqrt(AVE[targets])
+        pairs <- expand.grid(i = targets, j = targets, stringsAsFactors = FALSE)
+        pairs <- pairs[pairs$i < pairs$j, , drop = FALSE]
+        fl_pairs <- within(pairs, {
+          r  <- LatCor[cbind(i, j)]
+          r2 <- r^2
+          pass_i <- AVE[i] > r2
+          pass_j <- AVE[j] > r2
+          pass_both <- pass_i & pass_j
+        })
       }
     }
     quiet_pkg("semTools")
@@ -405,8 +411,9 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
     second_order_formative_vif_detail = second_order_formative_vif_detail,
     second_order_formative_unique_R2 = second_order_formative_unique_R2,
     discriminant_validity = list(
-      fornell_larcker = fl_table,   # CLASSICAL MATRIX ONLY
-      htmt = htmt_vals              # optional; common threshold < .85
+      fornell_larcker_matrix = fl_matrix,
+      fornell_larcker_pairs  = fl_pairs,   # pairwise pass/fail
+      htmt = htmt_vals                     # optional; threshold often < .85
     ),
     flags = flags
   )
