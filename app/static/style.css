@@ -160,9 +160,7 @@ main{
     overflow: auto;
     padding: 10px;
 }
-#area2 { /* //todo maybe only for the data table */
-    position: relative; /* Needed for absolute positioning of the caret */
-}
+
 
 #area2 .area2-caret {
     position: absolute;

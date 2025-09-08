@@ -114,7 +114,6 @@ async def analyze_endpoint(data: dict):
 async def chat_endpoint(chat_req: ChatRequest):
     # decrypt user's API key cipher
     api_key = simple_decrypt(chat_req.keyCipher)
-    print(f"Using API key: {api_key[-3:]}")  # Log last 3 chars for debugging  //TODO remove in production
     # call ChatGPT via functions
     try:
         if chat_req.model == "search":

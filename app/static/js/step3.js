@@ -147,7 +147,6 @@ async function showAIRaterGenModal() {
 init()
 
 // todo handle unidimensional
-// (done) store ANOVA results inside data_step_3 instead of separate key
 
 async function init(){
     step1Data = await window.dataStorage.getData('data_step_1');
@@ -586,8 +585,6 @@ Output schema (JSON only, no extra text, no markdown):
 
 `
 
-                   //todo viel gleiche antworten. maybe gen whole batch
-                    // todo use cohort on persona generation prompt
                     const resp = await window.sendChat(prompt,[{
                             role: "system",
                             content: "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."

@@ -1,7 +1,7 @@
 import { initAPIKey, deleteAPIKey, storeAPIKey } from './handleAPIKey.js';
 window.currentAPIKey_enc = await initAPIKey();
 
-// todo add option to modify the prompts
+// todo MAYBE: add option to modify the prompts
 
 function displayInfo(type = 'info', message = '') {
     // Show success message
@@ -857,3 +857,11 @@ function shuffle(a){
   return a;
 }
 window.shuffle = shuffle;
+
+
+// todo check if sync and change project works everywhere
+// todo add settings for user preferences
+// todo Name / Logo / Favicon
+// todo use cohort on persona generation prompt
+// todo check Grammar
+// todo check unnecessary Console logs

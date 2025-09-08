@@ -142,7 +142,6 @@
   id('scaleMinInput')?.addEventListener('input', e=>{ scaleMin = parseNumber(e.target.value,1); userAdjustedScale = true; persistState(); });
   id('scaleMaxInput')?.addEventListener('input', e=>{ scaleMax = parseNumber(e.target.value,5); userAdjustedScale = true; persistState(); });
   id('showOriginalBtn')?.addEventListener('click', ()=>{ viewMode='original'; rawData = clone(originalData); setStatus('Showing original data.'); updateViewButtons(); renderTable(); });
-  // todo always show reversed
   id('showReversedBtn')?.addEventListener('click', ()=>{ if (!reversedData.length){ setStatus('No reversed version stored yet.'); return; } viewMode='reversed'; rawData = clone(reversedData); setStatus('Showing reversed data.'); updateViewButtons(); renderTable(); });
     // Lavaan editor handlers
     const lavaTA = id('lavaanStep6Textarea');
@@ -394,7 +393,6 @@ Output format (strict JSON):
   }
 
 
-  // todo get AI suggestion what to revert
   function renderColumns(){
     const host = id('columnsList');
     if (!host) return;
@@ -1616,9 +1614,6 @@ Output format (strict JSON):
 })();
 
 
-// todo make R results persistent
-
-  // todo check how to handle disabled items in R
 
 function removeColumn(col){
   if (!col) return;

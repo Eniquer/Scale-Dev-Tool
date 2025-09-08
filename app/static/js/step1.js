@@ -999,7 +999,7 @@ async function resetPanel4() {
 }
 
 // ***********************************    Panel 4 AI Suggestion ***********************************************
-// todo maybe add optional Comments on the panel
+// todo MAYBE: add optional Comments on the panel
 
 async function getThemeAISuggestion(tries = 0) {
     const step1Data = await window.dataStorage.getData('data_step_1');
@@ -1578,9 +1578,7 @@ async function takeSubdimAISuggestion(overwrite = true) {
 
 // ***********************************   Continue to Step 4    ***********************************************#
 
-// todo optional: review every result using AI and get results
-// todo optional: implement check if everything is saved before continuing/closing/changing project -> every save method. option to store on seperate var and then compare both storage and seperate var. Check saveTheme() for example if saveTheme(true) it returns only the data
-// todo check when warning save p4 that p5 data gets lost
+// todo MAYBE: review every result using AI and get results
 
 const continueBtn = document.getElementById('continueStep1Btn');
 if (continueBtn) {
@@ -1672,8 +1670,6 @@ async function checkIfSaved(panelId){
         }
 
         
-        // todo available data returns something. check if its really empty. by their methods?
-
         
         if (JSON.stringify(savedData) !== JSON.stringify(availableData.data)) {
             return false;
@@ -1770,8 +1766,7 @@ document.addEventListener('click', event => {
 
 document.getElementById("area1").addEventListener("click", emitDataChanged);
 
-// todo on nav click no warning unsaved
-// todo decide how to restart which panel after change on other steps/Panels
+// todo check how the page handles step1 data missing
 
 
 // track unsaved edits
@@ -1805,11 +1800,6 @@ function nextStepBtnThere(){
         }
     });
 }
-
-
-// todo chatgot prompt mit ob alles fine ist mit step 1
-// todo commend thi js
-// todo custom alert?
 
 
 async function getAllResults() {
