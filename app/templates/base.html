@@ -136,38 +136,6 @@
         }
         // Run tooltip initialization after page load
         document.addEventListener('DOMContentLoaded', initTooltips);
-
-
-        // Handle active navigation state for HTMX requests
-        document.addEventListener('htmx:beforeRequest', function(evt) {
-            // Remove active class from all nav links
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            // Add active class to the clicked link if it's a nav-link
-            if (evt.detail.elt.classList.contains('nav-link')) {
-                evt.detail.elt.classList.add('active');
-            }
-            // Handle buttons that navigate to specific steps
-            // todo hx xhange?
-            const hxGet = evt.detail.elt.getAttribute('hx-get');
-            if (hxGet && hxGet.startsWith('/step/')) {
-                const stepNumber = hxGet.match(/\/step\/(\d+)/)[1];
-                const navLink = document.querySelector(`[data-step="${stepNumber}"]`);
-                if (navLink) {
-                    navLink.classList.add('active');
-                }
-            }
-        });
-        
-        // Reinitialize functionality after HTMX content swap
-        document.addEventListener('htmx:afterSwap', function(evt) {
-            // Only reinit for main content area
-            if (evt.detail.target.id === 'content') {
-                initTooltips();
-                // TODO: call other init functions (e.g., table setup, split.js) here
-            }
-        });
     </script>
 </body>
 </html>
