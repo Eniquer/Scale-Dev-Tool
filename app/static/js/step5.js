@@ -110,7 +110,6 @@
 	}
 
 	function generateQuestionnaire(panel4, panel5, step4){
-        // todo add optional columns like demographics
 		const ta = document.getElementById('questionnairePreview');
 		if (!ta) return;
 		if (!items.length){ ta.value = 'No items available.'; return; }
@@ -424,7 +423,6 @@ let personas = [];
 
 
 	async function setup(){
-        // todo warning if to many questionaire items. maybe break output
 		const btn = document.getElementById('genPersonasBtn');
 		const likertSimBtn = document.getElementById('likertSimBtn');
 		// Create / locate cancel button for likert simulation
@@ -746,6 +744,16 @@ async function likertSimulation(min=1,max=5, codeMap, requestedRows=0, startOffs
 	if (!generatedPersonas.length && (!requestedRows || requestedRows < 1)) { displayInfo('warning','No personas available to simulate.'); return []; }
 	const likerRange = max - min + 1;
 	const questionnaire = (window.step5QuestionnaireItems||[]).map(item => ({ id: item.id, text: item.text, responseType: item.responseType||'likert' }));
+	if (questionnaire.length > 100) { 
+		const confirmItemLength = await window.customConfirm({
+			title: 'Warning, a lot of items in questionnaire',
+			message: `You have ${questionnaire.length} items in the questionnaire. 
+			This could break AI generation output.`,
+			confirmText: `Let's try it!`,
+			cancelText: 'Cancel'
+		});
+		if (!confirmItemLength) return;	
+	}
 	const randomizedQuestionaire = shuffle(questionnaire);
 	const simulationItems = randomizedQuestionaire.filter(q => q.responseType !== 'open').map(q=>({id:q.id,text:q.text}));
 	const openItems = randomizedQuestionaire.filter(q => q.responseType === 'open').map(q=>({id:q.id,text:q.text}));
@@ -903,6 +911,3 @@ function renderLikertTable(rawRows, fromStorage){
 		setTimeout(()=>{ try { window.answersTable.redraw(true); } catch(e){} }, 0);
 	} catch(e){ console.warn('[Step5] renderLikertTable failed', e); }
 }
-
-
-
