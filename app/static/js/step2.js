@@ -8,6 +8,7 @@ let constructName = "";
 let constructDefinition = "";
 let aiItems = {};
 let aiPersonas = {};
+let aiPersonasPrompt = {};
 let subdimensions = [];
 let dimensionality = "";
 let nextItemId = 1; // monotonically increasing id to avoid reuse
@@ -78,15 +79,27 @@ async function init(){
     dimensionality = step1Data?.panel4?.dimensionality || "";
     constructName = step1Data?.panel1?.constructName || "";
     constructDefinition = step1Data?.panel2?.savedDefinition || "";
+
+    aiPersonasPrompt = step2Data?.aiPersonasPrompt || {
+        "expert": "",
+        "focusGroup": ""
+    };
+
     generalExpertPrompt = `a pool of Experts in ${constructName}:${constructDefinition}
 With occupations as professors, PHD candidates, experts in the field and researchers.`
 if (!expertPromptAddon.value) {
     expertPromptAddon.value = generalExpertPrompt;
+    if (aiPersonasPrompt["expert"]) {
+        expertPromptAddon.value = aiPersonasPrompt["expert"]
+    }
 }
     generalFocusGroupPrompt = `a Pool of Focus Group Members with diverse backgrounds and expertise in ${constructName}:${constructDefinition}`
 
     if (!focusGroupPromptAddon.value) {
         focusGroupPromptAddon.value = generalFocusGroupPrompt;
+        if (aiPersonasPrompt["focusGroup"]) {
+            focusGroupPromptAddon.value = aiPersonasPrompt["focusGroup"]
+        }
     }
     subdimensions = step1Data?.panel5?.subdimensions || [];
     items = step2Data?.items || [];
@@ -206,7 +219,7 @@ function changeSubdimension(text = '', subdimensionId = '', id = null) {
          items.push({ id: newId, text: text, subdimensionId });
      }
      // Persist updated list to IndexedDB
-    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, aiPersonasPrompt, nextItemId }, false).then(() => {
          console.log('Data saved successfully');
      });
      // Refresh UI to reflect changes
@@ -289,7 +302,7 @@ function createItemRow(itemText = '', subdimensionId = '', id = null, disabledBy
      // Remove handler: delete from array, persist, and refresh
      row.querySelector('.remove-item').addEventListener('click', () => {
          items = items.filter(i => i.id !== parseInt(row.dataset.id));
-    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, aiPersonasPrompt, nextItemId }, false).then(() => {
              console.log('Data saved successfully');
          });
          syncData();
@@ -363,7 +376,7 @@ if (addItemButton) {
         subdimensionId: subdimensionId || null
     };
         items.push(item);
-    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, aiPersonasPrompt, nextItemId }, false).then(() => {
             console.log('Data saved successfully');
         });
         syncData()
@@ -474,12 +487,18 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
         showLoading();
         let personaList = "";
         if(indicator == "expert" || indicator == "focusGroup"){
-            if (!forceNewItems && aiPersonas[indicator].length > 0) { // Personas already Generated and only generate more items:
+            expertPromptAddon.value = expertPromptAddon.value.trim() || generalExpertPrompt;
+            focusGroupPromptAddon.value = focusGroupPromptAddon.value.trim() || generalFocusGroupPrompt;
+            let newPromptAddon = {
+                expert: expertPromptAddon.value.trim() !== aiPersonasPrompt["expert"],
+                focusGroup: focusGroupPromptAddon.value.trim() !== aiPersonasPrompt["focusGroup"]
+            }
+            if (!forceNewItems && aiPersonas[indicator].length > 0 && !newPromptAddon[indicator]) { // Personas already Generated and only generate more items and prompt didn't change:
                 personaList = {
                     "content" : "This is a list of " + (indicator == "expert" ? "experts" : "focus group members") + ": \n" + aiPersonas[indicator].join(", \n"),
                     "role": "system"
                 }
-            }else{ // no Personas Generated:
+            }else{ // no Personas Generated Or start new or prompt changed:
                 let type = ""
                 let pool = ""
                 if (indicator == "expert") {
@@ -490,6 +509,7 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
                     pool = focusGroupPromptAddon.value.trim() || generalFocusGroupPrompt
                     type = "Focus Group Members"
                 }
+                aiPersonasPrompt[indicator] = pool
                 genPersonaPrompts = `
                     **Role**: Act as an impartial persona architect specializing in human complexity. Create a multidimensional persona that authentically represents both positive and challenging traits.
                     
@@ -509,7 +529,7 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
                     "role": "system"
                 }
                 aiPersonas[indicator] = cleanAIRespond(result[0]);
-                window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
+                window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, aiPersonasPrompt, nextItemId }, false).then(() => {
                     console.log('AI Personas saved successfully');
                 });
             }
@@ -578,7 +598,7 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
     }
     itemHistory.push(...AIResponse);
     aiItems[indicator] = itemHistory; // Update the aiItems object with new items
-    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, aiPersonasPrompt, nextItemId }, false).then(() => {
         console.log('aiItems saved successfully');
     });
 
@@ -678,7 +698,7 @@ function chooseSelectItems(indicator) {
         });
     });
 
-    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, aiPersonasPrompt, nextItemId }, false).then(() => {
          console.log('Data saved successfully');
      });
 
@@ -703,7 +723,7 @@ async function deleteItems(indicator) {
         return; // User cancelled
     }
     aiItems[indicator] = []
-    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, aiPersonasPrompt, nextItemId }, false).then(() => {
         console.log('Data saved successfully');
     });
     document.getElementById(`generateMore${indicator}`).classList.add('d-none');        
