@@ -52,7 +52,7 @@
                         <a class="nav-link text-light" data-bs-toggle="modal" data-bs-target="#exportModal">Export</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link text-light" href="#">Settings</a>
+                        <a class="nav-link text-light" href="#" data-bs-toggle="modal" data-bs-target="#settingsModal">Settings</a>
                     </li>
                 </ul>
             </div>
@@ -116,6 +116,54 @@
           <div class="modal-footer">
             <button type="button" class="btn btn-outline-success me-auto" id="addProjectBtn">Add Project</button>
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light">
+          <div class="modal-header">
+            <h5 class="modal-title" id="settingsModalLabel">Settings</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="settingsForm" class="small">
+              <div class="mb-3">
+                <label for="preferredModel" class="form-label">Preferred Model</label>
+                <input list="modelOptions" class="form-control" id="preferredModel" placeholder="e.g. gpt-4.1" />
+              </div>
+              <div class="mb-3">
+                <label for="preferredSearchModel" class="form-label">Preferred Search Model</label>
+                <input list="searchModelOptions" class="form-control" id="preferredSearchModel" placeholder="e.g. gpt-4o-search-preview" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">API Key</label>
+                <div class="input-group">
+                  <input type="password" class="form-control" id="apiKeyMasked" placeholder="••••••••" disabled>
+                  <button type="button" class="btn btn-outline-secondary" id="updateApiKeyBtn">Update Key</button>
+                </div>
+                <div class="form-text">Stored locally & encrypted. Never sent unless making API requests.</div>
+              </div>
+              <datalist id="modelOptions">
+                <option value="gpt-4o" />
+                <option value="gpt-4.1" />
+                <option value="gpt-4.1-mini" />
+                <option value="o4-mini" />
+                <option value="o4" />
+              </datalist>
+              <datalist id="searchModelOptions">
+                <option value="gpt-4o-search-preview" />
+                <option value="gpt-4.1-search" />
+              </datalist>
+            </form>
+            <div id="settingsStatus" class="small text-info"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-primary" id="saveSettingsBtn">Save</button>
           </div>
         </div>
       </div>

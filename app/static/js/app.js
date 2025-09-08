@@ -1,6 +1,6 @@
 import { initAPIKey, deleteAPIKey, storeAPIKey } from './handleAPIKey.js';
 window.currentAPIKey_enc = await initAPIKey();
-
+window.initAPIKey = initAPIKey;
 // todo MAYBE: add option to modify the prompts
 
 function displayInfo(type = 'info', message = '') {
@@ -111,9 +111,15 @@ function makeHxPostRequest(url, data) {
 window.makeHxPostRequest = makeHxPostRequest;
 
 async function sendChat(input, history = [], model=undefined) {
-    if (model === "search") {
-        // If model is search, modify the input for search context
+    // Determine effective model based on user settings if not explicitly passed
+    if (!model || model === undefined) {
+        try { model = await window.getActiveModel(); } catch(_) {}
+    }
+    let searchModelOverride = undefined;
+    if (model === 'search') {
+        // If model is search, modify the input for search context and pull user preferred search model
         input = `Search for: ${input}`;
+        try { searchModelOverride = await window.getActiveModel('search'); } catch(_) {}
     }
     const cipher = window.currentAPIKey_enc;
     if (!cipher) {
@@ -129,7 +135,7 @@ async function sendChat(input, history = [], model=undefined) {
     const resp = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: promptText, keyCipher: cipher, history: history, model: model })
+        body: JSON.stringify({ prompt: promptText, keyCipher: cipher, history: history, model: model, search_model: searchModelOverride })
     });
     if (resp.ok) {
         const { reply, history: updatedHistory } = await resp.json();
@@ -144,9 +150,13 @@ async function sendChat(input, history = [], model=undefined) {
             errorDetail = await resp.text();
         }
         console.error(`Error from chat endpoint: ${resp.status} ${resp.statusText}`, errorDetail);
+        // Surface specific model-not-found scenario to user
+        if (/model_not_found/i.test(errorDetail) || /does not exist/i.test(errorDetail)) {
+            window.displayInfo && window.displayInfo('error', 'Selected AI model is unavailable. Choose another model in settings.');
+        }
         // Handle invalid API key: prompt user to re-enter
         if ((resp.status === 401) && /invalid/i.test(errorDetail)) {
-            const newKey = prompt('Your API key appears invalid or unauthorized. Please re-enter your key.');
+            const newKey = await window.customPrompt({ title: 'Your API key appears invalid or unauthorized. Please re-enter your key.', placeholder: 'sk-...', confirmText: 'Save', cancelText: 'Cancel' });
             // Re-init API key and retry storing cipher
             window.currentAPIKey_enc = await storeAPIKey(newKey, false);
             return await sendChat(input, history, model); // Retry with new key
@@ -155,17 +165,21 @@ async function sendChat(input, history = [], model=undefined) {
 }
 window.sendChat = sendChat;
 
-async function genPersonaPool({generatedPersonas=[], groupDescription,amount=20}) {
+async function genPersonaPool({generatedPersonas = [], groupDescription, amount = 20, model} = {}) {
     const cipher = window.currentAPIKey_enc;
     if (!cipher) {
         alert('API key is not set. Please enter your OpenAI API key first.');
         window.currentAPIKey_enc = await initAPIKey();
         return;
     }
+    // Fallback to user preferred model if none provided
+    if (!model) {
+        try { model = await window.getActiveModel(); } catch(_) {}
+    }
     const resp = await fetch('/api/personaGen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({generatedPersonas, groupDescription, keyCipher: cipher, amount })
+        body: JSON.stringify({ generatedPersonas, groupDescription, keyCipher: cipher, amount, model })
     });
     if (resp.ok) {
         return resp.json();
@@ -181,10 +195,9 @@ async function genPersonaPool({generatedPersonas=[], groupDescription,amount=20}
         console.error(`Error from persona generation endpoint: ${resp.status} ${resp.statusText}`, errorDetail);
         // Handle invalid API key: prompt user to re-enter
         if ((resp.status === 401) && /invalid/i.test(errorDetail)) {
-            const newKey = prompt('Your API key appears invalid or unauthorized. Please re-enter your key.');
-            // Re-init API key and retry storing cipher
+            const newKey = window.customPromp('Your API key appears invalid or unauthorized. Please re-enter your key.');
             window.currentAPIKey_enc = await storeAPIKey(newKey, false);
-            return await genPersonaPool(numberOfPersonas, groupDescription); // Retry with new key
+            return await genPersonaPool({ generatedPersonas, groupDescription, amount, model }); // Retry with new key
         }
     }
 }
@@ -860,8 +873,88 @@ window.shuffle = shuffle;
 
 
 // todo check if sync and change project works everywhere
-// todo add settings for user preferences
+// Settings: user preferences (models, API key)
+(function settingsModule(){
+    const SETTINGS_KEY = 'user_settings';
+    let settingsCache = null;
+
+    async function loadSettings(){
+        if (settingsCache) return settingsCache;
+        try {
+            const data = await window.dataStorage.getData(SETTINGS_KEY) || {};
+            settingsCache = data;
+            return data;
+        } catch(e){ console.warn('Load settings failed', e); return {}; }
+    }
+    async function saveSettings(patch){
+        settingsCache = { ...(settingsCache||{}), ...patch, updatedAt: Date.now() };
+        await window.dataStorage.storeData(SETTINGS_KEY, settingsCache, false);
+        return settingsCache;
+    }
+    window.getUserSettings = loadSettings;
+    window.saveUserSettings = saveSettings;
+
+    async function populateSettingsModal(){
+        const modal = document.getElementById('settingsModal');
+        if (!modal) return;
+        const form = modal.querySelector('#settingsForm');
+        if (!form) return;
+        const status = modal.querySelector('#settingsStatus');
+        status.textContent = '';
+        const data = await loadSettings();
+        form.querySelector('#preferredModel').value = data.preferredModel || '';
+        form.querySelector('#preferredSearchModel').value = data.preferredSearchModel || '';
+        // API key masked indicator
+        const apiMasked = modal.querySelector('#apiKeyMasked');
+        apiMasked.value = window.currentAPIKey_enc ? '********' : '';
+    }
+
+    // Open modal hook
+    document.addEventListener('show.bs.modal', (e)=>{
+        if (e.target && e.target.id === 'settingsModal') {
+            populateSettingsModal();
+        }
+    });
+
+    // Save button
+    document.addEventListener('click', async (e)=>{
+        if (e.target && e.target.id === 'saveSettingsBtn'){
+            const modal = document.getElementById('settingsModal');
+            if (!modal) return;
+            const model = modal.querySelector('#preferredModel').value.trim();
+            const searchModel = modal.querySelector('#preferredSearchModel').value.trim();
+            await saveSettings({ preferredModel: model || undefined, preferredSearchModel: searchModel || undefined });
+            window.displayInfo && window.displayInfo('success','Settings saved');
+            const status = modal.querySelector('#settingsStatus');
+            status.textContent = 'Saved.';
+            setTimeout(()=> status.textContent='', 2000);
+        }
+    });
+
+    // Update API Key button -> reuse existing prompt & storage
+    document.addEventListener('click', async (e)=>{
+        if (e.target && e.target.id === 'updateApiKeyBtn'){
+            const newKey = await customPrompt({ title: 'Update API Key', placeholder: 'sk-...', confirmText: 'Save', cancelText: 'Cancel' });
+            if (!newKey) return;
+            window.currentAPIKey_enc = await storeAPIKey(newKey, true);
+            window.displayInfo && window.displayInfo('success','API key updated');
+            const modal = document.getElementById('settingsModal');
+            if (modal) {
+                modal.querySelector('#apiKeyMasked').value = '********';
+            }
+        }
+    });
+
+    // Provide helpers to pick model when making requests
+    window.getActiveModel = async function(type){
+        const data = await loadSettings();
+        if (type === 'search') return data.preferredSearchModel || undefined;
+        return data.preferredModel || undefined;
+    }
+})();
+
 // todo Name / Logo / Favicon
 // todo use cohort on persona generation prompt
 // todo check Grammar
 // todo check unnecessary Console logs
+// todo more beautiful export all

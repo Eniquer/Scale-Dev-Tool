@@ -50,6 +50,7 @@ class ChatRequest(BaseModel):
     history: list = []
     temperature: float = 0.7
     keyCipher: str
+    search_model: str | None = None  # optional override for search mode
 
 class PersonaGenRequest(BaseModel):
     generatedPersonas: list = []
@@ -117,10 +118,12 @@ async def chat_endpoint(chat_req: ChatRequest):
     # call ChatGPT via functions
     try:
         if chat_req.model == "search":
+            # Use user override if supplied, else default env model
+            effective_search_model = chat_req.search_model or DEFAULT_SEARCH_MODEL
             reply = get_chatgpt_search(
                 chat_req.prompt,
                 chat_req.history,
-                model=DEFAULT_SEARCH_MODEL,
+                model=effective_search_model,
                 api_key=api_key
             )
         else:
