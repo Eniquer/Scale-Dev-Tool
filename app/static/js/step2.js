@@ -250,6 +250,26 @@ function syncData() {
         window.applyCodeConsistencyMarkers();
     }
 
+    // After rebuilding rows, hide Delete All buttons for empty panels
+    if (typeof updateDeleteAllButtonsVisibility === 'function') {
+        updateDeleteAllButtonsVisibility();
+    }
+
+}
+
+/**
+ * updateDeleteAllButtonsVisibility: hides the "Delete All" button inside
+ * each subdimension panel (including the no-subdimension panel) when
+ * that panel currently contains zero items. Restores it when items exist.
+ */
+function updateDeleteAllButtonsVisibility(){
+    const buttons = document.querySelectorAll('.delete-subdimension-items');
+    buttons.forEach(btn => {
+        const subdimRaw = btn.dataset.subdim;
+        const sid = subdimRaw === '__NONE__' ? null : subdimRaw; // normalize
+        const count = items.filter(i => (i.subdimensionId || null) === sid).length;
+        btn.style.display = count === 0 ? 'none' : '';
+    });
 }
 
 /**
