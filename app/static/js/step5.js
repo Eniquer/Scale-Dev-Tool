@@ -619,7 +619,8 @@ let personas = [];
 			try {
                 showLoading()
 				while (iteration < maxIterations && currentPersonas.length < targetCount) {
-					const batch = await window.genPersonaPool({ generatedPersonas: currentPersonas, groupDescription });
+					const batchAmount = Math.min(targetCount - currentPersonas.length, 20);
+					const batch = await window.genPersonaPool({ generatedPersonas: currentPersonas, groupDescription, amount: batchAmount });
 					if (Array.isArray(batch) && batch.length){
 						// Merge unique (avoid duplicates just in case)
 						for (const p of batch){
