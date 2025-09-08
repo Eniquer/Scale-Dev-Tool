@@ -353,7 +353,10 @@ function renderSubdimensionPanels() {
         const attributes = sd.attributes.length?`<p class="small text-muted">Attributes: ${sd.attributes.join(', ')}</p>`:'';
         panel.innerHTML = `
             <div class="card-body">
-                <h5 class="card-title">${sd.name}</h5>
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <h5 class="card-title mb-0">${sd.name}</h5>
+                    <button type="button" class="btn btn-sm btn-outline-danger delete-subdimension-items" data-subdim="${sd.id}" title="Delete all items in this subdimension">Delete All</button>
+                </div>
                 <p class="small text-muted">${sd.definition}</p>
                 ${attributes}
                 <div class="item-panel" id="items-${index}"></div>
@@ -366,13 +369,23 @@ function renderSubdimensionPanels() {
     noSubPanel.id = `subdim--1`;
     noSubPanel.innerHTML = `
         <div class="card-body">
-            <h5 class="card-title">${title}</h5>
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <h5 class="card-title mb-0">${title}</h5>
+                <button type="button" class="btn btn-sm btn-outline-danger delete-subdimension-items" data-subdim="__NONE__" title="Delete all items without a subdimension">Delete All</button>
+            </div>
             ${subtitle}
             <div class="item-panel" id="items--1">
             </div>
         </div>
     `;
     container.appendChild(noSubPanel);
+    // Attach delete handlers
+    container.querySelectorAll('.delete-subdimension-items').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const sid = btn.dataset.subdim === '__NONE__' ? null : btn.dataset.subdim;
+            deleteAllItemsInSubdimension(sid);
+        });
+    });
     // Panels updated
 }
 
@@ -527,6 +540,35 @@ function createItemRow(itemText = '', subdimensionId = '', id = null, disabledBy
 
      // Insert the row into its designated panel
      subdimensionPanel.appendChild(row);
+}
+
+/**
+ * Delete all items belonging to a specific subdimension (or those without one if subdimensionId is null)
+ * Shows confirmation dialog; persists changes & refreshes UI.
+ * @param {string|null} subdimensionId
+ */
+async function deleteAllItemsInSubdimension(subdimensionId){
+    const affected = items.filter(i => (i.subdimensionId || null) === (subdimensionId || null));
+    if (!affected.length){
+        window.displayInfo && window.displayInfo('info','No items to delete in this panel.');
+        return;
+    }
+    const name = subdimensionId ? (getSubdimensionNameById(subdimensionId) || 'Subdimension') : 'No Subdimension panel';
+    const confirmed = await customConfirm({
+        title: 'Delete All Items',
+        message: `Remove ${affected.length} item(s) from "${name}"? This cannot be undone.`,
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+    });
+    if (!confirmed) return;
+    const existingCount = items.length;
+    items = items.filter(i => (i.subdimensionId || null) !== (subdimensionId || null));
+    const removed = existingCount - items.length;
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, aiPersonasPrompt, nextItemId }, false).then(()=>{
+        console.log(`Deleted ${removed} items from subdimension ${subdimensionId}`);
+    });
+    syncData();
+    window.displayInfo && window.displayInfo('success', `${removed} item(s) deleted.`);
 }
 
 document.addEventListener('input', event => {
