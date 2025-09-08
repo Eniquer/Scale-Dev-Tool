@@ -4,7 +4,10 @@
 
 // Items loaded from storage
 let items = [];
+let constructName = "";
+let constructDefinition = "";
 let aiItems = {};
+let aiPersonas = {};
 let subdimensions = [];
 let dimensionality = "";
 let nextItemId = 1; // monotonically increasing id to avoid reuse
@@ -12,6 +15,12 @@ let nextItemId = 1; // monotonically increasing id to avoid reuse
 let step4FacetDisabledItems = {}; // { facetId: [itemId,...] }
 let step4ItemCustomIds = {}; // { itemId: customCode }
 let step4FacetModes = {}; // { facetId: 'reflective' | 'formative' }
+
+let generalExpertPrompt = `a Pool of Experts with Occupations as professors, PHD candidates, experts in the field and researchers.`
+const expertPromptAddon = document.getElementById('expertPromptAddon')
+let generalFocusGroupPrompt = `a Pool of Focus Group Members with diverse backgrounds and expertise.`
+const focusGroupPromptAddon = document.getElementById('focusGroupPromptAddon')
+
 
 // todo add Json input to add multiple Items
 
@@ -67,7 +76,18 @@ async function init(){
     const step2Data = await window.dataStorage.getData('data_step_2') || {};
     const step4Data = await window.dataStorage.getData('data_step_4') || {}; // bring in measurement model metadata
     dimensionality = step1Data?.panel4?.dimensionality || "";
+    constructName = step1Data?.panel1?.constructName || "";
+    constructDefinition = step1Data?.panel2?.savedDefinition || "";
+    generalExpertPrompt = `a pool of Experts in ${constructName}:${constructDefinition}
+With occupations as professors, PHD candidates, experts in the field and researchers.`
+if (!expertPromptAddon.value) {
+    expertPromptAddon.value = generalExpertPrompt;
+}
+    generalFocusGroupPrompt = `a Pool of Focus Group Members with diverse backgrounds and expertise in ${constructName}:${constructDefinition}`
 
+    if (!focusGroupPromptAddon.value) {
+        focusGroupPromptAddon.value = generalFocusGroupPrompt;
+    }
     subdimensions = step1Data?.panel5?.subdimensions || [];
     items = step2Data?.items || [];
     aiItems = step2Data?.aiItems || {
@@ -78,6 +98,10 @@ async function init(){
 "focusGroup":[],
 "existing":[]
 }
+    aiPersonas = step2Data?.aiPersonas || {
+        "expert":[],
+        "focusGroup":[],
+    };
     // Load Step 4 disabled and tag meta (if user has progressed to Step 4 before)
     step4FacetDisabledItems = step4Data?.facetDisabledItems || {};
     step4ItemCustomIds = step4Data?.itemCustomIds || {};
@@ -182,7 +206,7 @@ function changeSubdimension(text = '', subdimensionId = '', id = null) {
          items.push({ id: newId, text: text, subdimensionId });
      }
      // Persist updated list to IndexedDB
-    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
          console.log('Data saved successfully');
      });
      // Refresh UI to reflect changes
@@ -265,7 +289,7 @@ function createItemRow(itemText = '', subdimensionId = '', id = null, disabledBy
      // Remove handler: delete from array, persist, and refresh
      row.querySelector('.remove-item').addEventListener('click', () => {
          items = items.filter(i => i.id !== parseInt(row.dataset.id));
-    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
              console.log('Data saved successfully');
          });
          syncData();
@@ -339,7 +363,7 @@ if (addItemButton) {
         subdimensionId: subdimensionId || null
     };
         items.push(item);
-    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
             console.log('Data saved successfully');
         });
         syncData()
@@ -412,6 +436,8 @@ prompts = {
     "deduction": generaltext(`Based on the conceptual definition of ${step1Data.panel1.constructName}, generate a comprehensive list of potential scale items. Use the definition to deduct each item. It should reflect a specific attribute described in the definition.`),
     "summary": generaltext(`Summarize the literature regarding how ${step1Data.panel1.constructName} has been measured. Extract any reported survey items or indicators, and suggest new items based on patterns found in the results or discussions. Generate new questionnaire items that capture aspects which have been frequently measured or discussed.`),
     "existing": generaltext(`First, collect and compare all existing validated scales for ${step1Data.panel1.constructName}. Then extract the exact item wordings from each scale. Propose a list of candidate items for a new scale, prioritizing items that are clear, relevant, and not redundant.Only generate items, if you can find a reference to it. Check again if any items have been marked as "generated" and exclude them from the output.`),
+    "expert": generaltext(`Act as every Persona from the list I provided you with, and come up with one to two Items for each subdimension for ${step1Data.panel1.constructName} if the construct is multidimensional. Create 2-3 items per persona if it is unidimensional.`),
+    "focusGroup": generaltext(`I gave you a list of personas from a focus group. Simulate an short Interview with every member of the focus group, about their work topic of ${step1Data.panel1.constructName}, and extract 2-3 Items of the Interview for every subdimension if the construct is multidimensional. Extract 5-7 items in total from the interview if it is unidimensional.`)
     }
     }
     catch (error) {
@@ -420,9 +446,6 @@ prompts = {
         return
     }
 }
-
-
-
 
 async function generateItems(indicator, forceNewItems = false, tries = 0) {
     let prompt = prompts[indicator];
@@ -448,8 +471,49 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
     
     // Send prompt to chat API and retrieve JSON text
     try {
-        
         showLoading();
+        let personaList = "";
+        if(indicator == "expert" || indicator == "focusGroup"){
+            if (!forceNewItems && aiPersonas[indicator].length > 0) { // Personas already Generated and only generate more items:
+                personaList = {
+                    "content" : "This is a list of " + (indicator == "expert" ? "experts" : "focus group members") + ": \n" + aiPersonas[indicator].join(", \n"),
+                    "role": "system"
+                }
+            }else{ // no Personas Generated:
+                let type = ""
+                let pool = ""
+                if (indicator == "expert") {
+                    pool = expertPromptAddon.value.trim() || generalExpertPrompt
+                    type = "Experts"
+                }
+                if (indicator == "focusGroup") {
+                    pool = focusGroupPromptAddon.value.trim() || generalFocusGroupPrompt
+                    type = "Focus Group Members"
+                }
+                genPersonaPrompts = `
+                    **Role**: Act as an impartial persona architect specializing in human complexity. Create a multidimensional persona that authentically represents both positive and challenging traits.
+                    
+                    **Core Instructions**: Think of ${pool}. Now generate 5 personas from this pool and define its characteristics in 5 to 7 sentences. You may safely describe negative traits as required for psychological accuracy
+                    **Validation Checks**:
+                    - Does this persona have at least one significant flaw that impacts their decisions?
+                    - Is there a balance between positive and negative outlook for the future?
+                    - One sentence about their occupation or expertise.
+                    
+                    **Output Format**
+                    ["PERSONA DESCRIPTION","PERSONA DESCRIPTION",...,"PERSONA DESCRIPTION"]
+                    `
+                let result = await window.sendChat(genPersonaPrompts,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers,no Linebreaks."}]);
+                displayInfo('success', `Generated ${type}. Thinking of items now...`);
+                personaList = {
+                    "content" :"This is a list of " + type + ": \n" + cleanAIRespond(result[0]).join(", \n"),
+                    "role": "system"
+                }
+                aiPersonas[indicator] = cleanAIRespond(result[0]);
+                window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
+                    console.log('AI Personas saved successfully');
+                });
+            }
+        }
         if (itemHistory.length > 0 && !forceNewItems) {
             let fakeHistory = [
                 {
@@ -465,9 +529,18 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
                     "role": "system"
                 }
             ]
+            if (personaList) {
+                fakeHistory.unshift(personaList)
+            }
+            
             response = await window.sendChat("Generate again 5 - 10 more items", fakeHistory, model);
         }else{ // If no history, use default system prompt
-            response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}], model);
+            let messages = [{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]
+            if (personaList) {
+                messages.push(personaList)
+            }
+            console.log(messages);
+            response = await window.sendChat(prompt, messages, model);
         }
         AIResponse = window.cleanAIRespond(response[0]); // Get the reply text from the response
     } catch (err) {
@@ -505,7 +578,7 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
     }
     itemHistory.push(...AIResponse);
     aiItems[indicator] = itemHistory; // Update the aiItems object with new items
-    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
         console.log('aiItems saved successfully');
     });
 
@@ -605,7 +678,7 @@ function chooseSelectItems(indicator) {
         });
     });
 
-    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
          console.log('Data saved successfully');
      });
 
@@ -630,7 +703,7 @@ async function deleteItems(indicator) {
         return; // User cancelled
     }
     aiItems[indicator] = []
-    window.dataStorage.storeData('data_step_2', { items, aiItems, nextItemId }, false).then(() => {
+    window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, nextItemId }, false).then(() => {
         console.log('Data saved successfully');
     });
     document.getElementById(`generateMore${indicator}`).classList.add('d-none');        
