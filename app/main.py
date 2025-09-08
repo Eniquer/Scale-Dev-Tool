@@ -64,3 +64,6 @@ async def analyze(request: Request, file: UploadFile = File(...)):
             "message": f"Error processing CSV: {str(e)}",
             "success": False
         })
+
+
+# todo MAYBE: Move all OpenAI calls to frontend. Load not on server
