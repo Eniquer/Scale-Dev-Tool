@@ -22,8 +22,192 @@ const expertPromptAddon = document.getElementById('expertPromptAddon')
 let generalFocusGroupPrompt = `a Pool of Focus Group Members with diverse backgrounds and expertise.`
 const focusGroupPromptAddon = document.getElementById('focusGroupPromptAddon')
 
+// Bulk import (JSON / line / CSV) UI + logic injected here
+// Supported formats:
+// 1) JSON array of objects: [{"item":"text","subdimension":"Name(optional)"}, ...]
+//    Accepts fields: item | text, subdimension | subdim | dimension, reference (ignored for storage here)
+// 2) Plain text: one item per line
+// 3) Delimited text (csv/tsv): columns include item or text, optional subdimension column
+// Duplicate (same text + subdimension) are skipped. IDs are auto-assigned.
 
-// todo add Json input to add multiple Items
+function setupBulkItemImportUI(){
+    // Attempt to anchor below manual add panel or at end of body
+    const anchor = document.getElementById('itemPanel') || document.body;
+    if (document.getElementById('bulkImportSection')) return; // idempotent
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mt-3';
+    wrapper.innerHTML = `
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <button id="toggleBulkImportBtn" type="button" class="btn btn-sm btn-outline-primary my-3">Bulk Import Items</button>
+        <small class="text-muted">Paste JSON / lines / CSV to add many items.</small>
+    </div>
+    <div id="bulkImportSection" class="card mb-3 d-none">
+        <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                <h6 class="mb-0">Bulk Import</h6>
+                <div class="d-flex gap-2">
+                    <select id="bulkDefaultSubdimension" class="form-select form-select-sm" style="min-width:180px;${dimensionality!=="Multidimensional"?"display:none;":""}"></select>
+                    <button id="bulkPreviewBtn" class="btn btn-sm btn-secondary" type="button">Preview</button>
+                    <button id="bulkImportBtn" class="btn btn-sm btn-success" type="button" disabled>Import</button>
+                </div>
+            </div>
+            <div class="mb-2 d-flex gap-2 flex-wrap align-items-center">
+                <input id="bulkFileInput" type="file" accept=".json,.txt,.csv" class="form-control form-control-sm" style="max-width:250px;">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="bulkSkipDuplicates" checked>
+                    <label class="form-check-label small" for="bulkSkipDuplicates">Skip duplicates</label>
+                </div>
+            </div>
+            <textarea id="bulkItemsInput" class="form-control form-control-sm mb-2" rows="6" placeholder='Examples:\n[{"item":"I enjoy my work","subdimension":"Engagement"}]\nor lines:\nI enjoy my work\nI feel valued\n'></textarea>
+            <div id="bulkPreviewArea" class="small"></div>
+        </div>
+    </div>`;
+    anchor.parentNode.insertBefore(wrapper, anchor.nextSibling);
+
+    // Populate subdimension select
+    const sel = wrapper.querySelector('#bulkDefaultSubdimension');
+    if (sel){
+        sel.innerHTML = `<option value="" selected>Default: (none)</option>` +
+            subdimensions.map(sd=>`<option value="${sd.id}">${sd.name}</option>`).join('');
+    }
+
+    // Toggle visibility
+    wrapper.querySelector('#toggleBulkImportBtn').addEventListener('click',()=>{
+        document.getElementById('bulkImportSection').classList.toggle('d-none');
+    });
+
+    // File input handler
+    wrapper.querySelector('#bulkFileInput').addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+            wrapper.querySelector('#bulkItemsInput').value = ev.target.result;
+        };
+        reader.readAsText(file);
+    });
+
+    // Preview
+    wrapper.querySelector('#bulkPreviewBtn').addEventListener('click', ()=>{
+        const raw = wrapper.querySelector('#bulkItemsInput').value.trim();
+        const defSub = sel ? sel.value : '';
+        const {parsed, errors, duplicates, addedPreview} = parseBulkItems(raw, defSub, wrapper.querySelector('#bulkSkipDuplicates').checked);
+        const area = wrapper.querySelector('#bulkPreviewArea');
+        if (!raw){
+            area.innerHTML = '<span class="text-muted">Nothing to preview.</span>';
+            wrapper.querySelector('#bulkImportBtn').disabled = true;
+            return;
+        }
+        let html = '';
+        if (errors.length){
+            html += `<div class="text-danger">Errors (${errors.length}):<br>${errors.slice(0,5).map(e=>`• ${e}`).join('<br>')}${errors.length>5?'<br>…':''}</div>`;
+        }
+        html += `<div class="mt-1">Parsed items: ${parsed.length}</div>`;
+        if (duplicates.skippedCount){
+            html += `<div class="text-warning">Duplicates skipped (preview): ${duplicates.skippedCount}</div>`;
+        }
+        if (addedPreview.length){
+            html += `<div class="mt-1">Ready to import (${addedPreview.length} new):<br>`+
+                addedPreview.slice(0,5).map(p=>`<code>${escapeHtml(p.text)}</code>${p.subdimensionId?` <small class="text-muted">(${getSubdimensionNameById(p.subdimensionId)})</small>`:''}`).join('<br>') +
+                (addedPreview.length>5?'<br>…':'') + '</div>';
+        }
+        area.innerHTML = html;
+        wrapper.querySelector('#bulkImportBtn').disabled = addedPreview.length===0;
+        // Cache preview result for import
+        wrapper._bulkPreviewData = {addedPreview};
+    });
+
+    // Import
+    wrapper.querySelector('#bulkImportBtn').addEventListener('click', ()=>{
+        if (!wrapper._bulkPreviewData){
+            window.displayInfo && window.displayInfo('info','Preview first.');
+            return;
+        }
+        const {addedPreview} = wrapper._bulkPreviewData;
+        if (!addedPreview.length){
+            window.displayInfo && window.displayInfo('info','Nothing to import.');
+            return;
+        }
+        addedPreview.forEach(p=>{
+            items.push({ id: nextItemId++, text: p.text, subdimensionId: p.subdimensionId || null });
+        });
+        window.dataStorage.storeData('data_step_2', { items, aiItems, aiPersonas, aiPersonasPrompt, nextItemId }, false).then(()=>{
+            console.log('Bulk items imported');
+        });
+        wrapper.querySelector('#bulkImportBtn').disabled = true;
+        syncData();
+        window.displayInfo && window.displayInfo('success', `${addedPreview.length} items imported.`);
+    });
+}
+
+function parseBulkItems(raw, defaultSubdimensionId='', skipDuplicates=true){
+    const errors=[]; const parsed=[]; const addedPreview=[]; let data=[]; const dupTracker={skippedCount:0};
+    if (!raw) return {parsed, errors, duplicates: dupTracker, addedPreview};
+    // Try JSON first
+    let jsonTried=false;
+    try {
+        const j = JSON.parse(raw);
+        if (Array.isArray(j)) { jsonTried=true; data=j; }
+    } catch(_){ /* ignore */ }
+    if (!jsonTried){
+        // If it looks like CSV (has commas or tabs) with headers
+        const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(l=>l);
+        if (lines.length){
+            if (lines[0].split(/[\t,;]/).length>1){
+                const delim = lines[0].includes('\t')?'\t': (lines[0].includes(';')?';':',');
+                const headers = lines[0].split(delim).map(h=>h.trim().toLowerCase());
+                for (let i=1;i<lines.length;i++){
+                    const cols = lines[i].split(delim).map(c=>c.trim());
+                    const obj={};
+                    headers.forEach((h,idx)=>{ obj[h]=cols[idx]; });
+                    data.push(obj);
+                }
+            } else {
+                // Plain lines
+                data = lines.map(l=>({item:l}));
+            }
+        }
+    }
+    // Normalise
+    const subByName = subdimensions.reduce((acc,sd)=>{acc[sd.name.toLowerCase()]=sd.id; return acc;},{});
+    data.forEach((o,idx)=>{
+        if (!o) return;
+        const text = (o.item || o.text || '').toString().trim();
+        if (!text){ errors.push(`Row ${idx+1}: missing item text`); return; }
+        let subName = (o.subdimension || o.subdim || o.dimension || '').toString().trim();
+        let subId = null;
+        if (subName){
+            subId = subByName[subName.toLowerCase()];
+            if (!subId) errors.push(`Row ${idx+1}: unknown subdimension '${subName}' (will default)`);
+        }
+        if (!subId && defaultSubdimensionId) subId = defaultSubdimensionId || null;
+        parsed.push({text, subdimensionId: subId});
+    });
+    // De-duplicate vs existing items
+    const existingKey = (t, sid)=> t.toLowerCase()+ '::' + (sid||'');
+    const existingSet = new Set(items.map(i=>existingKey(i.text, i.subdimensionId)));
+    const seenNew = new Set();
+    parsed.forEach(p=>{
+        const key = existingKey(p.text, p.subdimensionId);
+        if (skipDuplicates && (existingSet.has(key) || seenNew.has(key))){ dupTracker.skippedCount++; return; }
+        seenNew.add(key);
+        addedPreview.push(p);
+    });
+    return {parsed, errors, duplicates: dupTracker, addedPreview};
+}
+
+function escapeHtml(str){
+    return str.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+// Helper used elsewhere but ensure exists (guard)
+if (typeof getSubdimensionNameById !== 'function') {
+    window.getSubdimensionNameById = function(id){
+        const sd = subdimensions.find(s=>s.id===id);
+        return sd?sd.name:'';
+    };
+}
 
 init()
 
@@ -146,6 +330,8 @@ if (!expertPromptAddon.value) {
     syncData();
     // Initial consistency check
     checkItemCodeConsistency();
+    // Setup bulk import UI after initial data load
+    setupBulkItemImportUI();
 
 }
 
