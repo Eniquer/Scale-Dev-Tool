@@ -155,7 +155,7 @@ async function sendChat(input, history = [], model=undefined) {
 }
 window.sendChat = sendChat;
 
-async function genPersonaPool({generatedPersonas=[], groupDescription}) {
+async function genPersonaPool({generatedPersonas=[], groupDescription,amount=20}) {
     const cipher = window.currentAPIKey_enc;
     if (!cipher) {
         alert('API key is not set. Please enter your OpenAI API key first.');
@@ -165,7 +165,7 @@ async function genPersonaPool({generatedPersonas=[], groupDescription}) {
     const resp = await fetch('/api/personaGen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({generatedPersonas, groupDescription, keyCipher: cipher })
+        body: JSON.stringify({generatedPersonas, groupDescription, keyCipher: cipher, amount })
     });
     if (resp.ok) {
         return resp.json();

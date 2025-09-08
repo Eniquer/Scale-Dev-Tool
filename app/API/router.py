@@ -57,6 +57,7 @@ class PersonaGenRequest(BaseModel):
     temperature: float = 0.7
     model: str = DEFAULT_MODEL
     keyCipher: str
+    amount: int = 20
 
 
 
@@ -207,7 +208,8 @@ async def generate_personas_endpoint(gen_req: PersonaGenRequest):
             groupDescription=gen_req.groupDescription,
             temperature=gen_req.temperature,
             model=gen_req.model,
-            api_key=simple_decrypt(gen_req.keyCipher)
+            api_key=simple_decrypt(gen_req.keyCipher),
+            amount=gen_req.amount
         )
         return personas
     except AuthenticationError:

@@ -6,6 +6,87 @@ let raters = []; // [{id, name, ratings}]
 let activeRaterId = null;
 let step1Data = null;
 let step2Data = null;
+let aiPersonas = [];
+
+// =============== AI Rater Generation Modal (count + group description) ==================
+function ensureAIRaterGenModal() {
+        if (document.getElementById('aiRaterGenModal')) return;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = `
+        <div class="modal fade" id="aiRaterGenModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Generate AI Raters</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="aiRaterCountInput" class="form-label small mb-1">Number of raters (1-30)</label>
+                            <input type="number" class="form-control" id="aiRaterCountInput" min="1" max="30" value="5" />
+                        </div>
+                        <div class="mb-2">
+                            <label for="aiRaterGroupDesc" class="form-label small mb-1">Additional context (optional)</label>
+                            <textarea class="form-control small" id="aiRaterGroupDesc" rows="3" placeholder="a pool of experts with occupations as professors, PHD candidates, experts in the field and researchers.">a pool of experts with occupations as professors, PHD candidates, experts in the field and researchers.</textarea>
+                        </div>
+                        <div class="form-text small text-secondary">Context can shape persona style (e.g., senior clinical psychologists focused on ethics).</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="aiRaterGenCancel">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="aiRaterGenConfirm" disabled>Generate</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+        document.body.appendChild(wrapper);
+}
+
+function showAIRaterGenModal() {
+        ensureAIRaterGenModal();
+        return new Promise(resolve => {
+                const modalEl = document.getElementById('aiRaterGenModal');
+                const countInput = document.getElementById('aiRaterCountInput');
+                const descInput = document.getElementById('aiRaterGroupDesc');
+                const confirmBtn = document.getElementById('aiRaterGenConfirm');
+                const cancelBtn = document.getElementById('aiRaterGenCancel');
+                const bsModal = new bootstrap.Modal(modalEl);
+
+                function validate() {
+                        const v = parseInt(countInput.value, 10);
+                        confirmBtn.disabled = !(Number.isInteger(v) && v >= 1 && v <= 30);
+                }
+                validate();
+                countInput.addEventListener('input', validate);
+
+                const cleanup = () => {
+                        countInput.removeEventListener('input', validate);
+                        confirmBtn.onclick = null;
+                        cancelBtn.onclick = null;
+                        modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                };
+                const onHidden = () => {
+                        cleanup();
+                        resolve(null); // resolve null if dismissed via backdrop/close
+                };
+                modalEl.addEventListener('hidden.bs.modal', onHidden, { once: true });
+
+                confirmBtn.onclick = () => {
+                    const cnt = parseInt(countInput.value, 10);
+                    if (!(Number.isInteger(cnt) && cnt >= 1 && cnt <= 30)) return;
+                    const desc = (descInput.value || '').trim();
+                    cleanup();
+                    bsModal.hide();
+                        resolve({ count: cnt, groupDescription: desc });
+                };
+                cancelBtn.onclick = () => {
+                        cleanup();
+                        bsModal.hide();
+                        resolve(null);
+                };
+                bsModal.show();
+                setTimeout(() => countInput?.focus(), 120);
+        });
+}
 
 init()
 
@@ -334,19 +415,10 @@ function wireRaterUI() {
     const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 
     btn.onclick = async () => {
-        // Ask how many raters to generate (1-10)
-        const countStr = await window.customPrompt({
-            title: 'Generate AI Raters',
-            message: 'How many AI raters would you like to generate? (1-10)',
-            placeholder: '5',
-            confirmText: 'Generate'
-        });
-        if (countStr === null) return; // cancelled
-        const count = parseInt(String(countStr).trim(), 10);
-        if (Number.isNaN(count) || count < 1 || count > 10) {
-            window.displayInfo && window.displayInfo('warning', 'Please enter a valid number between 1 and 10.');
-            return;
-        }
+        // Open modal for count + optional context
+        const params = await showAIRaterGenModal();
+        if (!params) return; // cancelled
+        const { count, groupDescription } = params;
 
         // Persist current rater before generating
         const currentIdx = raters.findIndex(rr => rr.id === activeRaterId);
@@ -370,7 +442,11 @@ function wireRaterUI() {
                 return max;
             };
             const baseNum = getMaxAIRaterNum() + 1;
+            if (count && aiPersonas.length < 1) {
+                await generatePersonas(count, groupDescription || '');
+            }
             for (let i = 1; i <= count; i++) {
+                    
                 try {
 
 
@@ -390,15 +466,21 @@ function wireRaterUI() {
                     // Simple escaper for double quotes inside item text
                     const esc = s => String(s).replace(/"/g, '\\"');
                     // todo add optional prompt input from the user
+                    let personaDesc = getPersona(i-1) || 'Experienced subject-matter expert';
+                    if (groupDescription) personaDesc += ` | Cohort context: ${groupDescription}`
                     let history = [
-                        {
-                            role: "system",
-                            content: "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."
-                        },
+                        
                         {
                             role: "system",
                             content: `
-        You are generating synthetic expert ratings for content validation following MacKenzie et al. (2011) Step 3 logic (content adequacy).
+
+                            `
+                        }
+                    ];
+                    let prompt = `
+                    You are generating synthetic expert ratings for content validation following MacKenzie et al. (2011) Step 3 logic (content adequacy).
+                            You will role‑play a single expert rater (the Persona) and rate how well each item reflects each subdimension of the construct. First answer in one short in-character line, then ONLY JSON as specified.
+Persona (short description): ${personaDesc}
 
 Inputs (randomized order):
 
@@ -407,16 +489,6 @@ Inputs (randomized order):
 
     Items (array of objects with id and text):
     ${shuffledItems.map(it => `{"id": "${it.id}", "text": "${esc(it.text)}"}`).join(',\n')}
-
-Output schema (JSON only, no extra text, no markdown):
-{
-  "ratings": {
-    "ITEM-ID": {
-      "SUBDIMENSION_NAME_1": ITEMRATING_NUMBER,
-      "SUBDIMENSION_NAME_2": ITEMRATING_NUMBER
-    }
-  }
-}
 
 Rating scale (integers 1-5):
 1 = not representative / off‑target
@@ -443,17 +515,28 @@ Quality checks (MUST PASS):
 - Include every item id from input (even though randomized in prompt).
 - Include every subdimension name under each item.
 - All ratings are integers 1-5.
-                            `
-                        }
-                    ];
 
-                    let prompt = `You will role‑play a single expert rater (the Persona) and rate how well each item reflects each subdimension of the construct. First answer in Sentences like the persona would and after that put your output into the requested format.
- Persona (short description):
-    "${await getRandomPersona()}
-    They are an Expert in ${step1Data.panel1.constructName}.`
+
+Output schema (JSON only, no extra text, no markdown):
+{
+  "ratings": {
+    "ITEM-ID": {
+      "SUBDIMENSION_NAME_1": ITEMRATING_NUMBER,
+      "SUBDIMENSION_NAME_2": ITEMRATING_NUMBER
+    }
+  }
+}
+
+`
+
                    //todo viel gleiche antworten. maybe gen whole batch
+                    // todo use cohort on persona generation prompt
+                    const resp = await window.sendChat(prompt,[{
+                            role: "system",
+                            content: "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."
+                        }]);
+                    console.log(resp);
                     
-                    const resp = await window.sendChat(prompt,history);
                     const aiText = Array.isArray(resp) ? resp[0] : resp;
                     let parsed = null;
                     try {
@@ -514,6 +597,43 @@ Quality checks (MUST PASS):
         }
     };
 })();
+
+function getPersona(id){
+    const len = aiPersonas.length;
+    const wrapped = ((id % len) + len) % len;
+    return aiPersonas[wrapped] || null;
+}
+
+async function generatePersonas(targetCount,groupDescription){
+    let maxIterations = 10
+    let iteration = 0;
+    let currentPersonas = [];
+    try {
+        while (iteration < maxIterations && currentPersonas.length < targetCount) {
+            const amount = Math.min(targetCount - currentPersonas.length, 20);
+            const batch = await window.genPersonaPool({ generatedPersonas: currentPersonas, groupDescription, amount });
+            if (Array.isArray(batch) && batch.length){
+                // Merge unique (avoid duplicates just in case)
+                for (const p of batch){
+                    if (currentPersonas.length >= targetCount) break;
+                    if (!currentPersonas.includes(p)) currentPersonas.push(p);
+                }
+            }
+            displayInfo('info', `Generated ${currentPersonas.length}/${targetCount}`);
+            iteration++;
+        }
+        if (currentPersonas.length >= targetCount){
+            displayInfo('success', `Successfully generated ${currentPersonas.length} personas.`);
+        } else if (iteration === maxIterations){
+            displayInfo('warning', `Stopped after ${iteration} iterations with ${currentPersonas.length}/${targetCount}.`);
+        }
+    } catch(err){
+        console.error(err);
+        displayInfo('error', 'Error generating personas.');
+    } finally {
+        aiPersonas = aiPersonas.concat(currentPersonas)
+    }
+}
 
 function renderRatingTable() {
     const container = document.getElementById('item-rating-table');

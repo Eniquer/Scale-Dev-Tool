@@ -318,14 +318,14 @@ def _empty_row(it, target, n_raters, k, notes):
     
     
 
-def generate_persona_set(generatedPersonas, groupDescription,temperature=0.7, model=DEFAULT_MODEL, api_key=None):
+def generate_persona_set(generatedPersonas, groupDescription,temperature=0.7, model=DEFAULT_MODEL, api_key=None, amount = 20):
     messages = []
     resultsPersonas = []
     personasPrompt = f'''
     
     **Role**: Act as an impartial persona architect specializing in human complexity. Create a multidimensional persona that authentically represents both positive and challenging traits. Create a persona that is not overly unique or "special," but rather embodies an average individual with relatable strengths and flaws.
 
-    **Core Instructions**: Think of {groupDescription}. Now generate 20 personas from this pool and define its characteristics in 3 to 5 sentences. Include at least one positiv and one negative character trait. You may safely describe negative traits as required for psychological accuracy
+    **Core Instructions**: Think of {groupDescription}. Now generate {amount} personas from this pool and define its characteristics in 3 to 5 sentences. Include at least one positiv and one negative character trait. You may safely describe negative traits as required for psychological accuracy
     **Validation Checks**:
         - Does this persona have at least one significant flaw that impacts their decisions?
         - Is there a balance between positive and negative outlook for the future?
