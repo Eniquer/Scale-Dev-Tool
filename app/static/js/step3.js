@@ -7,10 +7,53 @@ let activeRaterId = null;
 let step1Data = null;
 let step2Data = null;
 let aiPersonas = [];
+let aiGenInProgress = false;
+let aiGenAbortRequested = false;
+// Persisted group description for AI rater persona generation
+let persistedGroupDescription = 'a pool of experts with occupations as professors, PHD candidates, experts in the field and researchers.';
+
+function ensureAbortGenerationButton() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (!overlay) return;
+    if (document.getElementById('abortGenerationBtn')) return; // already added
+    const btn = document.createElement('button');
+    btn.id = 'abortGenerationBtn';
+    btn.type = 'button';
+    btn.textContent = 'Abort';
+    btn.className = 'btn btn-sm btn-warning mt-3 d-none';
+    // Center below spinner: ensure overlay is a column flex container
+    if (!overlay.classList.contains('flex-column')) {
+        overlay.classList.add('flex-column');
+    }
+    overlay.style.flexDirection = 'column';
+    overlay.style.gap = '0.75rem';
+    btn.onclick = async () => {
+        if (!aiGenInProgress) return;
+        aiGenAbortRequested = true;
+        window.displayInfo && window.displayInfo('warning', 'Abort requested. Finishing current request...');
+    };
+    overlay.style.position = overlay.style.position || 'fixed';
+    overlay.appendChild(btn);
+}
+
+function showAbortButton() {
+    const btn = document.getElementById('abortGenerationBtn');
+    if (btn) btn.classList.remove('d-none');
+}
+function hideAbortButton() {
+    const btn = document.getElementById('abortGenerationBtn');
+    if (btn) btn.classList.add('d-none');
+}
 
 // =============== AI Rater Generation Modal (count + group description) ==================
-function ensureAIRaterGenModal() {
+async function ensureAIRaterGenModal() {
         if (document.getElementById('aiRaterGenModal')) return;
+        const step1Data = await window.dataStorage.getData('data_step_1');
+        constructDefinition = step1Data?.panel2?.savedDefinition || "";
+        constructName = step1Data?.panel1?.constructName || "";
+
+            generalExpertPrompt = `a pool of Experts in ${constructName}:${constructDefinition}
+With occupations as professors, PHD candidates, experts in the field and researchers.`
         const wrapper = document.createElement('div');
         wrapper.innerHTML = `
         <div class="modal fade" id="aiRaterGenModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -27,7 +70,7 @@ function ensureAIRaterGenModal() {
                         </div>
                         <div class="mb-2">
                             <label for="aiRaterGroupDesc" class="form-label small mb-1">Additional context (optional)</label>
-                            <textarea class="form-control small" id="aiRaterGroupDesc" rows="3" placeholder="a pool of experts with occupations as professors, PHD candidates, experts in the field and researchers.">a pool of experts with occupations as professors, PHD candidates, experts in the field and researchers.</textarea>
+                            <textarea class="form-control small" id="aiRaterGroupDesc" rows="3" placeholder="${generalExpertPrompt}">${generalExpertPrompt}</textarea>
                         </div>
                         <div class="form-text small text-secondary">Context can shape persona style (e.g., senior clinical psychologists focused on ethics).</div>
                     </div>
@@ -39,10 +82,11 @@ function ensureAIRaterGenModal() {
             </div>
         </div>`;
         document.body.appendChild(wrapper);
+        return generalExpertPrompt
 }
 
-function showAIRaterGenModal() {
-        ensureAIRaterGenModal();
+async function showAIRaterGenModal() {
+        let generalPrompt = await ensureAIRaterGenModal();
         return new Promise(resolve => {
                 const modalEl = document.getElementById('aiRaterGenModal');
                 const countInput = document.getElementById('aiRaterCountInput');
@@ -50,6 +94,14 @@ function showAIRaterGenModal() {
                 const confirmBtn = document.getElementById('aiRaterGenConfirm');
                 const cancelBtn = document.getElementById('aiRaterGenCancel');
                 const bsModal = new bootstrap.Modal(modalEl);
+
+                if (!descInput.value && generalPrompt) {
+                    // Pre-fill description with general prompt
+                    descInput.value = generalPrompt;
+                }
+                if (descInput && persistedGroupDescription) {
+                    descInput.value = persistedGroupDescription;
+                }
 
                 function validate() {
                         const v = parseInt(countInput.value, 10);
@@ -74,6 +126,10 @@ function showAIRaterGenModal() {
                     const cnt = parseInt(countInput.value, 10);
                     if (!(Number.isInteger(cnt) && cnt >= 1 && cnt <= 30)) return;
                     const desc = (descInput.value || '').trim();
+                    // Update persisted value and save immediately
+                    persistedGroupDescription = desc || persistedGroupDescription;
+                    // Fire and forget persistence
+                    saveStep3Data();
                     cleanup();
                     bsModal.hide();
                         resolve({ count: cnt, groupDescription: desc });
@@ -103,6 +159,9 @@ async function init(){
     raters = step3Data.raters || [];
     activeRaterId = step3Data.activeRaterId || (raters[0]?.id ?? null);
     ratings = (raters.find(r => r.id === activeRaterId)?.ratings) || {};
+    if (typeof step3Data.aiRaterGroupDescription === 'string' && step3Data.aiRaterGroupDescription.trim()) {
+        persistedGroupDescription = step3Data.aiRaterGroupDescription;
+    }
 
     wireRaterUI();
     renderRatingTable();
@@ -122,7 +181,7 @@ async function saveStep3Data() {
     const idx = raters.findIndex(r => r.id === activeRaterId);
     if (idx !== -1) raters[idx].ratings = ratings;
     const stored = await window.dataStorage.getData('data_step_3') || {};
-    const merged = { ...stored, raters, activeRaterId };
+    const merged = { ...stored, raters, activeRaterId, aiRaterGroupDescription: persistedGroupDescription };
     return window.dataStorage.storeData('data_step_3', merged, false);
 }
 
@@ -427,6 +486,10 @@ function wireRaterUI() {
         }
         try {
             window.showLoading && window.showLoading();
+            ensureAbortGenerationButton();
+            showAbortButton();
+            aiGenInProgress = true;
+            aiGenAbortRequested = false;
             window.displayInfo && window.displayInfo('info', `Generating ${count} AI rater(s)...`);
             let successCount = 0;
             // Determine starting index: one higher than highest existing "AI Rater N"
@@ -446,6 +509,10 @@ function wireRaterUI() {
                 await generatePersonas(count, groupDescription || '');
             }
             for (let i = 1; i <= count; i++) {
+                if (aiGenAbortRequested) {
+                    window.displayInfo && window.displayInfo('info', `Abort acknowledged. Stopping at ${i-1}/${count}.`);
+                    break;
+                }
                     
                 try {
 
@@ -465,18 +532,8 @@ function wireRaterUI() {
 
                     // Simple escaper for double quotes inside item text
                     const esc = s => String(s).replace(/"/g, '\\"');
-                    // todo add optional prompt input from the user
                     let personaDesc = getPersona(i-1) || 'Experienced subject-matter expert';
                     if (groupDescription) personaDesc += ` | Cohort context: ${groupDescription}`
-                    let history = [
-                        
-                        {
-                            role: "system",
-                            content: `
-
-                            `
-                        }
-                    ];
                     let prompt = `
                     You are generating synthetic expert ratings for content validation following MacKenzie et al. (2011) Step 3 logic (content adequacy).
                             You will role‑play a single expert rater (the Persona) and rate how well each item reflects each subdimension of the construct. First answer in one short in-character line, then ONLY JSON as specified.
@@ -588,11 +645,21 @@ Output schema (JSON only, no extra text, no markdown):
                     window.displayInfo && window.displayInfo('danger', `Failed on ${i}/${count}`);
                 }
             }
-            window.displayInfo && window.displayInfo('info', `AI rater generation complete. Created ${successCount}/${count}.`);
+            if (aiGenAbortRequested) {
+                // Persist partial progress
+                await saveStep3Data();
+                window.displayInfo && window.displayInfo('warning', `Generation aborted. Created ${successCount}/${count}.`);
+            } else {
+                window.displayInfo && window.displayInfo('info', `AI rater generation complete. Created ${successCount}/${count}.`);
+            }
         } catch (err) {
             console.error('Generate AI raters error', err);
             window.displayInfo && window.displayInfo('danger', 'Could not generate AI raters.');
         } finally {
+            aiGenInProgress = false;
+            aiGenAbortRequested = false;
+            hideAbortButton();
+            await saveStep3Data(); // ensure all progress is stored
             window.hideLoading && window.hideLoading();
         }
     };
