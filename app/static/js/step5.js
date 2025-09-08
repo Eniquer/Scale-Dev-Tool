@@ -35,6 +35,36 @@
 		} catch(err){ console.error('[Step5] init failed', err); }
 	}
 
+
+	async function downloadLikertCsv(){
+		try {
+			const step5 = await window.dataStorage.getData('data_step_5')||{};
+			const rows = step5.likertAnswers || [];
+			if (!rows.length){ window.displayInfo && window.displayInfo('info','No likert answers to export.'); return; }
+			// Determine header from union of keys
+			const headerSet = new Set();
+			rows.forEach(r=> Object.keys(r||{}).forEach(k=> headerSet.add(k)));
+			const header = Array.from(headerSet);
+			const esc = v => {
+				if (v==null) return '';
+				const s = String(v);
+				return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+			};
+			const lines = [header.join(',')];
+			rows.forEach(r=>{
+				lines.push(header.map(h=> esc(r[h])).join(','));
+			});
+			const csv = lines.join('\n');
+			const blob = new Blob([csv+'\n'], { type:'text/csv;charset=utf-8;' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url; a.download = 'likert_responses.csv';
+			document.body.appendChild(a); a.click();
+			setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },150);
+			window.displayInfo && window.displayInfo('success','Likert table downloaded.');
+		} catch(e){ console.warn('[Step5] download CSV failed', e); window.displayInfo && window.displayInfo('danger','Download failed'); }
+	}
+
 	function renderSampleSize(){
 		const host = document.getElementById('sampleSizeGuidance');
 		if (!host) return;
@@ -259,7 +289,7 @@
 						warn.className = 'alert alert-warning py-1 px-2 small mt-2';
 						warn.style.width = 'fit-content';
 						warn.innerHTML = '<strong>Warning:</strong> The questionnaire structure changed after these responses were stored. Item codes may be misaligned.';
-						const container = host.parentNode && host.parentNode.parentNode ? host.parentNode.parentNode : host.parentNode || host;
+						const container = host.parentNode ? host.parentNode : host;
 						container.insertBefore(warn, container.firstChild);
 					}
 				} else if (warn){
@@ -782,11 +812,47 @@ function mapResultsToCodes(resultRows, codeMap){
 	return (resultRows||[]).map(r=>{ const obj={}; Object.entries(r).forEach(([id,val])=>{ const c=codeMap[id]||id; obj[c]=val; }); return obj; });
 }
 
+// Reintroduced after relocation of button: exports stored likert answers to CSV
+async function downloadLikertCsv(){
+	try {
+		const step5 = await window.dataStorage.getData('data_step_5')||{};
+		const rows = step5.likertAnswers || [];
+		if (!rows.length){ window.displayInfo && window.displayInfo('info','No likert answers to export.'); return; }
+		const headerSet = new Set(); rows.forEach(r=> Object.keys(r||{}).forEach(k=> headerSet.add(k)));
+		const header = Array.from(headerSet);
+		const esc = v => { if (v==null) return ''; const s=String(v); return /[",\n]/.test(s)? '"'+s.replace(/"/g,'""')+'"': s; };
+		const lines = [header.join(',')];
+		rows.forEach(r=> lines.push(header.map(h=> esc(r[h])).join(',')));
+		const csv = lines.join('\n');
+		const blob = new Blob([csv+'\n'], { type:'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a'); a.href=url; a.download='likert_responses.csv'; document.body.appendChild(a); a.click();
+		setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },150);
+		window.displayInfo && window.displayInfo('success','Likert table downloaded.');
+	} catch(e){ console.warn('[Step5] download CSV failed', e); window.displayInfo && window.displayInfo('danger','Download failed'); }
+}
+
 // Shared renderer for Likert Tabulator ensuring consistent column min width
 function renderLikertTable(rawRows, fromStorage){
 	try {
 		const targetDiv = document.getElementById('answersTable');
 		if (!targetDiv) return;
+		// Ensure download button wrapper exists just above the table container
+		if (targetDiv.parentNode){
+			let wrap = document.getElementById('likertDownloadWrapper');
+			if (!wrap){
+				wrap = document.createElement('div');
+				wrap.id='likertDownloadWrapper';
+				wrap.className='my-2';
+				const btn = document.createElement('button');
+				btn.type='button';
+				btn.className='btn btn-sm btn-outline-secondary';
+				btn.textContent='Download Likert Table (.csv)';
+				btn.addEventListener('click', downloadLikertCsv);
+				wrap.appendChild(btn);
+				targetDiv.parentNode.insertBefore(wrap, targetDiv);
+			}
+		}
 		// Lightweight local debounce fallback (non-interfering) if none present
 		if (typeof window.debounce !== 'function') {
 			window.debounce = function(fn, delay=300){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), delay); }; };

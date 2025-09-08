@@ -6,6 +6,9 @@
   let reversedData = []; // last reversed version stored
   let originalData = []; // pristine original load (simulated or uploaded)
   let columns = []; // item codes
+  // Persisted analysis outputs (EFA and CFA/SEM)
+  let lastEFAResult = null;   // raw JSON result from /api/r/efa
+  let lastCFAResult = null;   // raw JSON result from /api/r/cfa
   let reverseSet = new Set();
   let source = 'simulated';
   let scaleMin = 1, scaleMax = 5;
@@ -27,6 +30,10 @@
     switchSource(source);
   await initLavaanEditor();
     updateViewButtons();
+  // Ensure result containers have at least empty placeholders so outdated banners can attach even before first run
+  if (cfaResultsEl && !cfaResultsEl.innerHTML.trim()) cfaResultsEl.innerHTML = '<div class="text-muted small">No CFA run yet.</div>';
+  const efaResultsEl = id('efaResults');
+  if (efaResultsEl && !efaResultsEl.innerHTML.trim()) efaResultsEl.innerHTML = '<div class="text-muted small">No EFA run yet.</div>';
     // Auto-set default EFA factor count to theorized subdimensions (if available) instead of 'auto'
     try {
 
@@ -504,18 +511,20 @@ Output format (strict JSON):
   async function persistState(){
     try {
     await window.dataStorage.storeData('data_step_6', {
-        storedAt: new Date().toISOString(),
-        columns,
-        reverseColumns: Array.from(reverseSet),
-        scaleMin, scaleMax,
-        source,
-        viewMode,
-        originalData,
-  reversedData,
-  userAdjustedScale: userAdjustedScale || persistedUserAdjusted,
-  lavaanEdited,
-  aiReverseSuggestion
-      }, false);
+      storedAt: new Date().toISOString(),
+      columns,
+      reverseColumns: Array.from(reverseSet),
+      scaleMin, scaleMax,
+      source,
+      viewMode,
+      originalData,
+      reversedData,
+      userAdjustedScale: userAdjustedScale || persistedUserAdjusted,
+      lavaanEdited,
+      aiReverseSuggestion,
+      lastEFAResult,
+      lastCFAResult
+    }, false);
     } catch(e){ console.warn('[Step6] persistState failed', e); }
   }
 
@@ -545,6 +554,15 @@ Output format (strict JSON):
       id('scaleMaxInput') && (id('scaleMaxInput').value = scaleMax);
   // Restore edited model if previously saved
   if (stored.lavaanEdited) { lavaanEdited = stored.lavaanEdited; lavaanActiveView = 'edited'; }
+      // Restore prior EFA / CFA results if any
+      if (stored.lastEFAResult){
+        lastEFAResult = stored.lastEFAResult;
+        setTimeout(()=>{ try { renderEFAResults(lastEFAResult); } catch(e){} },0);
+      }
+      if (stored.lastCFAResult){
+        lastCFAResult = stored.lastCFAResult;
+        setTimeout(()=>{ try { renderCFAResults(lastCFAResult); } catch(e){} },0);
+      }
       // Apply radio button states explicitly instead of click (ensures consistent UI)
       const rUpload = id('srcUpload');
       const rSim = id('srcSimulated');
@@ -694,6 +712,7 @@ Output format (strict JSON):
     updateLavaanViewButtons();
     setLavaanStatus();
   updateAnalyzeButton();
+  updateOutdatedNotices();
   }
 
   function updateLavaanViewButtons(){
@@ -715,6 +734,64 @@ Output format (strict JSON):
     }
   }
 
+  // ---- Outdated detection helpers ----
+  function computeDataSignature(data, cols){
+    try {
+      const maxRows = 30;
+      const subset = (data||[]).slice(0,maxRows).map(r=>{
+        const o={}; (cols||Object.keys(r||{})).forEach(c=>{ o[c]=r[c]; }); return o;
+      });
+      const json = JSON.stringify({ rows:(data||[]).length, cols:[...(cols||[])], sample: subset });
+      let h=0; for (let i=0;i<json.length;i++){ h = (h*31 + json.charCodeAt(i)) >>> 0; }
+      return h.toString(16);
+    } catch(e){ return 'na'; }
+  }
+
+  function updateOutdatedNotices(){
+    // EFA
+    const efaOut = id('efaResults');
+    if (efaOut){
+      let note = efaOut.previousElementSibling && efaOut.previousElementSibling.id==='efaOutdatedNotice' ? efaOut.previousElementSibling : null;
+      const currentNF = (id('efaNFactors')?.value||'').trim()||'auto';
+      const currentRot = (id('efaRotation')?.value||'oblimin');
+      const currentSig = computeDataSignature(rawData, columns);
+      let outdated=false;
+  if (lastEFAResult && lastEFAResult._meta){
+        const m = lastEFAResult._meta;
+        outdated = (m.nFactorsValUsed !== currentNF) || (m.rotationUsed !== currentRot) || (m.dataSig !== currentSig);
+      }
+      if (outdated){
+        if (!note){
+          note = document.createElement('div');
+          note.id='efaOutdatedNotice';
+          note.className='alert alert-warning py-1 px-2 small mb-1';
+          note.innerHTML='EFA results may be outdated (data or parameters changed). Re-run EFA.';
+          efaOut.parentNode.insertBefore(note, efaOut);
+        }
+      } else if (note){ note.remove(); }
+    }
+    // CFA
+    if (cfaResultsEl){
+      let banner = cfaResultsEl.previousElementSibling && cfaResultsEl.previousElementSibling.id==='cfaOutdatedNotice' ? cfaResultsEl.previousElementSibling : null;
+      let outdated=false;
+  if (lastCFAResult && lastCFAResult._meta){
+        const meta = lastCFAResult._meta;
+        const currentModel = (lavaanActiveView==='edited'? lavaanEdited : lavaanOriginalSnapshot) || '';
+        const currentSig = computeDataSignature(rawData, columns);
+        outdated = (meta.modelTextUsed !== currentModel) || (meta.dataSig !== currentSig);
+      }
+      if (outdated){
+        if (!banner){
+          banner = document.createElement('div');
+          banner.id='cfaOutdatedNotice';
+          banner.className='alert alert-warning py-1 px-2 small mb-1';
+          banner.innerHTML='Results may be outdated (data or model changed). Re-run analysis.';
+          cfaResultsEl.parentNode.insertBefore(banner, cfaResultsEl);
+        }
+      } else if (banner){ banner.remove(); }
+    }
+  }
+
   function setLavaanStatus(){
     const status = id('lavaanStep6Status');
     if (!status) return;
@@ -724,6 +801,16 @@ Output format (strict JSON):
       status.textContent = lavaanEdited ? 'Viewing Edited (saved)' : 'Edited (unsaved)';
     }
   }
+
+  // Ensure model textarea edits flag outdated CFA without needing to save
+  (function(){
+    const ta = document.getElementById('lavaanStep6Textarea');
+    if (ta){
+      ta.addEventListener('input', ()=>{ // only mark outdated if differs from last used model
+        updateOutdatedNotices();
+      });
+    }
+  })();
 
   function updateAnalyzeButton(){
     if (!analyzeBtn) return;
@@ -764,6 +851,13 @@ Output format (strict JSON):
         throw new Error(json.detail || `HTTP ${res.status}`);
       }
       renderCFAResults(json);
+      try {
+        const dataSig = computeDataSignature(rawData, columns);
+        json._meta = { dataSig, modelTextUsed: modelText, storedAt: Date.now() };
+      } catch(e) { /* ignore */ }
+      lastCFAResult = json;
+      persistState();
+      updateOutdatedNotices();
       if (cfaStatusEl) cfaStatusEl.textContent = 'Done';
     } catch(err){
       if (cfaResultsEl) cfaResultsEl.innerHTML = `<span class="text-danger">Error: ${escapeHtml(err.message||err)}</span>`;
@@ -828,6 +922,13 @@ Output format (strict JSON):
       const json = await res.json().catch(()=>({status:'client_parse_error'}));
       if (!res.ok){ throw new Error(json.detail || ('HTTP '+res.status)); }
       renderEFAResults(json);
+      try {
+        const dataSig = computeDataSignature(rawData, Object.keys(inputData[0]||{}));
+        json._meta = { dataSig, nFactorsValUsed: nFactorsVal, rotationUsed: rotation, storedAt: Date.now() };
+      } catch(e){ /* ignore */ }
+      lastEFAResult = json;
+      persistState();
+      updateOutdatedNotices();
       statusEl && (statusEl.textContent = 'Done');
     } catch(err){
       outEl && (outEl.innerHTML = `<span class='text-danger'>Error: ${escapeHtml(err.message||err)}</span>`);
@@ -905,6 +1006,7 @@ Output format (strict JSON):
       }
     }
     outEl.textContent = lines.join('\n');
+  updateOutdatedNotices();
   }
 
   function numFmt(v){ if (v==null||v==='') return 'NA'; const n=Number(v); return isFinite(n)? (Math.abs(n)<1e-4||Math.abs(n)>=1e4? n.toExponential(2): n.toFixed(3)) : String(v); }
@@ -1414,7 +1516,7 @@ Output format (strict JSON):
       }
     } catch(e){ /* silent */ }
 
-    let revisionSection = '<h5 class="mt-3 mb-1">Revision Recommendations (MacKenzie Step 6)</h5>';
+    let revisionSection = '<h5 class="mt-3 mb-1">Revision Recommendations</h5>';
     if (!revisionRows.length){
       revisionSection += '<div class="small text-success">No items currently flagged for revision under operational rules.</div>';
     } else {
@@ -1432,6 +1534,21 @@ Output format (strict JSON):
     if (out.warning){ html = `<div class='alert alert-warning small py-1 mb-2'><strong>R Warning:</strong> ${escapeHtml(out.warning)}</div>` + html; }
     if (out.error){ html += `<div class='alert alert-danger small py-1 mt-2 mb-0'>CFA Error: ${escapeHtml(out.error)}</div>`; }
     cfaResultsEl.innerHTML = html;
+    // Inject download button (once)
+    let dlWrap = document.getElementById('cfaDownloadWrapper');
+    if (!dlWrap){
+      dlWrap = document.createElement('div');
+      dlWrap.id = 'cfaDownloadWrapper';
+      dlWrap.className = 'd-flex gap-2 mb-2';
+      const btn = document.createElement('button');
+      btn.type='button';
+      btn.className='btn btn-sm btn-outline-secondary';
+      btn.id='downloadCfaBundleBtn';
+      btn.textContent='Download Results (.json)';
+      dlWrap.appendChild(btn);
+      cfaResultsEl.parentNode.insertBefore(dlWrap, cfaResultsEl);
+      btn.addEventListener('click', ()=>{ try { downloadStep6Bundle(); } catch(e){ console.warn('Download bundle failed', e); window.displayInfo?.('danger','Download failed'); } });
+    }
     // Init tooltips if Bootstrap available
     try {
       const ttEls = cfaResultsEl.querySelectorAll('[data-bs-toggle="tooltip"]');
@@ -1441,6 +1558,49 @@ Output format (strict JSON):
         window.$(ttEls).tooltip();
       }
     } catch(e){ /* silent */ }
+  }
+
+  function buildRevisionArray(){
+    // Extract current revision table rows for inclusion in bundle
+    const rows = [];
+    if (!cfaResultsEl) return rows;
+    const table = cfaResultsEl.querySelector('h5:nth-of-type(5)')?.nextElementSibling; // fragile; fallback below
+    const revHeader = [...cfaResultsEl.querySelectorAll('h5')].find(h=> /Revision Recommendations/i.test(h.textContent||''));
+    const revSection = revHeader ? revHeader.nextElementSibling : null;
+    const revTable = revSection && revSection.querySelector && revSection.querySelector('table');
+    if (revTable){
+      const ths = [...revTable.querySelectorAll('thead th')].map(th=> th.textContent.trim());
+      [...revTable.querySelectorAll('tbody tr')].forEach(tr=>{
+        const cells = [...tr.children];
+        if (!cells.length) return;
+        const obj={}; let ci=0; for (let i=0;i<cells.length;i++){ const txt=cells[i].textContent.trim(); obj[ths[ci]] = txt; ci++; }
+        rows.push(obj);
+      });
+    }
+    return rows;
+  }
+
+  function downloadStep6Bundle(){
+    const bundle = {
+      generatedAt: new Date().toISOString(),
+      dataSignature: computeDataSignature(rawData, columns),
+      columns,
+      viewMode,
+      scale: { min: scaleMin, max: scaleMax },
+      efa: lastEFAResult || null,
+      cfa: lastCFAResult || null,
+      revisionRecommendations: buildRevisionArray(),
+      lavaan: { original: lavaanOriginalSnapshot, edited: lavaanEdited, activeView: lavaanActiveView },
+      meta: { reversedColumns: Array.from(reverseSet), nRows: rawData.length }
+    };
+    const json = JSON.stringify(bundle,null,2);
+    const blob = new Blob([json], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'step6_results_bundle.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+    window.displayInfo?.('success','Results bundle downloaded.');
   }
 
   function formatNum(v){
