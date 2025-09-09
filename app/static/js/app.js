@@ -356,11 +356,8 @@ async function populateProjectsModal() {
                     }
                     }
                 await window.projects.setActiveProjectId(proj.id);
-                populateProjectsModal();
-                await window.getSyncFunc();
-                setTimeout(() => {
-                    bootstrap.Modal.getInstance(modalEl).hide();
-                }, 500);
+                // Clean full reload to ensure all step modules re-init under new project
+                window.location.reload();
             };
             btnDiv.appendChild(selectBtn);
         }
@@ -380,8 +377,13 @@ async function populateProjectsModal() {
             if (confirmed) {
                 
                 await window.projects.deleteProject(proj.id);
+                // If deleted project was active, reload; otherwise update list
+                const activeIdAfter = await window.projects.getActiveProjectId();
+                if (!activeIdAfter || activeIdAfter === proj.id){
+                    window.location.reload();
+                    return;
+                }
                 populateProjectsModal();
-                await window.getSyncFunc();
                 // if (nameDiv.childNodes.length > 1) { 
                 //     setTimeout(() => {
                 //         bootstrap.Modal.getInstance(modalEl).hide();
@@ -411,11 +413,8 @@ if (addProjectBtn) {
         const newProj = await window.projects.addProject();
         if (newProj) {
             window.displayInfo('success', `Project '${newProj.name}' added`);
-            populateProjectsModal();
-            await window.getSyncFunc();
-            setTimeout(() => {
-                bootstrap.Modal.getInstance(projectsModal).hide();
-            }, 500);
+            // New project becomes active inside addProject; force reload
+            window.location.reload();
         } else {
             window.displayInfo('error', `Could not add project. It may already exist.`);
         }
@@ -509,15 +508,7 @@ function customConfirm({
 }
 
 
-window.getSyncFunc = function () {
-    document.querySelectorAll('[data-get-sync-function]').forEach(el => {
-        const syncFunction = el.getAttribute('data-get-sync-function');
-        
-        if (syncFunction && typeof window[syncFunction] === "function") {
-            window[syncFunction]();
-        }
-    })
-}
+// Removed getSyncFunc in favor of full page reload on project changes for cleaner state reset.
 
 // Returns true if any element has an associated unsaved-changes flag set to true
 window.getUnsavedChangesFlag = function () {
@@ -841,20 +832,7 @@ window.updateModelSpecIssueMarker = updateModelSpecIssueMarker;
         scheduleInitialDetection();
     }
 
-    // Patch getSyncFunc to also trigger detection after it finishes.
-    if (typeof window.getSyncFunc === 'function' && !window.getSyncFunc.__patchedForCodeConsistency) {
-        const original = window.getSyncFunc;
-        window.getSyncFunc = function (...args) {
-            const ret = original.apply(this, args);
-            // In case original is async or returns a promise
-            Promise.resolve(ret).finally(() => {
-                // Delay a tick to let any async dataStorage updates settle
-                setTimeout(runDetection, 50);
-            });
-            return ret;
-        };
-        window.getSyncFunc.__patchedForCodeConsistency = true;
-    }
+    // getSyncFunc removed; code consistency detection now runs on load and visibility changes only.
 
     // Optional: re-run when tab becomes visible again (in case data changed elsewhere).
     document.addEventListener('visibilitychange', () => {
@@ -872,7 +850,6 @@ function shuffle(a){
 window.shuffle = shuffle;
 
 
-// todo check if sync and change project works everywhere
 // Settings: user preferences (models, API key)
 (function settingsModule(){
     const SETTINGS_KEY = 'user_settings';
@@ -954,7 +931,7 @@ window.shuffle = shuffle;
 })();
 
 // todo Name / Logo / Favicon
-// todo use cohort on persona generation prompt
+// todo MAYBE use cohort on persona generation prompt
 // todo check Grammar
 // todo check unnecessary Console logs
 // todo more beautiful export all
