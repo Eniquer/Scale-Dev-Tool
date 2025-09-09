@@ -353,6 +353,12 @@ if (!expertPromptAddon.value) {
     // Setup bulk import UI after initial data load
     setupBulkItemImportUI();
 
+    // After loading, validate prerequisites
+    const subdims = step1Data?.panel5?.subdimensions || [];
+    if (!dimensionality || (dimensionality === 'Multidimensional' && (!Array.isArray(subdims) || subdims.length === 0))) {
+        window.ensurePersistentWarning('⚠️ Please complete Step 1 first: set dimensionality'+(dimensionality==='Multidimensional'? ' and define subdimensions.':'.'));
+    }
+
 }
 
 /**
@@ -668,14 +674,14 @@ function generatePrompt(step1Data){
 
     Items should reflect the essential attributes of the construct and its domain as specified in the definition.
 
-    Given the construct name "${step1Data.panel1.constructName}" and the definition provided below, retrieve or generate 5–10 concise, relevant self-report questionnaire items (one per line)
+    Given the construct name "${step1Data?.panel1?.constructName}" and the definition provided below, retrieve or generate 5–10 concise, relevant self-report questionnaire items (one per line)
 
     
  Construct name:
-"${step1Data.panel1.constructName}"
+"${step1Data?.panel1?.constructName}"
 
 Initial definition:
-"${step1Data.panel2.savedDefinition}"
+"${step1Data?.panel2?.savedDefinition}"
 
 ${dimensionText}
 
@@ -693,12 +699,12 @@ ${specificInstructions}
     ${outputFormat}
     ` }
 prompts = {
-    "literature": generaltext(`Search the literature for validated scales related to ${step1Data.panel1.constructName}. Extract all papers with questionnaire items or measurement statements that are used to assess this construct and extract its items. Only generate items, if you can find a reference to it. Check again if any items have been marked as "generated" and exclude them from the output.`),
-    "deduction": generaltext(`Based on the conceptual definition of ${step1Data.panel1.constructName}, generate a comprehensive list of potential scale items. Use the definition to deduct each item. It should reflect a specific attribute described in the definition.`),
-    "summary": generaltext(`Summarize the literature regarding how ${step1Data.panel1.constructName} has been measured. Extract any reported survey items or indicators, and suggest new items based on patterns found in the results or discussions. Generate new questionnaire items that capture aspects which have been frequently measured or discussed.`),
-    "existing": generaltext(`First, collect and compare all existing validated scales for ${step1Data.panel1.constructName}. Then extract the exact item wordings from each scale. Propose a list of candidate items for a new scale, prioritizing items that are clear, relevant, and not redundant.Only generate items, if you can find a reference to it. Check again if any items have been marked as "generated" and exclude them from the output.`),
-    "expert": generaltext(`Act as every Persona from the list I provided you with, and come up with one to two Items for each subdimension for ${step1Data.panel1.constructName} if the construct is multidimensional. Create 2-3 items per persona if it is unidimensional.`),
-    "focusGroup": generaltext(`I gave you a list of personas from a focus group. Simulate an short Interview with every member of the focus group, about their work topic of ${step1Data.panel1.constructName}, and extract 2-3 Items of the Interview for every subdimension if the construct is multidimensional. Extract 5-7 items in total from the interview if it is unidimensional.`)
+    "literature": generaltext(`Search the literature for validated scales related to ${step1Data?.panel1?.constructName}. Extract all papers with questionnaire items or measurement statements that are used to assess this construct and extract its items. Only generate items, if you can find a reference to it. Check again if any items have been marked as "generated" and exclude them from the output.`),
+    "deduction": generaltext(`Based on the conceptual definition of ${step1Data?.panel1?.constructName}, generate a comprehensive list of potential scale items. Use the definition to deduct each item. It should reflect a specific attribute described in the definition.`),
+    "summary": generaltext(`Summarize the literature regarding how ${step1Data?.panel1?.constructName} has been measured. Extract any reported survey items or indicators, and suggest new items based on patterns found in the results or discussions. Generate new questionnaire items that capture aspects which have been frequently measured or discussed.`),
+    "existing": generaltext(`First, collect and compare all existing validated scales for ${step1Data?.panel1?.constructName}. Then extract the exact item wordings from each scale. Propose a list of candidate items for a new scale, prioritizing items that are clear, relevant, and not redundant.Only generate items, if you can find a reference to it. Check again if any items have been marked as "generated" and exclude them from the output.`),
+    "expert": generaltext(`Act as every Persona from the list I provided you with, and come up with one to two Items for each subdimension for ${step1Data?.panel1?.constructName} if the construct is multidimensional. Create 2-3 items per persona if it is unidimensional.`),
+    "focusGroup": generaltext(`I gave you a list of personas from a focus group. Simulate an short Interview with every member of the focus group, about their work topic of ${step1Data?.panel1?.constructName}, and extract 2-3 Items of the Interview for every subdimension if the construct is multidimensional. Extract 5-7 items in total from the interview if it is unidimensional.`)
     }
     }
     catch (error) {

@@ -55,6 +55,9 @@ async function init() {
 		}
 		attachAutoSaveHandlers();
 		attachLavaanPanelHandlers();
+		if (!Array.isArray(items) || items.length === 0) {
+			window.ensurePersistentWarning('⚠️ Please complete Step 2 first: add items before configuring the measurement model.');
+		}
 		return window.step4Data;
 	} catch (err) {
 		console.error('[Step4:init] Failed to load prior step data:', err);

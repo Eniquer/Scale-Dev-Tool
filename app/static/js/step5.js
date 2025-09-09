@@ -32,6 +32,11 @@
 			generateQuestionnaire(step1?.panel4, step1?.panel5, step4);
 			renderExtraItemsList();
 			attachExtraItemHandlers();
+			// Prerequisite: Step 4 must have produced item codes (or at least data)
+			const hasCodes = step4 && step4.itemCustomIds && Object.keys(step4.itemCustomIds).length > 0;
+			if (!hasCodes) {
+				window.ensurePersistentWarning('⚠️ Please complete Step 4 first: configure measurement model & assign item codes before proceeding to sample size & questionnaire.');
+			}
 		} catch(err){ console.error('[Step5] init failed', err); }
 	}
 

@@ -1641,3 +1641,5 @@ function removeColumn(col){
   persistState();
   setStatus(`Removed column ${col}.`);
 }
+
+// todo loaded saved csv table didnt get into SEM results. only reloaded

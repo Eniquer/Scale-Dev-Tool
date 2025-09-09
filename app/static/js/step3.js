@@ -147,7 +147,7 @@ async function showAIRaterGenModal() {
 init()
 
 // todo handle unidimensional
-// todo no reflective selectionn on step4
+// todo no reflective selectionn on step4 when unidimensional
 
 async function init(){
     step1Data = await window.dataStorage.getData('data_step_1');
@@ -155,12 +155,12 @@ async function init(){
     const step3Data = await window.dataStorage.getData('data_step_3') || {};
 
     subdimensions = step1Data?.panel5?.subdimensions || [];
-    items = step2Data.items || [];
-    raters = step3Data.raters || [];
-    activeRaterId = step3Data.activeRaterId || (raters[0]?.id ?? null);
+    items = step2Data?.items || [];
+    raters = step3Data?.raters || [];
+    activeRaterId = step3Data?.activeRaterId || (raters[0]?.id ?? null);
     ratings = (raters.find(r => r.id === activeRaterId)?.ratings) || {};
-    if (typeof step3Data.aiRaterGroupDescription === 'string' && step3Data.aiRaterGroupDescription.trim()) {
-        persistedGroupDescription = step3Data.aiRaterGroupDescription;
+    if (typeof step3Data?.aiRaterGroupDescription === 'string' && step3Data?.aiRaterGroupDescription.trim()) {
+        persistedGroupDescription = step3Data?.aiRaterGroupDescription;
     }
 
     wireRaterUI();
@@ -171,6 +171,11 @@ async function init(){
 
     // Auto-load saved ANOVA results if present
     loadSavedAnovaResults();
+
+    // Prerequisite: items from Step 2
+    if (!Array.isArray(step2Data?.items) || step2Data.items.length === 0) {
+        window.ensurePersistentWarning('⚠️ Please complete Step 2 first: add items before rating them here.');
+    }
 
 
 }

@@ -429,7 +429,7 @@ async function saveDefinition(dontSave = false) {
 
     
     const step1Data = await window.dataStorage.getData('data_step_1');
-    const isSavedDefinition = !!step1Data.panel2.savedDefinition;
+    const isSavedDefinition = !!step1Data?.panel2?.savedDefinition;
 
 
     // Check for conflicting definitions
@@ -1756,8 +1756,6 @@ document.addEventListener('click', event => {
 });
 
 document.getElementById("area1").addEventListener("click", emitDataChanged);
-
-// todo check how the page handles step1 data missing
 
 
 // track unsaved edits

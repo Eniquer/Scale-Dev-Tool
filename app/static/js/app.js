@@ -934,3 +934,17 @@ window.shuffle = shuffle;
 // todo MAYBE use cohort on persona generation prompt
 // todo check Grammar
 // todo more beautiful export all
+
+window.ensurePersistentWarning = function(msg){
+    let c = document.getElementById('stepPersistentWarning');
+    if (!c){
+        c = document.createElement('div');
+        c.id = 'stepPersistentWarning';
+        c.className = 'alert alert-warning m-3';
+        c.style.position = 'relative';
+        const host = document.querySelector('main') || document.body;
+        host.prepend(c);
+    }
+    c.innerHTML = `<div class="d-flex justify-content-between align-items-start"><div>${msg}</div><button type="button" class="btn-close" aria-label="Close"></button></div>`;
+    c.querySelector('.btn-close').onclick = ()=> c.remove();
+}
