@@ -1578,8 +1578,6 @@ async function takeSubdimAISuggestion(overwrite = true) {
 
 // ***********************************   Continue to Step 4    ***********************************************#
 
-// todo MAYBE: review every result using AI and get results
-
 const continueBtn = document.getElementById('continueStep1Btn');
 if (continueBtn) {
     continueBtn.addEventListener('click', async () => {
