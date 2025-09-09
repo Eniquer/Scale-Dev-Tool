@@ -290,7 +290,7 @@ Output format (strict JSON):
     if (overallRationale){
       htmlParts.push(`<div class="small fst-italic text-muted">${escapeHtml(overallRationale)}</div>`);
     }
-    htmlParts.push(`<div class="mt-2"><button type="button" class="btn btn-sm btn-outline-primary" id="applyAiReverseBtn">Apply Suggested</button></div>`);
+    htmlParts.push(`<div class="mt-2"><button type="button" class="btn btn-sm btn-outline-primary" id="applyAiReverseBtn">Apply suggested</button></div>`);
     body.innerHTML = htmlParts.join('');
     card.classList.remove('d-none');
     setTimeout(()=>{ const applyBtn = id('applyAiReverseBtn'); applyBtn && applyBtn.addEventListener('click', ()=>{ reverseSet = new Set(candidates); renderColumns(); applyReverse(); window.displayInfo?.('success','Applied AI suggested reverse items.'); }); },0);
@@ -418,7 +418,7 @@ Output format (strict JSON):
     const applyBtn = id('applyReverseBtn');
     if (applyBtn){
       applyBtn.disabled = !hasCols; // keep enabled if there are columns, even if none selected (allows unreverse)
-      applyBtn.textContent = any ? 'Apply / Update Reverse' : 'Apply (No Columns Reversed)';
+      applyBtn.textContent = any ? 'Apply / Update reverse' : 'Apply (no columns reversed)';
     }
     id('clearReverseSelectionBtn').disabled = !any;
     id('selectAllReverseBtn').disabled = !hasCols;
@@ -794,9 +794,9 @@ Output format (strict JSON):
     const status = id('lavaanStep6Status');
     if (!status) return;
     if (lavaanActiveView === 'original'){
-      status.textContent = 'Viewing Original';
+      status.textContent = 'Viewing original';
     } else {
-      status.textContent = lavaanEdited ? 'Viewing Edited (saved)' : 'Edited (unsaved)';
+      status.textContent = lavaanEdited ? 'Viewing edited (saved)' : 'Edited (unsaved)';
     }
   }
 
@@ -1542,7 +1542,7 @@ Output format (strict JSON):
       btn.type='button';
       btn.className='btn btn-sm btn-outline-secondary';
       btn.id='downloadCfaBundleBtn';
-      btn.textContent='Download Results (.json)';
+  btn.textContent='Download results (.json)';
       dlWrap.appendChild(btn);
       cfaResultsEl.parentNode.insertBefore(dlWrap, cfaResultsEl);
       btn.addEventListener('click', ()=>{ try { downloadStep6Bundle(); } catch(e){ console.warn('Download bundle failed', e); window.displayInfo?.('danger','Download failed'); } });

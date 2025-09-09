@@ -1253,7 +1253,7 @@ async function renderSubdimensions() {
             ${optionsHtml}
             </select>
             <button class="btn btn-outline-secondary" type="button" onclick="addSubAttr(${idx})">
-            <i class="bi bi-plus-lg"></i> Add Attribute
+            <i class="bi bi-plus-lg"></i> Add attribute
             </button>
         </div>
         `;

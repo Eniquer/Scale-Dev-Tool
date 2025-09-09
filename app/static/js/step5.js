@@ -856,7 +856,7 @@ function renderLikertTable(rawRows, fromStorage){
 				const btn = document.createElement('button');
 				btn.type='button';
 				btn.className='btn btn-sm btn-outline-secondary';
-				btn.textContent='Download Likert Table (.csv)';
+				btn.textContent='Download Likert table (.csv)';
 				btn.addEventListener('click', downloadLikertCsv);
 				wrap.appendChild(btn);
 				targetDiv.parentNode.insertBefore(wrap, targetDiv);

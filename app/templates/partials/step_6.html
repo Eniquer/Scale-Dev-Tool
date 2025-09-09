@@ -18,7 +18,7 @@
                 <div class="d-flex flex-wrap gap-3 mb-3">
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="dataSource" id="srcSimulated" value="simulated" checked>
-                        <label class="form-check-label" for="srcSimulated">Use Simulated Data (Step 5)</label>
+                        <label class="form-check-label" for="srcSimulated">Use simulated data</label>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="dataSource" id="srcUpload" value="upload">
@@ -31,12 +31,12 @@
                     <div class="small text-muted mb-2">First row should contain column headers (item codes). Values must be numeric for Likert items.</div>
                     <div class="d-flex flex-wrap gap-2 mb-2">
                         <button id="loadCsvBtn" class="btn btn-sm btn-primary" disabled>Load CSV</button>
-                        <button id="downloadTemplateBtn" type="button" class="btn btn-sm btn-outline-secondary" title="Download a CSV template with item headers">Download Template</button>
+                        <button id="downloadTemplateBtn" type="button" class="btn btn-sm btn-outline-secondary" title="Download a CSV template with item headers">Download template</button>
                     </div>
                     <div class="small text-muted">Template uses current or prior step item codes (if available) and inserts two example rows.</div>
                 </div>
                 <div class="mt-2">
-                    <button id="loadSimBtn" class="btn btn-sm btn-outline-primary">Refresh Simulated Data</button>
+                    <button id="loadSimBtn" class="btn btn-sm btn-outline-primary">Refresh simulated data</button>
                 </div>
             </div>
         </div>
@@ -54,10 +54,10 @@
                         <input type="number" id="scaleMaxInput" class="form-control form-control-sm" min="0" max="10" value="5" style="width:90px;">
                     </div>
                     <div class="col d-flex align-items-end gap-2 flex-wrap">
-                        <button id="applyReverseBtn" class="btn btn-sm btn-primary" disabled>Apply Reverse to Selected</button>
-                        <button id="selectAllReverseBtn" class="btn btn-sm btn-outline-secondary" disabled>Select All</button>
-                        <button id="clearReverseSelectionBtn" class="btn btn-sm btn-outline-secondary" disabled>Clear Selection</button>
-                        <button id="resetStep6Btn" class="btn btn-sm btn-outline-danger" disabled title="Reset scale, reversed selections, view mode, and reload underlying data (if simulated).">Reset All</button>
+                        <button id="applyReverseBtn" class="btn btn-sm btn-primary" disabled>Apply reverse to selected</button>
+                        <button id="selectAllReverseBtn" class="btn btn-sm btn-outline-secondary" disabled>Select all</button>
+                        <button id="clearReverseSelectionBtn" class="btn btn-sm btn-outline-secondary" disabled>Clear selection</button>
+                        <button id="resetStep6Btn" class="btn btn-sm btn-outline-danger" disabled title="Reset scale, reversed selections, view mode, and reload underlying data (if simulated).">Reset all</button>
                     </div>
                 </div>
                 <div id="columnsList" class="small" style="max-height:200px; overflow:auto; border:1px solid var(--bs-border-color); border-radius:4px; padding:6px;">
@@ -78,8 +78,8 @@
                 <h4 class="card-title mb-0">Data Preview</h4>
                 <h4 class="visually-hidden">Hidden</h4>
                                 <div class="d-flex flex-wrap gap-2 mb-2">
-                                        <button id="showOriginalBtn" class="btn btn-sm btn-outline-secondary" disabled>Show Original</button>
-                                        <button id="showReversedBtn" class="btn btn-sm btn-outline-secondary" disabled>Show Reversed</button>
+                                        <button id="showOriginalBtn" class="btn btn-sm btn-outline-secondary" disabled>Show original</button>
+                                        <button id="showReversedBtn" class="btn btn-sm btn-outline-secondary" disabled>Show reversed</button>
                                         <span class="small align-self-center" id="viewModeLabel"></span>
                                 </div>
                 <div id="step6Table" class="mb-2"></div>
@@ -95,8 +95,8 @@
                 <h4 class="card-title mb-3">Model Specification (lavaan)</h4>
                 <div class="small text-muted mb-2">Pulled from Step 4. You can edit below; changes are persisted only for Step 6 analyses (original auto-generation in Step 4 remains unchanged).</div>
                 <div class="d-flex flex-wrap gap-2 mb-2">
-                    <button id="btnDeleteEditedLavaan" class="btn btn-sm btn-outline-danger" type="button" disabled>Delete Edited</button>
-                    <button id="btnSaveEditedLavaan" class="btn btn-sm btn-primary" disabled>Save Edits</button>
+                    <button id="btnDeleteEditedLavaan" class="btn btn-sm btn-outline-danger" type="button" disabled>Delete edited</button>
+                    <button id="btnSaveEditedLavaan" class="btn btn-sm btn-primary" disabled>Save edits</button>
                     <div class="vr d-none d-sm-block" style="height:24px;"></div>
                     <button id="btnShowOriginalLavaan" class="btn btn-sm btn-outline-secondary" type="button">Original</button>
                     <button id="btnShowEditedLavaan" class="btn btn-sm btn-outline-secondary" type="button" disabled>Edited</button>

@@ -60,7 +60,7 @@ With occupations as professors, PHD candidates, experts in the field and researc
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Generate AI Raters</h5>
+                        <h5 class="modal-title">Generate AI raters</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -147,6 +147,7 @@ async function showAIRaterGenModal() {
 init()
 
 // todo handle unidimensional
+// todo no reflective selectionn on step4
 
 async function init(){
     step1Data = await window.dataStorage.getData('data_step_1');
@@ -495,7 +496,7 @@ function wireRaterUI() {
             const getMaxAIRaterNum = () => {
                 let max = 0;
                 for (const r of raters) {
-                    const m = /^AI Rater\s*(\d+)$/i.exec(r.name || '');
+                    const m = /^AI rater\s*(\d+)$/i.exec(r.name || '');
                     if (m) {
                         const n = parseInt(m[1], 10);
                         if (!Number.isNaN(n) && n > max) max = n;
@@ -602,7 +603,7 @@ Output schema (JSON only, no extra text, no markdown):
                     const seqNum = baseNum + (i - 1);
                     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                         const id = newId();
-                        const name = `AI Rater ${seqNum}`;
+                        const name = `AI rater ${seqNum}`;
                         const rawRatings = (parsed.ratings && typeof parsed.ratings === 'object') ? parsed.ratings : {};
                         // Transform name-keyed ratings => id-keyed ratings
                         const nameToId = Object.fromEntries(subdimensions.map(sd => [sd.name, sd.id]));
@@ -618,10 +619,10 @@ Output schema (JSON only, no extra text, no markdown):
                         rater = { id, name, ratings: transformed };
                     } else if (Array.isArray(parsed) && parsed.length) {
                         const first = parsed[0];
-                        const name = (first && typeof first.name === 'string' && first.name.trim()) ? first.name.trim() : `AI Rater ${seqNum}`;
+                        const name = (first && typeof first.name === 'string' && first.name.trim()) ? first.name.trim() : `AI rater ${seqNum}`;
                         rater = { id: newId(), name, ratings: {} };
                     } else {
-                        rater = { id: newId(), name: `AI Rater ${seqNum}`, ratings: {} };
+                        rater = { id: newId(), name: `AI rater ${seqNum}`, ratings: {} };
                     }
 
                     // Ensure unique ID
@@ -934,7 +935,7 @@ function wireAnalysisUI() {
                     <i class="bi bi-download"></i> Export CSV
                 </button>
                 <button type="button" id="bulkDeleteItemsBtn" class="btn btn-sm btn-danger ms-2">
-                    <i class="bi bi-trash"></i> Delete Items
+                    <i class="bi bi-trash"></i> Delete items
                 </button>
             </div>
         </div>

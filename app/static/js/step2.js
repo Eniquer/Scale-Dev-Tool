@@ -39,7 +39,7 @@ function setupBulkItemImportUI(){
     wrapper.className = 'mt-3';
     wrapper.innerHTML = `
     <div class="d-flex align-items-center gap-2 flex-wrap">
-        <button id="toggleBulkImportBtn" type="button" class="btn btn-sm btn-outline-primary my-3">Bulk Import Items</button>
+        <button id="toggleBulkImportBtn" type="button" class="btn btn-sm btn-outline-primary my-3">Bulk import items</button>
         <small class="text-muted">Paste JSON / lines / CSV to add many items.</small>
     </div>
     <div id="bulkImportSection" class="card mb-3 d-none">
@@ -375,7 +375,7 @@ function renderSubdimensionPanels() {
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <h5 class="card-title mb-0">${sd.name}</h5>
-                    <button type="button" class="btn btn-sm btn-outline-danger delete-subdimension-items" data-subdim="${sd.id}" title="Delete all items in this subdimension">Delete All</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger delete-subdimension-items" data-subdim="${sd.id}" title="Delete all items in this subdimension">Delete all</button>
                 </div>
                 <p class="small text-muted">${sd.definition}</p>
                 ${attributes}
@@ -391,7 +391,7 @@ function renderSubdimensionPanels() {
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-start mb-1">
                 <h5 class="card-title mb-0">${title}</h5>
-                <button type="button" class="btn btn-sm btn-outline-danger delete-subdimension-items" data-subdim="__NONE__" title="Delete all items without a subdimension">Delete All</button>
+                <button type="button" class="btn btn-sm btn-outline-danger delete-subdimension-items" data-subdim="__NONE__" title="Delete all items without a subdimension">Delete all</button>
             </div>
             ${subtitle}
             <div class="item-panel" id="items--1">
