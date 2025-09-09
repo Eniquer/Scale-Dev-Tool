@@ -807,7 +807,6 @@ async function generateItems(indicator, forceNewItems = false, tries = 0) {
             if (personaList) {
                 messages.push(personaList)
             }
-            console.log(messages);
             response = await window.sendChat(prompt, messages, model);
         }
         AIResponse = window.cleanAIRespond(response[0]); // Get the reply text from the response
@@ -873,7 +872,6 @@ function createAiItemRows(indicator){
         parentCard.classList.add('d-none');
         return
     }
-    console.log(indicator);
     parentCard.classList.remove('d-none');
 
     itemContainer.innerHTML = ''; // Clear existing items

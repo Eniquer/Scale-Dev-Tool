@@ -170,7 +170,6 @@ async function saveConstructData(dontSave = false) {
     // Store in IndexedDB using the renamed DataStorage
     try {
         const storedStep1Data = await window.dataStorage.getData('data_step_1')
-        console.log(storedStep1Data);
         
         if (storedStep1Data.panel1) {
             const userConfirmed = await customConfirm({
@@ -434,9 +433,6 @@ async function saveDefinition(dontSave = false) {
 
 
     // Check for conflicting definitions
-    // console.log(step1Data.panel2.savedDefinition && (step1Data.panel2.savedDefinition !== resultingDefinition));
-    // console.log(step1Data.panel2.resultingDefinition && (step1Data.panel2.resultingDefinition !== resultingDefinition));
-
     const currentDefinition = step1Data?.panel2?.savedDefinition || step1Data?.panel2?.resultingDefinition;
     const prevDefinition = step1Data?.panel2?.savedDefinition;
 
@@ -726,7 +722,6 @@ async function showAISuggestion() {
         return;
     }
     const panel3 = step1Data.panel3;
-    console.log(step1Data);
     
     if (!panel3 || !panel3.aiProperty || !panel3.aiEntity || !panel3.aiJustification) {
         console.warn('No AI suggestion available. Please generate one first.');
@@ -1682,8 +1677,6 @@ async function checkIfSaved(panelId){
 }
 
 async function checkAllSavedState(){
-    console.log("checking");
-    
     results = {}
     for (let index = 1; index <= 5; index++) {
         var isElementSaved = await checkIfSaved(index);

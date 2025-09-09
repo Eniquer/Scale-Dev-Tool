@@ -589,7 +589,6 @@ Output schema (JSON only, no extra text, no markdown):
                             role: "system",
                             content: "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."
                         }]);
-                    console.log(resp);
                     
                     const aiText = Array.isArray(resp) ? resp[0] : resp;
                     let parsed = null;
@@ -855,7 +854,6 @@ async function analyzeAnova(extraParams = {}) {
       dropIncomplete: extraParams.dropIncomplete ?? true
     }
   };
-  console.log(payload);
   
 
   const resp = await fetch('/api/analyze-anova', {

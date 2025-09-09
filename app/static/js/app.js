@@ -933,5 +933,4 @@ window.shuffle = shuffle;
 // todo Name / Logo / Favicon
 // todo MAYBE use cohort on persona generation prompt
 // todo check Grammar
-// todo check unnecessary Console logs
 // todo more beautiful export all
