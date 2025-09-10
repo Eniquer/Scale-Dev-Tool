@@ -1593,16 +1593,23 @@ if (continueBtn) {
         }
             
         // persist any unsaved data if needed, then navigate:
-        window.location.href = '/step/2';
+    // user confirmed via custom dialog -> bypass native beforeunload briefly
+    window._bypassUnloadConfirm = true;
+    setTimeout(()=>{ window._bypassUnloadConfirm = false; }, 3000);
+    window.location.href = '/step/2';
   });
 }
 
-// warn on unload
-window.addEventListener('beforeunload', e => {
-  if (hasUnsavedChangesFlag) {
-    e.preventDefault();
-  }
-});
+// Manage native unload prompt; allow temporary bypass after custom confirmation
+window._bypassUnloadConfirm = window._bypassUnloadConfirm || false;
+function step1BeforeUnloadHandler(e){
+    if (hasUnsavedChangesFlag && !window._bypassUnloadConfirm) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+    }
+}
+window.addEventListener('beforeunload', step1BeforeUnloadHandler);
 
 // warn on navbar navigation
 const navbarLinks = document.querySelectorAll('#navbar a');
@@ -1617,9 +1624,12 @@ navbarLinks.forEach(link => {
         confirmText: 'Yes, leave',
         cancelText: 'No, stay'
       });
-      if (confirmed) {
-        window.location.href = targetUrl;
-      }
+            if (confirmed) {
+                // Bypass native prompt briefly since user already confirmed
+                window._bypassUnloadConfirm = true;
+                setTimeout(()=>{ window._bypassUnloadConfirm = false; }, 3000);
+                window.location.href = targetUrl;
+            }
     }
   });
 });
@@ -1662,8 +1672,10 @@ async function checkIfSaved(panelId){
             return true; 
         }
 
-        
-        
+        if (savedData === undefined && panelId == 1) {
+            return true;
+        }
+
         if (JSON.stringify(savedData) !== JSON.stringify(availableData.data)) {
             return false;
         }
@@ -1691,6 +1703,7 @@ async function checkAllSavedState(){
 }
 
 async function anyUnsavedChanges() {
+    // todo wenn step1 data nicht vorhanden triggered direkt alles
     results = {}
     for (let index = 1; index <= 5; index++) {
         panelData = await saveMethod[index](true); // get data without saving
