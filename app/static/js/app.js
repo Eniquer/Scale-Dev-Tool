@@ -205,17 +205,89 @@ async function genPersonaPool({generatedPersonas = [], groupDescription, amount 
 window.genPersonaPool = genPersonaPool;
 
 // ***********************************       Export Data         ***********************************************
+
+
+async function extractResults(step) {
+    // todo MAYBE make it more human readable not ID everywhere
+    if (parseInt(step) < 1 || parseInt(step) > 6) {
+        throw new Error("Step not found on result extraction.");
+    }
+    try{
+        const stepData = await window.dataStorage.getData('data_step_'+step) || {};
+        if (stepData === undefined || Object.keys(stepData).length < 1) {
+            return {["Step_"+step]: "No data available"}
+        }
+        let results = []
+        switch (parseInt(step)) {
+            case 1:
+                results = {
+                    constructName: stepData?.panel1?.constructName,
+                    savedDefinitions: stepData?.panel2?.savedDefinition,
+                    property: stepData?.panel3.property,
+                    entity: stepData?.panel3.entity,
+                    propertyExplanation: stepData?.panel3.propertyExplanation,
+                    entityExplanation: stepData?.panel3.entityExplanation,
+                    ...stepData?.panel4,
+                    ...stepData?.panel5
+                }
+                break;
+            case 2:
+                const step1Data = await window.dataStorage.getData('data_step_1') || {};
+    
+                results = {
+                    items: stepData?.items.map(item => ({ ...item, subdimension: step1Data?.panel5.subdimensions.find(subdim => subdim.id === item.subdimensionId).name }),),
+                }
+                break;
+            case 3:
+                results = {
+                    raters: stepData?.raters,
+                    anovaResults: stepData?.anovaResults
+                }
+                break;
+            case 4: 
+                delete stepData.lastAISuggestions;
+                delete stepData.updatedAt;
+                
+                results = {...stepData}
+                break;
+            case 5:
+                results = {
+                    personas: stepData.personas,
+                    questionnaireItems: stepData.questionnaireItems,
+                    extraItems: stepData.extraItems,
+                    likertAnswers: stepData.likertAnswers,
+                }
+                break;
+            case 6:
+                results = {
+                    reversedItems: stepData.reverseColumns,
+                    lavaanEdited: stepData.lavaanEdited,
+                    lastEFAResult: stepData.lastEFAResult,
+                    lastCFAResult: stepData.lastCFAResult
+                }
+                break;
+            default:
+                throw new Error("Step not found on result extraction.");
+        }
+        return {["Step_"+step]:results}
+    }
+    catch(e){
+        console.error("Error extracting results:", e);
+        return {["Step_"+step]: { error: e.message }};
+    }
+    
+}
+
 // Add exportSelected function for modal-based export
 async function exportSelected() {
     const exportAll = document.getElementById('exportAll').checked;
-    const output = {};
+    let output = {};
 
     if (exportAll) {
         // fetch all data keys
-        for (let i = 1; i <= 8; i++) {
-            const key = `data_step_${i}`;
-            const data = await window.dataStorage.getData(key);
-            if (data) output[key] = data;
+        for (let i = 1; i <= 6; i++) {
+            const data = await extractResults(i);
+            if (data) output= {...output, ...data}
         }
     } else {
         // fetch only checked steps
@@ -223,8 +295,8 @@ async function exportSelected() {
         for (const cb of cbs) {
             const stepNum = cb.value;
             const key = `data_step_${stepNum}`;
-            const data = await window.dataStorage.getData(key);
-            if (data) output[key] = data;
+            const data = await extractResults(stepNum);
+            if (data) output= {...output, ...data}
         }
     }
 
@@ -273,10 +345,13 @@ if (exportModal) {
         const container = document.getElementById('exportStepsContainer');
         container.innerHTML = '';
         // fetch availability for each step
-        for (let i = 1; i <= 8; i++) {
+        for (let i = 1; i <= 6; i++) {
             const key = `data_step_${i}`;
             const has = await window.dataStorage.hasData(key);
             if (has) {
+                const stepData = await window.dataStorage.getData(key);
+                if (i==3 && stepData.raters.length === 0 && !stepData.anovaResults) continue;
+                if (i==4 && Object.keys(stepData.itemCustomIds).length === 0) continue;
                 const div = document.createElement('div');
                 div.className = 'form-check';
                 const input = document.createElement('input');
@@ -934,6 +1009,7 @@ window.shuffle = shuffle;
 // todo MAYBE use cohort on persona generation prompt
 // todo check Grammar
 // todo more beautiful export all
+// todo reset all
 
 window.ensurePersistentWarning = function(msg){
     let c = document.getElementById('stepPersistentWarning');
