@@ -489,7 +489,7 @@ if (addProjectBtn) {
         if (newProj) {
             window.displayInfo('success', `Project '${newProj.name}' added`);
             // New project becomes active inside addProject; force reload
-            window.location.reload();
+            window.location.href = '/step/1';
         } else {
             window.displayInfo('error', `Could not add project. It may already exist.`);
         }
@@ -1030,6 +1030,7 @@ window.shuffle = shuffle;
 
 // todo Name / Logo / Favicon
 // todo MAYBE use cohort on persona generation prompt
+// todo MAYBE implement full project export/import
 // todo check Grammar
 
 window.ensurePersistentWarning = function(msg){
