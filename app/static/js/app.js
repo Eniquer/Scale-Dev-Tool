@@ -1,4 +1,4 @@
-import { initAPIKey, deleteAPIKey, storeAPIKey } from './handleAPIKey.js';
+import { initAPIKey, storeAPIKey } from './handleAPIKey.js';
 window.currentAPIKey_enc = await initAPIKey();
 window.initAPIKey = initAPIKey;
 // todo MAYBE: add option to modify the prompts
@@ -983,6 +983,29 @@ window.shuffle = shuffle;
         }
     });
 
+    // Reset all data
+    document.addEventListener('click', async (e)=>{
+        if (e.target && e.target.id === 'resetAllDataBtn'){
+            const confirmed = await window.customConfirm({
+                title: 'Reset all data?',
+                message: 'This will delete ALL locally stored data for this app, including projects, step data, settings, and API key. This cannot be undone.',
+                confirmText: 'Delete everything',
+                cancelText: 'Cancel'
+            });
+            if (!confirmed) return;
+            try {
+                await window.dataStorage.clearAll();
+                // Bypass beforeunload prompts and go to welcome page
+                window._bypassUnloadConfirm = true;
+                setTimeout(()=>{ window._bypassUnloadConfirm = false; }, 3000);
+                window.location.href = '/step/0';
+            } catch (err) {
+                console.error('Reset all failed:', err);
+                window.displayInfo && window.displayInfo('error','Failed to reset data.');
+            }
+        }
+    });
+
     // Update API Key button -> reuse existing prompt & storage
     document.addEventListener('click', async (e)=>{
         if (e.target && e.target.id === 'updateApiKeyBtn'){
@@ -1008,7 +1031,6 @@ window.shuffle = shuffle;
 // todo Name / Logo / Favicon
 // todo MAYBE use cohort on persona generation prompt
 // todo check Grammar
-// todo reset all
 
 window.ensurePersistentWarning = function(msg){
     let c = document.getElementById('stepPersistentWarning');

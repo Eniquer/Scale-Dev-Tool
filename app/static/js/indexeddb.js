@@ -301,6 +301,19 @@ if (typeof window !== 'undefined' && !window.DataStorage) {
                 };
             });
         }
+
+        // Remove all keys from the object store
+        async clearAll() {
+            if (!this.db) {
+                await this.init();
+            }
+            const entries = await this.getAllEntries();
+            const keys = entries.map(e => e.key);
+            await Promise.all(keys.map(k => this.deleteData(k).catch(err => {
+                console.warn('Failed to delete key during clearAll:', k, err);
+            })));
+            console.log('IndexedDB: all data cleared');
+        }
     }
 
     // Global instance
