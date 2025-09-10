@@ -139,8 +139,16 @@
 				const txt = (g?.text||'').trim();
 				if (!txt) return;
 				const existingCode = itemCodes[g.id];
-				// Pattern: facetcodeGnumber (lowercase facet code) e.g., teG1. Fallback: f<fid>G<number>
-				let baseCode = existingCode || (facetCodeById[fid] ? `${facetCodeById[fid].toLowerCase()}G${idx+1}` : `f${fid}G${idx+1}`);
+				// Pattern:
+				// - Unidimensional: overallCodeG<number> (lowercase overall short code), e.g., scG1
+				// - Otherwise: facetcodeG<number> (lowercase facet code), fallback f<fid>G<number>
+				let baseCode;
+				if (fid === 'unidim') {
+					const oc = (overallCode || 'ov').toLowerCase();
+					baseCode = existingCode || `${oc}G${idx+1}`;
+				} else {
+					baseCode = existingCode || (facetCodeById[fid] ? `${facetCodeById[fid].toLowerCase()}G${idx+1}` : `f${fid}G${idx+1}`);
+				}
 				baseCode = baseCode.toString();
 				globalItems.push({ id: g.id || `global_${fid}_${idx+1}`, code: baseCode, text: clean(txt), subdimensionId: fid, isGlobal: true });
 			});
@@ -220,6 +228,9 @@
 			// Unidimensional: prepend any second-order/global items (subdimensionId null)
 			const rootGlobals = globalItems.filter(g=>g.subdimensionId==null);
 			rootGlobals.forEach(g=> lines.push(`${g.code}. ${g.text}`));
+			// Also include unidimensional facet-level global reflective items
+			const uniGlobals = globalItems.filter(g=>g.subdimensionId === 'unidim');
+			uniGlobals.forEach(g=> lines.push(`${g.code}. ${g.text}`));
 			codedItems.forEach(it => {
 				const code = (itemCodes[it.id]||'').toString();
 				lines.push(`${code}. ${clean(it.text)}`);

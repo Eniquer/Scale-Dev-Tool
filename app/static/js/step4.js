@@ -89,6 +89,8 @@ function renderFirstOrderFacets() {
 		const disabledSet = new Set((facetDisabledItems['unidim']||[]).map(String));
 		const activeItems = allItems.filter(it => !disabledSet.has(String(it.id)));
 		const pseudoId = 'unidim';
+		const currentMode = facetModes[pseudoId] || '';
+		if (currentMode === 'formative') ensureGlobalReflectiveDefaults(pseudoId);
 		ensureScalingDefaults(pseudoId, activeItems);
 		const scale = facetScaling[pseudoId] || {};
 		const method = scale.method || 'fix_loading';
@@ -96,17 +98,42 @@ function renderFirstOrderFacets() {
 		const itemsHtml = allItems.length
 			? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click an item to ${disabledSet.size? 'toggle include/exclude':'exclude it from the facet'}.</div>${allItems.map(it => { const t = escapeHtml(it.text); const long = t.length>80? ' long' : ''; const inactive = disabledSet.has(String(it.id)) ? ' inactive' : ''; const cid = escapeHtml(itemCustomIds[it.id] || ''); const refMark = (method==='fix_loading' && String(scale.refItemId)===String(it.id)) ? ' ref-item' : ''; return `<span class="mm-item-tag${long}${inactive}${refMark}" data-facet="${pseudoId}" data-item-id="${it.id}" title="${cid? '['+cid+'] ' : ''}${t} (click to ${inactive? 'include':'exclude'})" role="button" tabindex="0">${cid? `<span class="badge bg-secondary me-1">${cid}</span>`:''}${t}${refMark? ' <i class="bi bi-asterisk text-warning"></i>':''}</span>`; }).join('')}</div>`
 			: '<div class="text-muted small mb-2">No items added in Step 2.</div>';
-		const refSelect = allItems.length ? `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${pseudoId}">${allItems.map(it=>{ const excluded = disabledSet.has(String(it.id)); return `<option value="${it.id}" ${String(it.id)===String(refItemId)?'selected':''} ${excluded? 'data-excluded="1"':''}>${escapeHtml(shorten(it.text,40))}${excluded? ' (excluded)':''}</option>`; }).join('')}</select>` : '<div class="small text-muted mt-1">No items to reference</div>';
+		// Candidates for reference depend on mode: items for reflective; global reflective for formative
+		const reflectiveCandidates = currentMode === 'formative'
+			? (globalReflective[pseudoId]||[]).filter(g => (g.text||'').trim())
+			: allItems;
+		let refSelect;
+		if (currentMode === 'formative') {
+			refSelect = `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${pseudoId}">${reflectiveCandidates.map(g=>`<option value="${g.id}" ${String(g.id)===String(refItemId)?'selected':''}>${escapeHtml(shorten(g.text,40))}</option>`).join('')}</select>` + (reflectiveCandidates.length>=2? '' : '<div class="small text-muted mt-1">Add two global reflective items above to enable fixing a loading.</div>');
+		} else {
+			refSelect = allItems.length ? `<select class="form-select form-select-sm mt-1 facet-ref-item" data-facet="${pseudoId}">${allItems.map(it=>{ const excluded = disabledSet.has(String(it.id)); return `<option value="${it.id}" ${String(it.id)===String(refItemId)?'selected':''} ${excluded? 'data-excluded="1"':''}>${escapeHtml(shorten(it.text,40))}${excluded? ' (excluded)':''}</option>`; }).join('')}</select>` : '<div class="small text-muted mt-1">No items to reference</div>';
+		}
 		const col = document.createElement('div');
 		col.className = 'col-12';
 		col.innerHTML = `
 			<div class="facet-card h-100 d-flex flex-column" data-facet="${pseudoId}">
-				<h5 class="mb-1">All Items <span class="small text-muted">(${activeItems.length}${activeItems.length!==allItems.length? '/'+allItems.length:''})</span></h5>
+				<h4 class="mb-1">${overallCode ? `<span class="badge bg-info me-1">${escapeHtml(overallCode)}</span>` : ''}${escapeHtml(constructName || 'Overall Construct')} <span class="small text-muted">(${activeItems.length}${activeItems.length!==allItems.length? '/'+allItems.length:''})</span></h4>
+				<div class="mb-2"><label class="small fw-bold me-2">Overall Short ID</label><input type="text" id="overallCodeInput" class="form-control form-control-sm d-inline-block" style="max-width:160px" maxlength="10" placeholder="Code" value="${escapeHtml(overallCode || deriveShortCode(constructName))}"> <div class="form-text small">Used in model syntax.</div></div>
 				<p class="small text-muted mb-2">Unidimensional construct (no first-order facets defined).</p>
+				<div class="mb-2">
+					<div class="small fw-bold mb-1">Measurement Type</div>
+					<div class="btn-group btn-group-sm" role="group" aria-label="Measurement Type">
+						<input type="radio" class="btn-check" name="facet-mode-${pseudoId}" id="facet-${pseudoId}-refl" value="reflective" ${currentMode==='reflective' ? 'checked' : ''}>
+						<label class="btn btn-outline-info" for="facet-${pseudoId}-refl" title="Items are effects (interchangeable)">Reflective</label>
+						<input type="radio" class="btn-check" name="facet-mode-${pseudoId}" id="facet-${pseudoId}-form" value="formative" ${currentMode==='formative' ? 'checked' : ''}>
+						<label class="btn btn-outline-info" for="facet-${pseudoId}-form" title="Items are causes (non-interchangeable)">Formative</label>
+					</div>
+				</div>
+				${currentMode==='formative' ? `
+				<div class="mb-2 formative-globals" data-facet="${pseudoId}">
+					<div class="small fw-bold mb-1">Global Reflective Items (for identification)</div>
+					<div class="form-text small mb-1">Provide up to two global reflective items.</div>
+					${(globalReflective[pseudoId]||[]).map((g,i)=>`<input type="text" class="form-control form-control-sm mb-1 global-reflective-input" data-facet="${pseudoId}" data-idx="${i}" placeholder="Global reflective item ${i+1}" value="${escapeHtml(g.text)}">`).join('')}
+				</div>` : ''}
 				<div class="mb-2">
 					<div class="small fw-bold mb-1">Scaling Rule</div>
 					<div class="form-check form-check-inline small">
-						<input class="form-check-input facet-scale-radio" type="radio" name="facet-scale-${pseudoId}" id="scale-${pseudoId}-fixload" value="fix_loading" ${method==='fix_loading'?'checked':''} data-facet="${pseudoId}">
+						<input class="form-check-input facet-scale-radio" type="radio" name="facet-scale-${pseudoId}" id="scale-${pseudoId}-fixload" value="fix_loading" ${method==='fix_loading'?'checked':''} data-facet="${pseudoId}" ${(currentMode==='formative' ? (reflectiveCandidates.length>=2 ? '' : 'disabled') : (allItems.length ? '' : 'disabled'))}>
 						<label class="form-check-label" for="scale-${pseudoId}-fixload">Fix one loading to 1.0</label>
 					</div>
 					<div class="form-check form-check-inline small">
@@ -122,6 +149,8 @@ function renderFirstOrderFacets() {
 				<div class="flex-grow-1 d-flex flex-column mb-1" style="max-height:220px; overflow:auto;">${itemsHtml}</div>
 			</div>`;
 		list.appendChild(col);
+		updateValidationMessages();
+		if (!dimensionality || dimensionality === 'Unidimensional') updateRefItemVisual('unidim');
 		return;
 	}
 
@@ -258,8 +287,19 @@ function attachAutoSaveHandlers(){
 		if (e.target && e.target.matches('input[type="radio"][name^="facet-mode-"]')) {
 			const facetId = e.target.name.replace('facet-mode-','');
 			facetModes[facetId] = e.target.value;
-			if (e.target.value === 'formative') ensureGlobalReflectiveDefaults(facetId);
-			renderFirstOrderFacets();
+				if (e.target.value === 'formative') ensureGlobalReflectiveDefaults(facetId);
+				// Recompute scaling defaults depending on active items/globals
+				if (!dimensionality || dimensionality === 'Unidimensional') {
+					const pseudoId = 'unidim';
+					const disabledSet = new Set((facetDisabledItems[pseudoId]||[]).map(String));
+					const activeItems = (items||[]).filter(it => !disabledSet.has(String(it.id)));
+					ensureScalingDefaults(pseudoId, activeItems);
+				} else {
+					const disabledSet = new Set((facetDisabledItems[facetId]||[]).map(String));
+					const facetItems = (items||[]).filter(it => it.subdimensionId === facetId && !disabledSet.has(String(it.id)));
+					ensureScalingDefaults(facetId, facetItems);
+				}
+				renderFirstOrderFacets();
 			scheduleAutoSave();
 		}
 		if (e.target && e.target.matches('input.facet-scale-radio')) {
@@ -323,7 +363,9 @@ function attachAutoSaveHandlers(){
 			const idx = Number(e.target.getAttribute('data-idx'));
 			ensureGlobalReflectiveDefaults(facetId);
 			globalReflective[facetId][idx].text = e.target.value;
-			refreshFormativeScalingUI(facetId);
+				refreshFormativeScalingUI(facetId);
+				if (!dimensionality || dimensionality === 'Unidimensional') updateRefItemVisual('unidim');
+				refreshLavaanPanel();
 			scheduleAutoSave();
 		}
 	});
@@ -471,8 +513,13 @@ function generateLavaanSpec(){
 		const facetVar = (sd) => sanitize(sd.code || sd.name || ('F_'+sd.id));
 		const overallVar = sanitize(overallCode || constructName || 'Overall');
 		const globalItemVar = (facetId, idx) => {
+			// For unidimensional, prefix globals with overall short code (e.g., scG1)
+			if (facetId === 'unidim') {
+				const prefix = (overallCode || 'ov').toLowerCase();
+				return sanitize(prefix + 'G' + (idx+1));
+			}
 			const sd = subdimensions.find(s => s.id === facetId);
-			const base = sd ? (sd.code || sd.name || ('F'+facetId.slice(0,4))) : ('G'+facetId.slice(0,4));
+			const base = sd ? (sd.code || sd.name || ('F'+String(facetId).slice(0,4))) : ('G'+String(facetId).slice(0,4));
 			return sanitize(((base || '').toLowerCase()) + 'G' + (idx+1));
 		};
 		const secondGlobalItemVar = (idx) => sanitize(((overallCode || '').toLowerCase()) + 'G' + (idx+1));
@@ -507,11 +554,32 @@ function generateLavaanSpec(){
 			const varName = overallVar;
 			const disabledSet = new Set((facetDisabledItems['unidim']||[]).map(String));
 			const facetItems = (items||[]).filter(it => !disabledSet.has(String(it.id)));
-			if (facetItems.length){
-				const refId = (scale.method === 'fix_loading') ? scale.refItemId : null;
-				const parts = facetItems.map(it => (refId != null && String(it.id) === String(refId) ? '1*'+itemVar(it.id) : itemVar(it.id)));
-				lines.push(`${varName} =~ ${parts.join(' + ')}`);
-				if (scale.method === 'fix_variance') lines.push(`${varName} ~~ 1*${varName}`);
+			const mode = facetModes[pseudoId] || 'reflective';
+			if (mode === 'formative') {
+				// items cause the overall; identification via global reflective items
+				if (facetItems.length){
+					const causal = facetItems.map(it => itemVar(it.id));
+					lines.push(`${varName} <~ ${causal.join(' + ')}`);
+				}
+				const globals = (globalReflective[pseudoId]||[]).filter(g => (g.text||'').trim());
+				if (globals.length){
+					const refId = (scale.method === 'fix_loading') ? scale.refItemId : null;
+					const parts = globals.map((g,i) => {
+						const gv = globalItemVar(pseudoId,i);
+						return (refId != null && String(g.id) === String(refId) ? '1*'+gv : gv);
+					});
+					lines.push(`${varName} =~ ${parts.join(' + ')}`);
+					if (scale.method === 'fix_variance') lines.push(`${varName} ~~ 1*${varName}`);
+				} else if (facetItems.length) {
+					lines.push(`${varName} ~~ 1*${varName}`); // fallback variance scaling
+				}
+			} else { // reflective (default)
+				if (facetItems.length){
+					const refId = (scale.method === 'fix_loading') ? scale.refItemId : null;
+					const parts = facetItems.map(it => (refId != null && String(it.id) === String(refId) ? '1*'+itemVar(it.id) : itemVar(it.id)));
+					lines.push(`${varName} =~ ${parts.join(' + ')}`);
+					if (scale.method === 'fix_variance') lines.push(`${varName} ~~ 1*${varName}`);
+				}
 			}
 			return { syntax: lines.concat(['','## Mapping','#',...mapping]).join('\n'), generatedAt: new Date().toISOString() };
 		}
@@ -998,12 +1066,18 @@ function computeValidation(){
 			else if (count === 2) warnings.push(`Reflective facet "${sd.name || sd.id}" has only 2 included items.`);
 		}
 	});
-	// Unidimensional case: ensure at least 2 active items if reflective-like interpretation
+	// Unidimensional case: validate based on selected mode
 	if (!subdimensions.length || dimensionality === 'Unidimensional') {
 		const disabledSet = new Set((facetDisabledItems['unidim']||[]).map(String));
 		const active = (items||[]).filter(it => !disabledSet.has(String(it.id)));
-		if (active.length < 2) errors.push(`At least 2 items must remain included for a unidimensional reflective model (has ${active.length}).`);
-		else if (active.length === 2) warnings.push('Only 2 items remain included for the unidimensional construct.');
+		const uniMode = facetModes['unidim'] || 'reflective';
+		if (uniMode === 'reflective') {
+			if (active.length < 2) errors.push(`At least 2 items must remain included for a unidimensional reflective model (has ${active.length}).`);
+			else if (active.length === 2) warnings.push('Only 2 items remain included for the unidimensional construct.');
+		} else if (uniMode === 'formative') {
+			const globals = (globalReflective['unidim']||[]).filter(g => (g.text||'').trim());
+			if (globals.length < 2) errors.push(`Formative unidimensional construct requires two global reflective items (has ${globals.length}).`);
+		}
 		const scUni = facetScaling['unidim'];
 		if (scUni && scUni.method === 'fix_loading' && scUni.refItemId != null && disabledSet.has(String(scUni.refItemId))) {
 			errors.push('Unidimensional reference item is excluded; re-include it or choose another reference.');
@@ -1126,7 +1200,16 @@ function renderAISuggestions(data){
 	if (!data){ host.textContent = 'No suggestions.'; return; }
 	const higher = data.higherOrderFacet;
 	const firstOrder = data.firstOrderFacets || {};
+	const unidim = data.unidimensionalFacet || data.unidimensional; // support either key
 	const rows = [];
+	if (unidim) {
+		let globalsList = '';
+		if (unidim.spec === 'formative' && Array.isArray(unidim.globalReflectiveItems)) {
+			const items = unidim.globalReflectiveItems.slice(0,2).filter(t => (t||'').trim());
+			if (items.length) globalsList = `<ul class="small ms-3 mt-1 mb-0">${items.map(t=>`<li>${escapeHtml(shorten(t,80))}</li>`).join('')}</ul>`;
+		}
+		rows.push(`<div class="mb-2"><div class="fw-bold">Overall (Unidimensional): <span class="badge bg-secondary">${escapeHtml(unidim.spec||'')}</span></div><div class="small text-muted">${escapeHtml(unidim.justification||'')}</div>${globalsList}</div>`);
+	}
 	if (higher) {
 		let globalsList = '';
 		if (higher.spec === 'formative' && Array.isArray(higher.globalReflectiveItems)) {
@@ -1156,7 +1239,18 @@ function applyAISuggestions(_, applyAll=false){
 	if (!lastAISuggestions) return;
 	const data = lastAISuggestions;
 	const firstOrder = data.firstOrderFacets || {};
+	const unidim = data.unidimensionalFacet || data.unidimensional;
 	// Always treat as apply all (only button present)
+	if (!subdimensions.length || dimensionality === 'Unidimensional') {
+		if (unidim && unidim.spec) {
+			facetModes['unidim'] = unidim.spec;
+			if (unidim.spec === 'formative' && Array.isArray(unidim.globalReflectiveItems)) {
+				ensureGlobalReflectiveDefaults('unidim');
+				const globals = unidim.globalReflectiveItems.slice(0,2);
+				globals.forEach((txt,i) => { if (globalReflective['unidim'][i]) globalReflective['unidim'][i].text = txt || ''; });
+			}
+		}
+	}
 	if (data.higherOrderFacet && data.higherOrderFacet.spec) {
 		secondOrder.type = data.higherOrderFacet.spec === 'none' ? null : data.higherOrderFacet.spec;
 		// Apply higher-order global reflective items if formative and provided
@@ -1201,11 +1295,23 @@ document.addEventListener('DOMContentLoaded', initAISuggestionsUI);
 
 
 async function getSpecificationSuggestions(tries = 0) {
-    if(dimensionality == "Unidimensional") {
-		displayInfo('info', 'The construct is unidimensional. No subdimensions available for suggestions.');
-		return;
-    }
-	const prompt = `
+		const prompt = dimensionality === 'Unidimensional' ? `
+You are an expert in measurement model specification following MacKenzie et al. (2011).
+Task: For a unidimensional construct, recommend reflective vs formative with a concise justification (≤25 words). If formative, propose two global reflective items for identification.
+
+Context:
+Construct name: "${constructName}"
+Overall definition: "${savedDefinition}"
+Dimensionality: ${dimensionality}
+
+Items:
+${(items||[]).map(it => `- ${it.text}`).join('\n')}
+
+Output format (strict JSON, no markdown):
+{
+	"unidimensionalFacet": { "spec": "reflective"|"formative", "justification": "≤25 WORDS HERE", "globalReflectiveItems": ["text1","text2"] (if formative, else omit) }
+}
+		` : `
 	You are an expert in measurement model specification following MacKenzie et al. (2011). 
 	Task: Recommend how to specify a latent variable measurement model in lavaan, given facets (first-order constructs), items, and optional higher-order structure.
 
@@ -1257,7 +1363,7 @@ Output format (strict JSON, no markdown or commentary):
     }
    
     // Parse JSON response
-    if (AIResponse.length === 0) {
+	if (!AIResponse || AIResponse.length === 0) {
         window.displayInfo('info', 'Empty return Try again!');
         return
     }
