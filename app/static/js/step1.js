@@ -957,6 +957,11 @@ async function saveTheme(dontSave = false) {
     syncData();
     
 
+    setTimeout(() => {
+        if (!document.getElementById("continueStep1Btn").classList.contains("d-none")) {
+            scrollToElement(document.getElementById("continueStep1Btn"));
+        }
+    }, 400);
     if (!step1Data.panel5) {
         setTimeout(() => {
             scrollToElement(document.getElementById("step1panel5"));
@@ -1374,6 +1379,11 @@ async function saveSubdimensions(dontSave=false) {
   step1Data.panel5 = {"subdimensions": resultSubdimensions };
   await window.dataStorage.storeData('data_step_1', step1Data, false);
   window.displayInfo('success', 'Subdimensions saved successfully!');
+  if (!document.getElementById("continueStep1Btn").classList.contains("d-none")) {
+    setTimeout(() => {
+        scrollToElement(document.getElementById("continueStep1Btn"));
+    }, 400);
+  }
 }
 
 async function resetPanel5() {
@@ -1667,20 +1677,17 @@ async function checkIfSaved(panelId){
         }
         if (panelId == 2) domVisible = !resultingDefinitionContainer.classList.contains("d-none"); // Panel 2 is special, we check if the resulting definition is visible
         
-        // if we cant see the panel. Say it is saved
+        // if we can't see the panel. Say it is saved
         if (!domVisible) {
             return true; 
         }
 
         if (savedData === undefined && panelId == 1) {
             return true;
-        }
-
+        }        
         if (JSON.stringify(savedData) !== JSON.stringify(availableData.data)) {
             return false;
         }
-
-
         return true;
     } catch (error) {
         console.log("couldn't get save data on Panel " + panelId + ": ", error);
@@ -1703,7 +1710,6 @@ async function checkAllSavedState(){
 }
 
 async function anyUnsavedChanges() {
-    // todo wenn step1 data nicht vorhanden triggered direkt alles
     results = {}
     for (let index = 1; index <= 5; index++) {
         panelData = await saveMethod[index](true); // get data without saving
@@ -1711,7 +1717,6 @@ async function anyUnsavedChanges() {
             results[`panel${index}`] = true;
         }else{
             var isElementSaved = await checkIfSaved(index);
-            saveBtns[index.toString()].disabled = isElementSaved;
             results[`panel${index}`] = isElementSaved;
         }
     }

@@ -1008,7 +1008,6 @@ window.shuffle = shuffle;
 // todo Name / Logo / Favicon
 // todo MAYBE use cohort on persona generation prompt
 // todo check Grammar
-// todo more beautiful export all
 // todo reset all
 
 window.ensurePersistentWarning = function(msg){
