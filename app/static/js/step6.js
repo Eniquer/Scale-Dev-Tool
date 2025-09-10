@@ -940,8 +940,27 @@ Output format (strict JSON):
     const outEl = id('efaResults');
     if (!outEl) return;
     const out = resp.output || {};
+    // If R returned an error message, show it
+    if (resp.stderr || resp.error) {
+      outEl.innerHTML = `<span class="text-danger">R Error: ${escapeHtml(resp.stderr || resp.error)}</span>`;
+      updateOutdatedNotices();
+      return;
+    }
+    // If backend indicates no data, surface the message
+    if ((out.status && out.status !== 'ok') || (!out.efa && out.message)) {
+      const rows = (out.n_rows!=null? ` (rows: ${out.n_rows}`: '') + (out.n_cols!=null? `, numeric columns: ${out.n_cols})` : (out.n_rows!=null? ')' : ''));
+      const msg = out.message || 'No EFA output available.';
+      outEl.innerHTML = `<div class="alert alert-warning py-2 px-3 small mb-0"><strong>EFA not available:</strong> ${escapeHtml(msg)}${rows? ` <span class='text-muted'>${escapeHtml(rows)}</span>`:''}</div>`;
+      updateOutdatedNotices();
+      return;
+    }
     const efa = out.efa || {};
-    if (!efa.n_factors_selected){ outEl.innerHTML = '<span class="text-muted">No EFA output.</span>'; return; }
+    if (!efa.n_factors_selected){
+      const msg = out.message ? ` <span class='text-muted'>${escapeHtml(out.message)}</span>` : '';
+      outEl.innerHTML = `<span class="text-muted">No EFA output.</span>${msg}`;
+      updateOutdatedNotices();
+      return;
+    }
     const lines = [];
     lines.push(`Selected factors: ${efa.n_factors_selected}`);
     if (Array.isArray(efa.eigenvalues)){
