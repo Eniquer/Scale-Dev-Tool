@@ -1681,10 +1681,13 @@ async function checkIfSaved(panelId){
         if (!domVisible) {
             return true; 
         }
-
+        
         if (savedData === undefined && panelId == 1) {
-            return true;
+            if(availableData.data?.constructName == "" && availableData.data?.initialDefinition == "") // wenn beide leer sind, dant ist gesaved
+                return true
+            return false; 
         }        
+        
         if (JSON.stringify(savedData) !== JSON.stringify(availableData.data)) {
             return false;
         }
