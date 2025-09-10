@@ -37,38 +37,10 @@
 			if (!hasCodes) {
 				window.ensurePersistentWarning('⚠️ Please complete Step 4 first: configure measurement model & assign item codes before proceeding to sample size & questionnaire.');
 			}
+	
 		} catch(err){ console.error('[Step5] init failed', err); }
 	}
 
-
-	async function downloadLikertCsv(){
-		try {
-			const step5 = await window.dataStorage.getData('data_step_5')||{};
-			const rows = step5.likertAnswers || [];
-			if (!rows.length){ window.displayInfo && window.displayInfo('info','No likert answers to export.'); return; }
-			// Determine header from union of keys
-			const headerSet = new Set();
-			rows.forEach(r=> Object.keys(r||{}).forEach(k=> headerSet.add(k)));
-			const header = Array.from(headerSet);
-			const esc = v => {
-				if (v==null) return '';
-				const s = String(v);
-				return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
-			};
-			const lines = [header.join(',')];
-			rows.forEach(r=>{
-				lines.push(header.map(h=> esc(r[h])).join(','));
-			});
-			const csv = lines.join('\n');
-			const blob = new Blob([csv+'\n'], { type:'text/csv;charset=utf-8;' });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url; a.download = 'likert_responses.csv';
-			document.body.appendChild(a); a.click();
-			setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },150);
-			window.displayInfo && window.displayInfo('success','Likert table downloaded.');
-		} catch(e){ console.warn('[Step5] download CSV failed', e); window.displayInfo && window.displayInfo('danger','Download failed'); }
-	}
 
 	function renderSampleSize(){
 		const host = document.getElementById('sampleSizeGuidance');
@@ -407,6 +379,9 @@ let personas = [];
 
 	async function loadLikertAnswers(){
 		try {
+			if (document.getElementById("numLikertRows")) {
+				document.getElementById("numLikertRows").value = personas.length || 10;
+			}
 			const existing = await window.dataStorage.getData(STORAGE_KEY) || {};
 			if (!Array.isArray(existing.likertAnswers)) return null;
 			const currentHash = computeQuestionnaireHash();
@@ -519,6 +494,9 @@ let personas = [];
 
 		// If we already have personas, show them immediately
 		if (personas.length){
+			if (numLikertRows) {
+				numLikertRows.value = personas.length || 10;
+			}	
 			const lines = personas.map((p,i)=> `${i+1}. ${String(p)}`);
 			out.classList.remove('d-none');
 			likertSim.classList.remove('d-none');
@@ -648,6 +626,9 @@ let personas = [];
                 await savePersonas();
 				const lines = personas.map((p,i)=> `${i+1}. ${String(p)}`);
 				out.value = lines.join('\n');
+				if (numLikertRows) {
+					numLikertRows.value = personas.length || 10;
+				}
 			}
 		});
 		likertSimBtn.addEventListener('click', async () => {
@@ -740,6 +721,8 @@ let personas = [];
 		setup();
 	}
 })();
+
+// todo MAYBE Option to load personas from text
 
 
 async function likertSimulation(min=1,max=5, codeMap, requestedRows=0, startOffset=0, existingRowsBefore=[], appendMode=false) {
