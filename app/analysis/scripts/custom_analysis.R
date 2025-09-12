@@ -71,6 +71,182 @@ result <- list(
   model_provided = nchar(trimws(model_syntax)) > 0
 )
 
+# ---------- Pre-CFA diagnostics (to help when lavaan fails) ----------
+# Returns metrics to pinpoint issues like non-PD covariance, collinearity, etc.
+extract_model_observed_vars <- function(model_txt, dat_cols) {
+  if (!nzchar(model_txt)) return(intersect(dat_cols, dat_cols))
+  quiet_pkg("lavaan")
+  obs <- character(0)
+  pt <- tryCatch(lavaan::lavaanify(model_txt, warn = FALSE, fixed.x = FALSE), error = function(e) NULL)
+  if (!is.null(pt)) {
+    lv <- unique(pt$lhs[pt$op %in% c("=~","<~","~")])
+    cand <- unique(pt$rhs)
+    obs <- setdiff(cand, lv)
+  }
+  obs <- intersect(obs, dat_cols)
+  if (!length(obs)) obs <- dat_cols
+  obs
+}
+
+compute_precheck <- function(dat, model_txt) {
+  # Only on numeric columns referenced in the model (fallback: all numeric)
+  num_cols <- names(dat)[vapply(dat, is.numeric, logical(1))]
+  vars <- extract_model_observed_vars(model_txt, num_cols)
+  X <- dat[, vars, drop = FALSE]
+  # Complete cases for stable covariance / cor diagnostics
+  cc_idx <- stats::complete.cases(X)
+  Xcc <- X[cc_idx, , drop = FALSE]
+  n <- nrow(Xcc); p <- ncol(Xcc)
+
+  zero_var <- names(which(vapply(Xcc, function(x) isTRUE(all.equal(stats::var(x), 0)) || (!any(is.finite(x))), logical(1))))
+  near_zero_var <- names(which(vapply(Xcc, function(x) {
+    v <- stats::var(x)
+    !is.na(v) && is.finite(v) && v <= 1e-8
+  }, logical(1))))
+
+  cov_mat <- tryCatch(stats::cov(Xcc), error = function(e) NULL)
+  cor_mat <- tryCatch(stats::cor(Xcc), error = function(e) NULL)
+  eig_vals <- if (!is.null(cov_mat) && ncol(cov_mat) > 0) tryCatch(eigen(cov_mat, only.values = TRUE)$values, error = function(e) NULL) else NULL
+  is_pd <- if (!is.null(eig_vals)) all(eig_vals > 1e-8) else NA
+  cond_num <- tryCatch(kappa(cov_mat), error = function(e) NA)
+  log_det <- tryCatch({
+    d <- determinant(cov_mat, logarithm = TRUE)
+    list(sign = unname(d$sign), logabsdet = unname(d$modulus))
+  }, error = function(e) NULL)
+
+  # Smallest-eigenvector analysis (use correlation matrix for scale invariance when possible)
+  # Use covariance eigen-decomposition (handles zero-variance columns better than cor which may create NAs)
+  eig_cor <- tryCatch(eigen(cov_mat, symmetric = TRUE), error = function(e) NULL)
+  smallest_ev <- list()
+  culprit_candidates <- data.frame()
+  if (!is.null(eig_cor)) {
+    vals <- eig_cor$values
+    vecs <- eig_cor$vectors
+    # Threshold for near-zero eigenvalues
+    eps <- 1e-6
+    idx_small <- which(vals <= eps)
+    # If none flagged, still inspect the single smallest to aid diagnostics
+    if (!length(idx_small) && length(vals)) idx_small <- length(vals)
+    top_k <- 5L
+    for (ii in idx_small) {
+      v <- vecs[, ii]
+      ord <- order(-abs(v))
+      vars_top <- data.frame(var = colnames(Xcc)[ord], weight = as.numeric(v[ord]), abs_weight = as.numeric(abs(v[ord])), stringsAsFactors = FALSE)
+      vars_top$rank <- seq_len(nrow(vars_top))
+      smallest_ev[[length(smallest_ev) + 1L]] <- list(eigenvalue = as.numeric(vals[ii]), component = ii, top = head(vars_top, top_k))
+      take <- head(vars_top, max(top_k, 1L))
+      culprit_candidates <- rbind(culprit_candidates, data.frame(var = take$var, source = paste0("eigvec", ii), score = take$abs_weight, stringsAsFactors = FALSE))
+    }
+  }
+
+  # Per-variable redundancy: regress each variable on all others; R^2 near 1 implies near-linear dependence
+  r2_from_others <- data.frame()
+  if (n > 5 && p >= 2) {
+    r2_list <- lapply(seq_len(p), function(j) {
+      y <- Xcc[, j]
+      others <- Xcc[, -j, drop = FALSE]
+      # Skip if others empty or constant
+      if (!ncol(others) || any(apply(others, 2, function(col) all(is.na(col))))) return(NA_real_)
+      mod <- tryCatch(lm(y ~ ., data = as.data.frame(others)), error = function(e) NULL)
+      if (is.null(mod)) return(NA_real_)
+      r2 <- tryCatch(summary(mod)$r.squared, error = function(e) NA_real_)
+      r2
+    })
+    r2_from_others <- data.frame(var = colnames(Xcc), R2_other_vars = as.numeric(r2_list), stringsAsFactors = FALSE)
+  }
+
+  # Aggregate culprit scores across smallest eigenvectors
+  culprit_agg <- data.frame()
+  if (nrow(culprit_candidates)) {
+    a_max <- aggregate(score ~ var, data = culprit_candidates, FUN = function(x) suppressWarnings(max(x, na.rm = TRUE)))
+    a_sum <- aggregate(score ~ var, data = culprit_candidates, FUN = function(x) suppressWarnings(sum(x, na.rm = TRUE)))
+    names(a_max)[2] <- "score_max"; names(a_sum)[2] <- "score_sum"
+    culprit_agg <- merge(a_max, a_sum, by = "var", all = TRUE)
+    # Join with R2 diagnostics if available
+    if (nrow(r2_from_others)) {
+      culprit_agg <- merge(culprit_agg, r2_from_others, by = "var", all = TRUE)
+    }
+    sx <- ifelse(is.na(culprit_agg$score_max), -Inf, culprit_agg$score_max)
+    ss <- ifelse(is.na(culprit_agg$score_sum), -Inf, culprit_agg$score_sum)
+    r2v <- ifelse(is.na(culprit_agg$R2_other_vars), -Inf, culprit_agg$R2_other_vars)
+    culprit_agg <- culprit_agg[order(-sx, -ss, -r2v), , drop = FALSE]
+  } else if (nrow(r2_from_others)) {
+    r2v <- ifelse(is.na(r2_from_others$R2_other_vars), -Inf, r2_from_others$R2_other_vars)
+    culprit_agg <- r2_from_others[order(-r2v), , drop = FALSE]
+  }
+
+  # High correlations
+  high_pairs <- data.frame()
+  near_dup_pairs <- data.frame()
+  if (!is.null(cor_mat)) {
+    cm <- cor_mat
+    cm[upper.tri(cm, diag = TRUE)] <- NA
+    thr <- 0.95
+    nd_thr <- 0.999
+    idx <- which(abs(cm) > thr, arr.ind = TRUE)
+    if (nrow(idx)) {
+      high_pairs <- data.frame(var1 = rownames(cm)[idx[,1]], var2 = colnames(cm)[idx[,2]], r = cm[idx])
+      # order by |r|
+      high_pairs <- high_pairs[order(-abs(high_pairs$r)), , drop = FALSE]
+    }
+    idx2 <- which(abs(cor_mat) > nd_thr & upper.tri(cor_mat), arr.ind = TRUE)
+    if (nrow(idx2)) {
+      near_dup_pairs <- data.frame(var1 = rownames(cor_mat)[idx2[,1]], var2 = colnames(cor_mat)[idx2[,2]], r = cor_mat[idx2])
+      near_dup_pairs <- near_dup_pairs[order(-abs(near_dup_pairs$r)), , drop = FALSE]
+    }
+  }
+
+  # Rank deficiency (exact linear dependencies)
+  rank_def <- NA
+  if (n > 0 && p > 0) {
+    rank_def <- tryCatch({
+      qr(Xcc)$rank < p
+    }, error = function(e) NA)
+  }
+
+  # Missingness profile
+  miss_perc <- lapply(vars, function(v) {
+    mv <- mean(is.na(X[[v]]))
+    list(var = v, missing_prop = if (is.finite(mv)) mv else NA_real_)
+  })
+
+  # KMO and Bartlett (complete cases, requires psych)
+  KMO <- NULL; bartlett <- NULL
+  if (!is.null(cor_mat) && p >= 2 && n > p) {
+    quiet_pkg("psych")
+    KMO <- tryCatch({
+      k <- psych::KMO(cor(Xcc))
+      list(MSA_overall = unname(k$MSA), MSA_per_var = as.list(unname(k$MSAi)), names = colnames(Xcc))
+    }, error = function(e) NULL)
+    bartlett <- tryCatch({
+      b <- psych::cortest.bartlett(cor(Xcc), n = n)
+      list(chisq = unname(b$chisq), df = unname(b$df), p = unname(b$p.value))
+    }, error = function(e) NULL)
+  }
+
+  list(
+    vars_considered = vars,
+    n_complete = n,
+    p = p,
+    zero_variance = zero_var,
+    near_zero_variance = setdiff(near_zero_var, zero_var),
+    is_cov_positive_definite = is_pd,
+    min_eigenvalue = if (!is.null(eig_vals)) min(eig_vals) else NA_real_,
+    eigenvalues = if (!is.null(eig_vals)) as.numeric(eig_vals) else NULL,
+    condition_number = cond_num,
+    log_determinant = log_det,
+    high_correlation_pairs = high_pairs,
+    near_duplicate_pairs = near_dup_pairs,
+    rank_deficiency = isTRUE(rank_def),
+    missingness = miss_perc,
+    KMO = KMO,
+  bartlett = bartlett,
+  smallest_eigenvectors = smallest_ev,
+  redundancy_R2 = r2_from_others,
+  culprit_candidates = head(culprit_agg, 20)
+  )
+}
+
 # ---------- Step 6 helper: purification + reliability + item/subdim + discriminant validity ----------
 # Thresholds: AVE >= .50, CR >= .70; MI > 3.84; VIF pref < 3 (tolerate < 10).
 step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pref = 3, vif_cut = 10) {
@@ -415,6 +591,9 @@ step6_auto_report <- function(fit, dat, loading_cut = .50, mi_cut = 3.84, vif_pr
 
 if (result$model_provided) {
   quiet_pkg("lavaan")
+  # Compute pre-check diagnostics up-front (included in both success and error cases)
+  precheck <- compute_precheck(df, cleaned_model_syntax)
+  result$precheck <- precheck
   cfa_out <- tryCatch(
     withCallingHandlers({
       # Use sem() so formative (~ or <~) is allowed; works for pure CFA too
@@ -444,7 +623,17 @@ if (result$model_provided) {
     }),
     error = function(e) {
       result$status <<- "cfa_error"
-      list(error = conditionMessage(e))
+      list(
+        error = conditionMessage(e),
+        error_kind = if (grepl("not positive-definite", conditionMessage(e), ignore.case = TRUE)) "covariance_not_pd" else "other",
+        suggestions = c(
+          "Check and remove variables with zero or near-zero variance",
+          "Inspect near-duplicate or highly correlated indicator pairs (> .95)",
+          "Reduce multicollinearity (consider dropping one of a pair, or combining)",
+          "Increase sample size relative to number of indicators",
+          "Ensure the model syntax matches the data (no typos in item names)"
+        )
+      )
     }
   )
   result <- c(result, cfa_out)

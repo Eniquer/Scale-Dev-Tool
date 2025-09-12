@@ -1,8 +1,8 @@
 // Step 6 Data Handling: load simulated or uploaded data, manage reverse scoring
 
+let rawData = []; // current working data (may be reversed)
 (function(){
   document.addEventListener('DOMContentLoaded', init);
-  let rawData = []; // current working data (may be reversed)
   let reversedData = []; // last reversed version stored
   let originalData = []; // pristine original load (simulated or uploaded)
   let columns = []; // item codes
@@ -940,24 +940,30 @@ Output format (strict JSON):
     const outEl = id('efaResults');
     if (!outEl) return;
     const out = resp.output || {};
-    // If R returned an error message, show it
+    // Collect banners for errors/warnings but do not bail out if results exist
+    const banners = [];
     if (resp.stderr || resp.error) {
-      outEl.innerHTML = `<span class="text-danger">R Error: ${escapeHtml(resp.stderr || resp.error)}</span>`;
-      updateOutdatedNotices();
-      return;
+      banners.push(`<div class="alert alert-danger py-1 px-2 small mb-2"><strong>R Error:</strong> ${escapeHtml(resp.stderr || resp.error)}</div>`);
+    }
+    if (out.status && out.status !== 'ok') {
+      const msg = out.message ? ` ${escapeHtml(out.message)}` : '';
+      banners.push(`<div class="alert alert-warning py-1 px-2 small mb-2"><strong>Status:</strong> ${escapeHtml(String(out.status))}${msg}</div>`);
+    }
+    if (out.warning) {
+      banners.push(`<div class="alert alert-warning py-1 px-2 small mb-2"><strong>Warning:</strong> ${escapeHtml(out.warning)}</div>`);
     }
     // If backend indicates no data, surface the message
-    if ((out.status && out.status !== 'ok') || (!out.efa && out.message)) {
+    if (!out.efa) {
       const rows = (out.n_rows!=null? ` (rows: ${out.n_rows}`: '') + (out.n_cols!=null? `, numeric columns: ${out.n_cols})` : (out.n_rows!=null? ')' : ''));
       const msg = out.message || 'No EFA output available.';
-      outEl.innerHTML = `<div class="alert alert-warning py-2 px-3 small mb-0"><strong>EFA not available:</strong> ${escapeHtml(msg)}${rows? ` <span class='text-muted'>${escapeHtml(rows)}</span>`:''}</div>`;
+      outEl.innerHTML = banners.join('') + `<div class="alert alert-warning py-2 px-3 small mb-0"><strong>EFA not available:</strong> ${escapeHtml(msg)}${rows? ` <span class='text-muted'>${escapeHtml(rows)}</span>`:''}</div>`;
       updateOutdatedNotices();
       return;
     }
     const efa = out.efa || {};
     if (!efa.n_factors_selected){
       const msg = out.message ? ` <span class='text-muted'>${escapeHtml(out.message)}</span>` : '';
-      outEl.innerHTML = `<span class="text-muted">No EFA output.</span>${msg}`;
+      outEl.innerHTML = banners.join('') + `<span class="text-muted">No EFA output.</span>${msg}`;
       updateOutdatedNotices();
       return;
     }
@@ -1022,7 +1028,9 @@ Output format (strict JSON):
         });
       }
     }
-    outEl.textContent = lines.join('\n');
+  // Render banners (HTML) + results (escaped text inside <pre>)
+  const textBlock = `<pre class="small mb-0">${escapeHtml(lines.join('\n'))}</pre>`;
+  outEl.innerHTML = banners.join('') + textBlock;
   updateOutdatedNotices();
   }
 
@@ -1038,6 +1046,7 @@ Output format (strict JSON):
     // Switch to rich HTML mode
   cfaResultsEl.classList.add('cfa-rich','fs-6');
 
+  const precheck = out.precheck || {};
     const step6 = out.step6 || {};
     const fm = out.fit_measures || {};
     const loadings = out.loadings || [];
@@ -1208,6 +1217,115 @@ Output format (strict JSON):
       }
       return `${fmt(num)} ${badge(label, cls)}`;
     }
+
+    // 0) Data diagnostics (pre-CFA). Always render if available; most helpful on errors (e.g., non-PD covariance)
+    let preDiag = '';
+    try {
+      if (precheck && Object.keys(precheck).length){
+        const kmo = precheck.KMO || null;
+        const bart = precheck.bartlett || null;
+        const hi = Array.isArray(precheck.high_correlation_pairs)? precheck.high_correlation_pairs : [];
+        const nearDup = Array.isArray(precheck.near_duplicate_pairs)? precheck.near_duplicate_pairs : [];
+        const miss = Array.isArray(precheck.missingness)? precheck.missingness : [];
+        const zv = Array.isArray(precheck.zero_variance)? precheck.zero_variance : (precheck.zero_variance||[]);
+        const nzv = Array.isArray(precheck.near_zero_variance)? precheck.near_zero_variance : (precheck.near_zero_variance||[]);
+        const eig = Array.isArray(precheck.eigenvalues)? precheck.eigenvalues : [];
+        const sev = Array.isArray(precheck.smallest_eigenvectors)? precheck.smallest_eigenvectors : [];
+        const r2red = Array.isArray(precheck.redundancy_R2)? precheck.redundancy_R2 : [];
+        const culprits = Array.isArray(precheck.culprit_candidates)? precheck.culprit_candidates : [];
+
+        const boolBadge = (b) => b===true? '<span class="badge bg-success">Yes</span>' : b===false? '<span class="badge bg-danger">No</span>' : '<span class="badge bg-secondary">NA</span>';
+
+        let rows = [];
+        rows.push({ metric:'Covariance PD', value: boolBadge(precheck.is_cov_positive_definite), note: `min eig=${fmt(precheck.min_eigenvalue)}, cond#=${fmt(precheck.condition_number)}` });
+        if (precheck.log_determinant && (precheck.log_determinant.logabsdet!=null)){
+          rows.push({ metric:'log|Σ|', value: fmt(precheck.log_determinant.logabsdet), note: `sign=${escapeHtml(String(precheck.log_determinant.sign))}` });
+        }
+        rows.push({ metric:'Zero variance', value: (zv && zv.length? zv.map(v=>`<code>${escapeHtml(String(v))}</code>`).join(' ') : '<span class="text-muted">None</span>'), note:'' });
+        rows.push({ metric:'Near-zero variance', value: (nzv && nzv.length? nzv.map(v=>`<code>${escapeHtml(String(v))}</code>`).join(' ') : '<span class="text-muted">None</span>'), note:'' });
+        if (eig && eig.length){
+          const ev = eig.map(e=> fmt(e)).join(', ');
+          rows.push({ metric:'Eigenvalues(Σ)', value: `<span class="small">[${ev}]</span>`, note:'' });
+        }
+        rows.push({ metric:'Rank deficiency', value: boolBadge(precheck.rank_deficiency), note: '' });
+
+        preDiag += '<h5 class="mb-1">0) Data Diagnostics (pre‑CFA)</h5>' +
+          table([
+            { key:'metric', label:'Metric' },
+            { key:'value', label:'Value' },
+            { key:'note', label:'Note' }
+          ], rows);
+
+        // High correlation pairs
+        if (hi.length){
+          preDiag += '<div class="fw-bold mt-2">High Correlations (|r| > .95)</div>' + table([
+            { key:'var1', label:'Var 1' }, { key:'var2', label:'Var 2' }, { key:'r', label:'r', render:r=> fmt(r.r) }
+          ], hi.slice(0, 20));
+        }
+        if (nearDup.length){
+          preDiag += '<div class="fw-bold mt-2">Near‑Duplicate Pairs (|r| > .999)</div>' + table([
+            { key:'var1', label:'Var 1' }, { key:'var2', label:'Var 2' }, { key:'r', label:'r', render:r=> fmt(r.r) }
+          ], nearDup.slice(0, 20));
+        }
+
+        // Missingness table
+        if (miss.length){
+          preDiag += '<div class="fw-bold mt-2">Missingness by Variable</div>' + table([
+            { key:'var', label:'Variable' }, { key:'missing_prop', label:'Missing %', render:r=> `${(Number(r.missing_prop||0)*100).toFixed(1)}%` }
+          ], miss);
+        }
+
+        // Redundancy R² per variable
+        if (r2red.length){
+          preDiag += '<div class="fw-bold mt-2">Per‑Variable Redundancy (R² regressed on others)</div>' + table([
+            { key:'var', label:'Variable' }, { key:'R2_other_vars', label:'R²', render:r=> warnCell(r.R2_other_vars, v=> v>=.99? 'issue' : v>=.95? 'warn':'ok', {dir:'gte', good:.95, accept:.99}) }
+          ], r2red.sort((a,b)=> (b.R2_other_vars||0) - (a.R2_other_vars||0)).slice(0, 30));
+        }
+
+        // Smallest eigenvectors top contributors
+        if (sev.length){
+          sev.forEach((comp, idx)=>{
+            const rowsS = Array.isArray(comp.top)? comp.top.map(t=> ({ var: t.var, abs_weight: t.abs_weight })) : [];
+            preDiag += `<div class="fw-bold mt-2">Smallest Eigenvector #${idx+1} (λ=${fmt(comp.eigenvalue)})</div>` + table([
+              { key:'var', label:'Variable' }, { key:'abs_weight', label:'|weight|', render:r=> fmt(r.abs_weight) }
+            ], rowsS);
+          });
+        }
+
+        // Culprit candidates aggregation
+        if (culprits.length){
+          preDiag += '<div class="fw-bold mt-2">Culprit Candidates (aggregated)</div>' + table([
+            { key:'var', label:'Variable' },
+            { key:'score_max', label:'Max |weight|', render:r=> fmt(r.score_max) },
+            { key:'score_sum', label:'Sum |weight|', render:r=> fmt(r.score_sum) },
+            { key:'R2_other_vars', label:'R² (others)', render:r=> fmt(r.R2_other_vars) }
+          ], culprits);
+          preDiag += '<div class="small text-secondary">High |weight| in smallest eigenvectors and high R² indicate near-linear dependence; consider removing or combining one of the top variables.</div>';
+        }
+
+        // KMO & Bartlett
+        if (kmo){
+          preDiag += '<div class="fw-bold mt-2">KMO</div>' + table([
+            { key:'metric', label:'Metric' }, { key:'value', label:'Value' }
+          ], [
+            { metric:'Overall MSA', value: fmt(kmo.MSA_overall) }
+          ]);
+          const perVar = Array.isArray(kmo.MSA_per_var)? kmo.MSA_per_var : (kmo.MSA_per_var ? Object.values(kmo.MSA_per_var) : []);
+          const names = Array.isArray(kmo.names)? kmo.names : [];
+          if (perVar && perVar.length){
+            const rowsK = perVar.map((v,i)=> ({ var: names[i] || String(i+1), msa: v }));
+            preDiag += table([
+              { key:'var', label:'Var' }, { key:'msa', label:'MSA', render:r=> warnCell(r.msa, v=> v>=.80? 'ok' : v>=.60? 'warn':'issue', {dir:'gte', good:.80, accept:.60}) }
+            ], rowsK);
+          }
+        }
+        if (bart){
+          preDiag += '<div class="fw-bold mt-2">Bartlett’s Test of Sphericity</div>' + table([
+            { key:'chisq', label:'Chi‑sq' }, { key:'df', label:'df' }, { key:'p', label:'p' }
+          ], [ { chisq: fmt(bart.chisq), df: fmt(bart.df), p: fmt(bart.p) } ]);
+        }
+      }
+    } catch(e){ /* silent */ }
 
     // 1) Goodness of Fit
   let section1 = `<h5 class="mb-1">1) Goodness of Fit of the Measurement Model ${fitBadge}</h5>`;
@@ -1547,9 +1665,20 @@ Output format (strict JSON):
       revisionSection += '<div class="small text-secondary">Apply judgment: retain indicators essential for content validity even if flagged.</div>';
     }
 
-    let html = section1 + section2 + section3 + section4 + summary + revisionSection;
-    if (out.warning){ html = `<div class='alert alert-warning small py-1 mb-2'><strong>R Warning:</strong> ${escapeHtml(out.warning)}</div>` + html; }
-    if (out.error){ html += `<div class='alert alert-danger small py-1 mt-2 mb-0'>CFA Error: ${escapeHtml(out.error)}</div>`; }
+    // Build alerts first so errors appear at the top
+    let errorAlert = '';
+    if (out.error){
+      let extra = '';
+      if (out.error_kind){ extra += `<div><code>error_kind:</code> ${escapeHtml(String(out.error_kind))}</div>`; }
+      if (Array.isArray(out.suggestions) && out.suggestions.length){
+        extra += '<div class="mt-1"><strong>Suggestions</strong><ul class="mb-0 small">'+ out.suggestions.map(s=> `<li>${escapeHtml(String(s))}</li>`).join('') + '</ul></div>';
+      }
+      errorAlert = `<div class='alert alert-danger small py-1 mb-2'>CFA Error: ${escapeHtml(out.error)}${extra}</div>`;
+    }
+    let warningAlert = out.warning ? `<div class='alert alert-warning small py-1 mb-2'><strong>R Warning:</strong> ${escapeHtml(out.warning)}</div>` : '';
+
+  const includePreDiag = !!out.error; // show diagnostics only when there is an error
+  let html = errorAlert + warningAlert + (includePreDiag ? preDiag : '') + section1 + section2 + section3 + section4 + summary + revisionSection;
     cfaResultsEl.innerHTML = html;
     // Inject download button (once)
     let dlWrap = document.getElementById('cfaDownloadWrapper');
@@ -1662,3 +1791,4 @@ function removeColumn(col){
 }
 
 // todo loaded saved csv table didnt get into SEM results. only reloaded
+// todo could be the same: changing the original dat. dpoesnt preview the original data when available
