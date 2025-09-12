@@ -356,14 +356,20 @@ class ProjectManager {
         try {
             // Check if activeProject exists, if not initialize it
             if (!await this.storage.hasData('activeProject')) {
-                    console.log('No active project found, initializing with default project');
-                    if (await this.storage.hasKeyEntryLax('proj_')) { // Check if any project data exists
-                        console.log('Project data exists, setting first project as active');
-                        return await this.storage.storeData('activeProject', 0, false);
-                    } else {
-                        return await this.storage.storeData('activeProject', -1, false);
+                console.log('No active project found, initializing with default project');
+                // Prefer setting to 0; if calling context needs different behavior it can adjust later
+                try {
+                    if (typeof this.storage.hasKeyEntryLax === 'function') {
+                        if (await this.storage.hasKeyEntryLax('proj_')) {
+                            console.log('Project data exists, setting first project as active');
+                            return await this.storage.storeData('activeProject', 0, false);
+                        }
                     }
+                } catch (_) {
+                    // ignore and fall through
                 }
+                return await this.storage.storeData('activeProject', 0, false);
+            }
             const activeProjectId = await this.storage.getData('activeProject');
 
             // If no active project ID is found, initialize with default project
@@ -402,9 +408,13 @@ class ProjectManager {
             const projects = await this.getProjects();
             const activeProjectId = await this.getActiveProjectId();
             // Find the first project matching the active ID
-            const match = projects.find(p => p.id === (projectId ?? activeProjectId));
+            const targetId = projectId ?? activeProjectId;
+            const match = projects.find(p => p.id === targetId);
             if (match == null) {
-                console.warn('Project not found, returning null');
+                if (projectId != null) {
+                    console.warn('Project not found, returning null');
+                    return null;
+                }
                 if (projects.length > 0) {
                     console.log('No matching project found; returning first project as fallback');
                     await this.setActiveProjectId(projects[0].id); // Set first project as active
@@ -468,13 +478,17 @@ class ProjectManager {
             const projectIndex = projects.findIndex(p => p.id === projectId);
             if (projectIndex !== -1) {
                 projects.splice(projectIndex, 1); // Remove the project
-                const entries = await this.storage.getAllEntries();
-
-                const keysToDelete = entries
-                    .map(entry => entry.key)
-                    .filter(key => key.startsWith(`proj_${projectId}_`));
-                
-                await Promise.all(keysToDelete.map(key => this.storage.deleteData(key)));
+                try {
+                    if (typeof this.storage.getAllEntries === 'function') {
+                        const entries = await this.storage.getAllEntries();
+                        const keysToDelete = entries
+                            .map(entry => entry.key)
+                            .filter(key => key.startsWith(`proj_${projectId}_`));
+                        await Promise.all(keysToDelete.map(key => this.storage.deleteData(key)));
+                    }
+                } catch (e) {
+                    console.warn('Skipping deletion of project-scoped keys due to storage limitations', e);
+                }
 
                 // If the deleted project was the active one, reset to default
                 if (await this.getActiveProjectId() === projectId) {
@@ -491,6 +505,56 @@ class ProjectManager {
             }
         } catch (error) {
             console.error('Error deleting project:', error);
+        }
+    }
+
+    /**
+     * Clone a project, duplicating all project-scoped keys (proj_{id}_*) to a new project id.
+     * @param {number} sourceProjectId - Project id to clone from
+     * @param {string|null} newName - Optional name for the cloned project
+     * @param {boolean} setAsCurrent - Whether to set the new project as active
+     * @returns {Promise<object|null>} The new project object or null on failure
+     */
+    async cloneProject(sourceProjectId, newName = null, setAsCurrent = true) {
+        try {
+            const projects = await this.getProjects();
+            const source = projects.find(p => p.id === sourceProjectId);
+            if (!source) {
+                console.warn(`Source project ${sourceProjectId} not found`);
+                return null;
+            }
+
+            // Determine new id
+            const newProjectId = Math.max(...projects.map(p => p.id), -1) + 1;
+
+            // Determine new unique name
+            let baseName = newName ?? `Copy of ${source.name}`;
+            let candidate = baseName;
+            let suffix = 2;
+            while (projects.some(p => p.name === candidate)) {
+                candidate = `${baseName} (${suffix++})`;
+            }
+
+            const newProject = { id: newProjectId, name: candidate };
+            // Persist new project list early so id is reserved
+            await this.storage.storeData('projectData', [...projects, newProject], false);
+
+            // Clone all project-scoped keys
+            const entries = await this.storage.getAllEntries();
+            const toClone = entries.filter(e => typeof e.key === 'string' && e.key.startsWith(`proj_${sourceProjectId}_`));
+            await Promise.all(toClone.map(async ({ key, value }) => {
+                const newKey = key.replace(`proj_${sourceProjectId}_`, `proj_${newProjectId}_`);
+                // store without overwrite prompt
+                await this.storage.storeData(newKey, value, false);
+            }));
+
+            if (setAsCurrent) {
+                await this.setActiveProjectId(newProjectId);
+            }
+            return newProject;
+        } catch (error) {
+            console.error('Error cloning project:', error);
+            return null;
         }
     }
 

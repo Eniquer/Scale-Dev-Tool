@@ -437,7 +437,31 @@ async function populateProjectsModal() {
             btnDiv.appendChild(selectBtn);
         }
 
-        const delBtn = document.createElement('button');
+        // Clone button (available for any project)
+        const cloneBtn = document.createElement('button');
+        cloneBtn.className = 'btn btn-sm btn-outline-primary me-2';
+        cloneBtn.innerHTML = '<i class="bi bi-files"></i>';
+        cloneBtn.setAttribute('aria-label', 'Clone project');
+        cloneBtn.onclick = async () => {
+            const confirmed = await customConfirm({
+                title: 'Clone Project',
+                message: `Create a duplicate of '${proj.name}'?`,
+                confirmText: 'Clone',
+                cancelText: 'Cancel'
+            });
+            if (!confirmed) return;
+            const newProj = await window.projects.cloneProject(proj.id);
+            if (newProj) {
+                window.displayInfo('success', `Cloned to '${newProj.name}'`);
+                // Navigate to step 1 of new active project
+                window.location.href = '/step/1';
+            } else {
+                window.displayInfo('error', 'Could not clone project');
+            }
+        };
+        btnDiv.appendChild(cloneBtn);
+
+    const delBtn = document.createElement('button');
         delBtn.className = 'btn btn-sm btn-outline-danger';
         // Use icon instead of text
         delBtn.innerHTML = '<i class="bi bi-trash"></i>';
