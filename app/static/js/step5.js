@@ -59,9 +59,9 @@
 		}
 		host.innerHTML = [
 			`<div class="small">Items: ${n}</div>`,
-			`<div class="small">Ratio rule (3:1-10:1): ${ratioMin} - ${ratioMax}</div>`,
-			`<div class="small">Absolute heuristic range: ${absMin} - ${absMax}</div>`,
-			`<div class="small">Decided range: ${decidedLower} - ${decidedUpper}</div>`
+			`<div class="small">Ratio rule (3:1-10:1): ${ratioMin} - ${ratioMax} Respondents</div>`,
+			`<div class="small">Absolute heuristic range: ${absMin} - ${absMax} Respondents</div>`,
+			`<div class="small">Decided range: ${decidedLower} - ${decidedUpper} Respondents</div>`
 		].join('');
 	}
 

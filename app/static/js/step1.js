@@ -215,7 +215,7 @@ async function getDefinitions(forceNewDefs = false) {
     const getDefinitionsPrompt = `
     You are assisting with the development of a conceptual definition following MacKenzie et al. (2011), which requires definitions to be clear, concise, theoretically grounded, and distinct from related constructs. Definitions should specify the essential attributes of the construct and its domain (e.g., property type, target entity, dimensionality if mentioned).
 
-    Given the construct name "${constructData.constructName}" and the rough initial definition provided below, retrieve 3-5 concise, relevant academic definitions (maximum 1-2 sentences each) from well-known published literature in this area.
+    Given the construct name "${constructData.constructName}" and the rough initial definition provided below, retrieve 3-5 concise, relevant academic definitions (maximum 1-2 sentences each) from well-known published literature in this area. Additionally include 1-2 definitions of closely related constructs that capture similar concepts. You don't have to be limited to the exact construct name, but ensure the definitions are relevant to the construct's core idea.
 
     Construct name:  
     "${constructData.constructName}"
@@ -1063,7 +1063,7 @@ Given the construct definition, return:
         }`;
     try {
         showLoading();
-        const response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
+        const response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}],"search");
         
         try{
             const match = response[0].match(/```json\s*({[\s\S]*?})\s*```/);
@@ -1465,7 +1465,7 @@ Return your answer in **strict JSON format**:
 }`;
   try {
     showLoading();
-    const response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}]);
+    const response = await window.sendChat(prompt,[{"role": "system", "content": "You are a JSON-only output assistant. Return only valid JSON in your response. No markdown, no commentary, no wrappers."}],"search");
     try {
         const match = response[0].match(/```json\s*({[\s\S]*?})\s*```/);
         let responseJson = null;

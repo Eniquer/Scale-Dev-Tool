@@ -147,7 +147,6 @@ async function showAIRaterGenModal() {
 init()
 
 // todo handle unidimensional
-// todo no reflective selectionn on step4 when unidimensional
 
 async function init(){
     step1Data = await window.dataStorage.getData('data_step_1');
@@ -1349,16 +1348,3 @@ function exportAnovaCSV(rows) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
