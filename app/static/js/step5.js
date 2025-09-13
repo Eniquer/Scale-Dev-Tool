@@ -890,6 +890,8 @@ function renderLikertTable(rawRows, fromStorage){
 					return { ...col, editor: 'input' };
 				}),
 			layout: 'fitData',
+			pagination: tabData.length>50? 'local': false,
+			paginationSize: 50,
 			reactiveData: true,
 			resizableColumns: true,
 			movableColumns: true,

@@ -471,11 +471,11 @@ Output format (strict JSON):
     if (!rawData.length){ host.innerHTML='<div class="text-muted small">No rows.</div>'; return; }
     const tableRows = rawData.map((r,i)=> ({ _idx: i+1, ...r }));
     const cols = ['_idx', ...columns].map(c=> ({
-      title:c + (isColumnReversed(c)? ' *' : ''),
-      field:c,
+      title: c === '_idx' ? '#' : (c + (isColumnReversed(c)? ' *' : '')),
+      field: c,
       hozAlign: 'center',
-      frozen: c==='_idx',
-      headerTooltip: isColumnReversed(c)? 'Reversed relative to original' : ''
+      frozen: c === '_idx',
+      headerTooltip: c === '_idx' ? '' : (isColumnReversed(c)? 'Reversed relative to original' : '')
     }));
     if (window.step6TableInstance){ try { window.step6TableInstance.destroy(); } catch(e){} }
     if (window.Tabulator){
