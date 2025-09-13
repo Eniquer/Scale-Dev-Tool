@@ -252,8 +252,18 @@ Output format (strict JSON):
         throw parseErr;
       }
       if (!parsed || typeof parsed !== 'object'){ throw new Error('Empty AI response'); }
-      const candidates = Array.isArray(parsed.reverseCandidates)? parsed.reverseCandidates.filter(c=> columns.includes(c)) : [];
-      aiReverseSuggestion = { reverseCandidates: candidates, reasons: parsed.reasons||{}, overallRationale: parsed.overallRationale||'' };
+      const full = Array.isArray(parsed.reverseCandidates)? parsed.reverseCandidates : [];
+      const candidates = full.filter(c=> columns.includes(c));
+      const missing = full.filter(c=> !columns.includes(c));
+      aiReverseSuggestion = {
+        reverseCandidates: candidates, // present in current table
+        missingCandidates: missing,    // suggested but not found in table
+        reasons: parsed.reasons||{},
+        overallRationale: parsed.overallRationale||''
+      };
+      if (missing.length){
+        window.displayInfo?.('warning', `${missing.length} suggested item code(s) not found in current data and were not applied.`);
+      }
       persistState();
       renderAiReverseSuggestion();
     } catch(err){
@@ -274,8 +284,8 @@ Output format (strict JSON):
     const body = id('aiReverseSuggestionBody');
     if (!card || !body) return;
     if (!aiReverseSuggestion){ card.classList.add('d-none'); return; }
-    const { reverseCandidates=[], reasons={}, overallRationale='' } = aiReverseSuggestion;
-    const candidates = reverseCandidates.filter(c=> columns.includes(c));
+  const { reverseCandidates=[], missingCandidates=[], reasons={}, overallRationale='' } = aiReverseSuggestion;
+  const candidates = reverseCandidates.filter(c=> columns.includes(c));
     const htmlParts = [];
     htmlParts.push(`<div class="small mb-1"><strong>Suggested Reverse Items (${candidates.length})</strong></div>`);
     if (candidates.length){
@@ -286,6 +296,10 @@ Output format (strict JSON):
     if (reasons && Object.keys(reasons).length){
       htmlParts.push('<div class="small"><strong>Reasons</strong></div>');
       htmlParts.push('<ul class="small mb-2 ps-3">'+ Object.entries(reasons).filter(([k])=> candidates.includes(k)).map(([k,v])=>`<li><code>${k}</code>: ${escapeHtml(String(v))}</li>`).join('') +'</ul>');
+    }
+    if (Array.isArray(missingCandidates) && missingCandidates.length){
+      htmlParts.push('<div class="alert alert-warning py-1 px-2 small mb-2"><strong>Not in table:</strong> The following suggested code(s) are not present in the current dataset and will not be applied.</div>');
+      htmlParts.push(`<div class="mb-2 small">${missingCandidates.map(c=>`<span class='badge bg-secondary me-1'>${c}</span>`).join('')}</div>`);
     }
     if (overallRationale){
       htmlParts.push(`<div class="small fst-italic text-muted">${escapeHtml(overallRationale)}</div>`);
