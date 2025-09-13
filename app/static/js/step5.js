@@ -7,6 +7,25 @@
 // Plus stability message if construct not stable over time (from Step 1 Panel 4).
 (function(){
 	document.addEventListener('DOMContentLoaded', init);
+	// Ensure loading helpers exist early in case app.js top-level await delays them
+	(function ensureLoadingHelpers(){
+		if (typeof window.showLoading === 'function' && typeof window.hideLoading === 'function') return;
+		const install = ()=>{
+			const overlay = document.getElementById('loadingOverlay');
+			if (!overlay) return;
+			if (typeof window.showLoading !== 'function'){
+				window.showLoading = function(){ try { overlay.classList.remove('visually-hidden'); overlay.style.opacity='1'; } catch(e){} };
+			}
+			if (typeof window.hideLoading !== 'function'){
+				window.hideLoading = function(){ try { overlay.style.opacity='0'; setTimeout(()=>{ try { overlay.classList.add('visually-hidden'); } catch(_){} }, 500); } catch(e){} };
+			}
+		};
+		if (document.readyState === 'loading'){
+			document.addEventListener('DOMContentLoaded', install, { once: true });
+		} else {
+			install();
+		}
+	})();
 	let items = [];
 	let decidedLower = null;
 	let decidedUpper = null;
@@ -414,6 +433,10 @@ let personas = [];
 
 
 	async function setup(){
+		// Global loading guard to coordinate overlays across steps
+		const beginLoading = ()=>{ window._globalLoadingCount = (window._globalLoadingCount||0)+1; if (window._globalLoadingCount===1){ try { window.showLoading && window.showLoading(); } catch(e){} } };
+		const endLoading = ()=>{ window._globalLoadingCount = Math.max(0,(window._globalLoadingCount||0)-1); if (window._globalLoadingCount===0){ try { window.hideLoading && window.hideLoading(); } catch(e){} } };
+		beginLoading();
 		const btn = document.getElementById('genPersonasBtn');
 		const likertSimBtn = document.getElementById('likertSimBtn');
 		// Create / locate cancel button for likert simulation
@@ -491,8 +514,13 @@ let personas = [];
 		}
 		window.addEventListener('step5:mismatchChanged', enforceAppendEligibility);
 
-		await loadStoredPersonas();
-		const storedLikert = await loadLikertAnswers();
+		try {
+			await loadStoredPersonas();
+		} finally {}
+		let storedLikert = null;
+		try {
+			storedLikert = await loadLikertAnswers();
+		} finally {}
 		// Load existing prompt addon & likert scale if stored
 		try {
 			const existingAll = await window.dataStorage.getData(STORAGE_KEY) || {};
@@ -527,6 +555,7 @@ let personas = [];
 			window.displayInfo && window.displayInfo('warning','Questionnaire changed since responses were saved. Review item alignment.');
 		}
 		enforceAppendEligibility();
+		endLoading();
 	function showQuestionnaireMismatchWarning(){
 		const host = document.getElementById('answersTable');
 		if (!host) return;

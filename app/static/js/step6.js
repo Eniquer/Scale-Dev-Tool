@@ -2,6 +2,25 @@
 
 let rawData = []; // current working data (may be reversed)
 (function(){
+  // Ensure loading helpers exist early (app.js may be delayed by top-level await)
+  (function ensureLoadingHelpers(){
+    if (typeof window.showLoading === 'function' && typeof window.hideLoading === 'function') return;
+    const install = ()=>{
+      const overlay = document.getElementById('loadingOverlay');
+      if (!overlay) return; // wait for DOM if not present
+      if (typeof window.showLoading !== 'function'){
+        window.showLoading = function(){ try { overlay.classList.remove('visually-hidden'); overlay.style.opacity = '1'; } catch(e){} };
+      }
+      if (typeof window.hideLoading !== 'function'){
+        window.hideLoading = function(){ try { overlay.style.opacity='0'; setTimeout(()=>{ try { overlay.classList.add('visually-hidden'); } catch(_){} }, 500); } catch(e){} };
+      }
+    };
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', install, { once: true });
+    } else {
+      install();
+    }
+  })();
   document.addEventListener('DOMContentLoaded', init);
   let reversedData = []; // last reversed version stored
   let originalData = []; // pristine original load (simulated or uploaded)
@@ -22,12 +41,17 @@ let rawData = []; // current working data (may be reversed)
   let aiReverseSuggestion = null; // persisted AI suggestion for reverse candidates
 
   async function init(){
-    bindUI();
-    await restorePersisted();
-    // Only auto-load simulated if simulated source currently selected
-    if (source === 'simulated' && !rawData.length) await loadSimulated();
-    // Ensure correct UI visibility for upload block after restore
-    switchSource(source);
+    // Global loading guard (supports nested calls across modules)
+    const beginLoading = ()=>{ window._globalLoadingCount = (window._globalLoadingCount||0)+1; if (window._globalLoadingCount===1){ try { window.showLoading && window.showLoading(); } catch(e){} } };
+    const endLoading = ()=>{ window._globalLoadingCount = Math.max(0,(window._globalLoadingCount||0)-1); if (window._globalLoadingCount===0){ try { window.hideLoading && window.hideLoading(); } catch(e){} } };
+    beginLoading();
+    try {
+      bindUI();
+      await restorePersisted();
+      // Only auto-load simulated if simulated source currently selected
+      if (source === 'simulated' && !rawData.length) await loadSimulated();
+      // Ensure correct UI visibility for upload block after restore
+      switchSource(source);
   await initLavaanEditor();
     updateViewButtons();
   // Ensure result containers have at least empty placeholders so outdated banners can attach even before first run
@@ -64,6 +88,9 @@ let rawData = []; // current working data (may be reversed)
       });
 
     } catch(e){ /* silent */ }
+    } finally {
+      endLoading();
+    }
   }
 
   function bindUI(){
