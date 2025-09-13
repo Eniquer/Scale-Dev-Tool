@@ -59,7 +59,7 @@ function setupBulkItemImportUI(){
                     <label class="form-check-label small" for="bulkSkipDuplicates">Skip duplicates</label>
                 </div>
             </div>
-            <textarea id="bulkItemsInput" class="form-control form-control-sm mb-2" rows="6" placeholder='Examples:\n[{"item":"I enjoy my work","subdimension":"Engagement"}]\nor lines:\nI enjoy my work\nI feel valued\n'></textarea>
+            <textarea id="bulkItemsInput" class="form-control form-control-sm mb-2" rows="6" placeholder='Examples:\nI enjoy my work\nI feel valued\nor pairs (item; subdimension):\nI enjoy my work; Engagement\nI feel valued; Recognition\n'></textarea>
             <div id="bulkPreviewArea" class="small"></div>
         </div>
     </div>`;
@@ -151,17 +151,35 @@ function parseBulkItems(raw, defaultSubdimensionId='', skipDuplicates=true){
         if (Array.isArray(j)) { jsonTried=true; data=j; }
     } catch(_){ /* ignore */ }
     if (!jsonTried){
-        // If it looks like CSV (has commas or tabs) with headers
+        // If it looks like CSV (has commas or tabs) with headers OR semicolon pairs without headers
         const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(l=>l);
         if (lines.length){
-            if (lines[0].split(/[\t,;]/).length>1){
-                const delim = lines[0].includes('\t')?'\t': (lines[0].includes(';')?';':',');
-                const headers = lines[0].split(delim).map(h=>h.trim().toLowerCase());
-                for (let i=1;i<lines.length;i++){
-                    const cols = lines[i].split(delim).map(c=>c.trim());
-                    const obj={};
-                    headers.forEach((h,idx)=>{ obj[h]=cols[idx]; });
-                    data.push(obj);
+            const first = lines[0];
+            const looksDelimited = first.split(/[\t,;]/).length>1;
+            if (looksDelimited){
+                // Detect header-based vs pair-based
+                const hasHeaderKeywords = /\b(item|text|subdimension|subdim|dimension)\b/i.test(first);
+                if (hasHeaderKeywords){
+                    // Headered CSV/TSV/Semicolon
+                    const delim = first.includes('\t')?'\t': (first.includes(';')?';':',');
+                    const headers = first.split(delim).map(h=>h.trim().toLowerCase());
+                    for (let i=1;i<lines.length;i++){
+                        const cols = lines[i].split(delim).map(c=>c.trim());
+                        const obj={};
+                        headers.forEach((h,idx)=>{ obj[h]=cols[idx]; });
+                        data.push(obj);
+                    }
+                } else {
+                    // Pair style without headers. Prefer semicolon; fallback to comma or tab if present.
+                    const delim = first.includes(';')?';': (first.includes('\t')?'\t':',');
+                    for (const line of lines){
+                        const parts = line.split(delim).map(p=>p.trim());
+                        if (parts.length >= 2){
+                            data.push({ item: parts[0], subdimension: parts[1] });
+                        } else if (parts.length === 1) {
+                            data.push({ item: parts[0] });
+                        }
+                    }
                 }
             } else {
                 // Plain lines
