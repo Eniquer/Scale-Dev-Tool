@@ -223,10 +223,10 @@ async function extractResults(step) {
                 results = {
                     constructName: stepData?.panel1?.constructName,
                     savedDefinitions: stepData?.panel2?.savedDefinition,
-                    property: stepData?.panel3.property,
-                    entity: stepData?.panel3.entity,
-                    propertyExplanation: stepData?.panel3.propertyExplanation,
-                    entityExplanation: stepData?.panel3.entityExplanation,
+                    property: stepData?.panel3?.property,
+                    entity: stepData?.panel3?.entity,
+                    propertyExplanation: stepData?.panel3?.propertyExplanation,
+                    entityExplanation: stepData?.panel3?.entityExplanation,
                     ...stepData?.panel4,
                     ...stepData?.panel5
                 }
