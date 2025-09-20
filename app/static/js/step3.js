@@ -11,6 +11,11 @@ let aiGenInProgress = false;
 let aiGenAbortRequested = false;
 // Persisted group description for AI rater persona generation
 let persistedGroupDescription = 'a pool of experts with occupations as professors, PHD candidates, experts in the field and researchers.';
+// NEW: optional extra column
+let extraColumnName = null;
+let extraColumnData = {}; // { itemId: string }
+// NEW: description for extra column header tooltip
+let extraColumnDescription = null;
 
 function ensureAbortGenerationButton() {
     const overlay = document.getElementById('loadingOverlay');
@@ -52,8 +57,7 @@ async function ensureAIRaterGenModal() {
         constructDefinition = step1Data?.panel2?.savedDefinition || "";
         constructName = step1Data?.panel1?.constructName || "";
 
-            generalExpertPrompt = `a pool of Experts in ${constructName}:${constructDefinition}
-With occupations as professors, PHD candidates, experts in the field and researchers.`
+            generalPersonaPrompt = `a pool of citizens experiencing and understanding the concept of ${constructName}:${constructDefinition}.`
         const wrapper = document.createElement('div');
         wrapper.innerHTML = `
         <div class="modal fade" id="aiRaterGenModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -70,7 +74,7 @@ With occupations as professors, PHD candidates, experts in the field and researc
                         </div>
                         <div class="mb-2">
                             <label for="aiRaterGroupDesc" class="form-label small mb-1">Additional context (optional)</label>
-                            <textarea class="form-control small" id="aiRaterGroupDesc" rows="3" placeholder="${generalExpertPrompt}">${generalExpertPrompt}</textarea>
+                            <textarea class="form-control small" id="aiRaterGroupDesc" rows="3" placeholder="${generalPersonaPrompt}">${generalPersonaPrompt}</textarea>
                         </div>
                         <div class="form-text small text-secondary">Context can shape persona style (e.g., senior clinical psychologists focused on ethics).</div>
                     </div>
@@ -82,7 +86,7 @@ With occupations as professors, PHD candidates, experts in the field and researc
             </div>
         </div>`;
         document.body.appendChild(wrapper);
-        return generalExpertPrompt
+        return generalPersonaPrompt
 }
 
 async function showAIRaterGenModal() {
@@ -162,11 +166,23 @@ async function init(){
         persistedGroupDescription = step3Data?.aiRaterGroupDescription;
     }
 
+    if (typeof step3Data.extraColumnName === 'string' && step3Data.extraColumnName.trim()) {
+        extraColumnName = step3Data.extraColumnName;
+    }
+    if (typeof step3Data.extraColumnDescription === 'string' && step3Data.extraColumnDescription.trim()) {
+        extraColumnDescription = step3Data.extraColumnDescription;
+    }
+    if (step3Data.extraColumnData && typeof step3Data.extraColumnData === 'object') {
+        extraColumnData = step3Data.extraColumnData;
+    }
+
     wireRaterUI();
     renderRatingTable();
+    wireExtraColumnUI(); // NEW
 
     // Inject analysis panel UI and wire actions
     wireAnalysisUI();
+    loadSavedAnovaResults();
 
     // Auto-load saved ANOVA results if present
     loadSavedAnovaResults();
@@ -185,13 +201,19 @@ async function saveStep3Data() {
     const idx = raters.findIndex(r => r.id === activeRaterId);
     if (idx !== -1) raters[idx].ratings = ratings;
     const stored = await window.dataStorage.getData('data_step_3') || {};
-    const merged = { ...stored, raters, activeRaterId, aiRaterGroupDescription: persistedGroupDescription };
+    const merged = { ...stored, raters, activeRaterId, aiRaterGroupDescription: persistedGroupDescription,
+        extraColumnName, extraColumnDescription, extraColumnData }; // NEW
     return window.dataStorage.storeData('data_step_3', merged, false);
 }
 
 function buildRows() {
     return items.map(it => {
         const row = { id: it.id, Item: it.text };
+        // NEW: extra column now behaves like a numeric dimension (1-5) stored in ratings under its name
+        if (extraColumnName) {
+            const rawExtra = ratings[it.id] && ratings[it.id][extraColumnName] !== undefined ? ratings[it.id][extraColumnName] : null;
+            row[extraColumnName] = (rawExtra === '' || rawExtra === null || rawExtra === undefined) ? null : Number(rawExtra);
+        }
         subdimensions.forEach(sd => {
             const key = sd.id; // internal key is id
             const raw = (ratings[it.id] && ratings[it.id][key] !== undefined) ? ratings[it.id][key] : null;
@@ -546,7 +568,8 @@ Persona (short description): ${personaDesc}
 Inputs (randomized order):
 
     Subdimensions (with concise descriptions):
-    ${shuffledSubdimensions.map(sd => `Dimensionname: ${sd.name}, Definition: ${sd.definition}`).join(';\n ')}
+    ${shuffledSubdimensions.map(sd => `Dimensionname: ${sd.name}, Definition: ${sd.definition}`).join(';}\n ')}${extraColumnName ? `;
+    Dimensionname: ${extraColumnName}, Definition: ${extraColumnDescription ? extraColumnDescription.replace(/"/g,'\\"') : ''}` : ''}
 
     Items (array of objects with id and text):
     ${shuffledItems.map(it => `{"id": "${it.id}", "text": "${esc(it.text)}"}`).join(',\n')}
@@ -609,6 +632,7 @@ Output schema (JSON only, no extra text, no markdown):
                         const id = newId();
                         const name = `AI rater ${seqNum}`;
                         const rawRatings = (parsed.ratings && typeof parsed.ratings === 'object') ? parsed.ratings : {};
+                        // Treat extraColumnName (if any) as just another subdimension already embedded in ratings
                         // Transform name-keyed ratings => id-keyed ratings
                         const nameToId = Object.fromEntries(subdimensions.map(sd => [sd.name, sd.id]));
                         const transformed = {};
@@ -707,14 +731,31 @@ function renderRatingTable() {
     const container = document.getElementById('item-rating-table');
     if (!container) return;
 
-    // Define columns: first frozen Item column, then one per subdimension
+    const baseItemCol = {
+        title: 'Item', field: 'Item', headerSort: false, frozen: true,
+        widthGrow: 0, minWidth: 320, tooltip: true
+    };
+
+    const dynamicCols = [];
+    // NEW: optional extra column now numeric (1-5) like other dimensions
+    if (extraColumnName) {
+        dynamicCols.push({
+            title: extraColumnName,
+            field: extraColumnName,
+            headerSort: false,
+            hozAlign: 'center',
+            editor: (activeRaterId ? 'select' : false),
+            editorParams: { values: [1,2,3,4,5] },
+            validator: ["integer", "min:1", "max:5"],
+            widthGrow: 1,
+            tooltip: true,
+            headerTooltip: extraColumnDescription || extraColumnName
+        });
+    }
+
     const columns = [
-        {
-            title: 'Item', field: 'Item', headerSort: false, frozen: true,
-            // Fix the left column width so other columns share remaining space
-            widthGrow: 0, minWidth: 320,
-            tooltip: true
-        },
+        baseItemCol,
+        ...dynamicCols,
         ...subdimensions.map(sd => ({
             title: sd.name,
             field: sd.id,
@@ -723,7 +764,6 @@ function renderRatingTable() {
             editor: (activeRaterId ? 'select' : false),
             editorParams: { values: [1, 2, 3, 4, 5] },
             validator: ["integer", "min:1", "max:5"],
-            // Equal grow so all subdimension columns share remaining width
             widthGrow: 1
         }))
     ];
@@ -740,25 +780,25 @@ function renderRatingTable() {
         data,
         columns,
         index: 'id',
-        // Make columns fill the table width; subdimension cols share remaining width
         layout: 'fitColumns',
         reactiveData: true,
         resizableColumns: true,
         movableColumns: true,
         placeholder: 'No items available',
         rowHeight: 40,
-        // Modern dark appearance is handled by midnight theme from base.html
     });
 
     ratingTable.on('cellEdited', async (cell) => {
-        if (!activeRaterId) return; // no raters -> ignore edits
-    const field = cell.getField(); // this is subdimension id now
-    if (field === 'Item') return; // do not edit item text here
+        const field = cell.getField();
+        if (field === 'Item') return;
         const row = cell.getRow().getData();
-    const value = cell.getValue();
+        const value = cell.getValue();
+
+        // If no active rater yet, ignore (can't store ratings) but allow user feedback? Just return.
+        if (!activeRaterId) return;
+
         if (!ratings[row.id]) ratings[row.id] = {};
-    // Normalize empty selection to null (allow clearing)
-    ratings[row.id][field] = (value === '' || value === undefined || value === null) ? null : Number(value);
+        ratings[row.id][field] = (value === '' || value === undefined || value === null) ? null : Number(value);
         try {
             await saveStep3Data();
         } catch (e) {
@@ -767,6 +807,109 @@ function renderRatingTable() {
         }
     });
 }
+
+// NEW: UI for optional extra column
+function wireExtraColumnUI() {
+    if (document.getElementById('extraColumnControls')) return;
+    const host = document.querySelector('#itemPanel .card-body');
+    if (!host) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'extraColumnControls';
+    wrap.className = 'mb-3';
+        wrap.innerHTML = `
+            <div class="input-group input-group-sm" style="max-width:520px">
+                <input type="text" class="form-control" id="extraColumnNameInput" placeholder="Optional extra column name (e.g., Notes)" value="${extraColumnName || ''}">
+                <button class="btn btn-outline-primary" type="button" id="applyExtraColumnBtn" title="Apply column name & description">Apply</button>
+                <button class="btn btn-outline-secondary" type="button" id="removeExtraColumnBtn"${extraColumnName ? '' : ' disabled'} title="Remove column">Remove</button>
+                <button class="btn btn-outline-info" type="button" id="suggestExtraColumnBtn" title="AI suggestion"><span class="bi bi-lightbulb"></span></button>
+            </div>
+            <div class="mt-2" style="max-width:420px">
+                <textarea class="form-control form-control-sm" id="extraColumnDescInput" rows="2" placeholder="Description">${extraColumnDescription || ''}</textarea>
+            </div>
+      <div class="form-text small text-secondary">
+        Adds a free-text column editable per item. Leave blank and click Apply to remove.
+      </div>`;
+    host.insertBefore(wrap, host.firstChild);
+
+    const nameInput = wrap.querySelector('#extraColumnNameInput');
+        const descInput = wrap.querySelector('#extraColumnDescInput');
+    wrap.querySelector('#applyExtraColumnBtn').onclick = async () => {
+        const val = (nameInput.value || '').trim();
+                const descVal = (descInput.value || '').trim();
+        if (!val) {
+            // remove
+            extraColumnName = null;
+            extraColumnData = {};
+            wrap.querySelector('#removeExtraColumnBtn').disabled = true;
+        } else {
+            extraColumnName = val;
+            wrap.querySelector('#removeExtraColumnBtn').disabled = false;
+        }
+                extraColumnDescription = descVal || null;
+        renderRatingTable();
+        await saveStep3Data();
+    };
+    wrap.querySelector('#removeExtraColumnBtn').onclick = async () => {
+        extraColumnName = null;
+        extraColumnData = {};
+                extraColumnDescription = null;
+        nameInput.value = '';
+                if (descInput) descInput.value = '';
+        wrap.querySelector('#removeExtraColumnBtn').disabled = true;
+        renderRatingTable();
+        await saveStep3Data();
+    };
+
+    // Suggestion button: calls AI with placeholder prompt (user to customize later)
+    const suggestBtn = wrap.querySelector('#suggestExtraColumnBtn');
+    if (suggestBtn) {
+        suggestBtn.onclick = async () => {
+            if (suggestBtn.dataset.loading === '1') return;
+            try {
+                suggestBtn.dataset.loading = '1';
+                const originalHTML = suggestBtn.innerHTML;
+                suggestBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+                const constructName = step1Data?.panel1?.constructName || 'the construct';
+                const subs = (subdimensions || []).map(sd => `${sd.name}: ${sd.definition || ''}`).join('\n');
+                const itemList = (items || []).map(it => `- ${it.id}: ${it.text}`).join('\n');
+                const prompt = `You will propose one additional decoy subdimension name and a concise description that could plausibly belong among existing ones to test expert differentiation. Return ONLY valid JSON with keys name and description.\nExisting subdimensions:\n${subs}\nItems:\n${itemList}\nConstraints: 1) Name: 1-3 words, professional. 2) Description: <= 20 words, stylistically similar to others, not obviously fake.
+                return JSON: {"name": "Column Name", "description": "Tooltip / rationale"}
+                `;
+                const resp = await window.sendChat(prompt, [{role:'system', content:'JSON only, no markdown.'}]);
+                const raw = Array.isArray(resp) ? resp[0] : resp;
+                let parsed = null;
+                try { parsed = window.cleanAIRespond(String(raw)); } catch { parsed = null; }
+                if (parsed && typeof parsed === 'object') {
+                    const proposedName = (parsed.name || '').toString().trim();
+                    const proposedDesc = (parsed.description || '').toString().trim();
+                    if (proposedName && !extraColumnName) {
+                        nameInput.value = proposedName;
+                        extraColumnName = proposedName;
+                        wrap.querySelector('#removeExtraColumnBtn').disabled = false;
+                    }
+                    if (proposedDesc && !extraColumnDescription) {
+                        descInput.value = proposedDesc;
+                        extraColumnDescription = proposedDesc;
+                    }
+                    renderRatingTable();
+                    await saveStep3Data();
+                    window.displayInfo && window.displayInfo('success', 'Suggestion applied. Review before generating AI raters.');
+                } else {
+                    window.displayInfo && window.displayInfo('warning', 'No usable suggestion returned.');
+                }
+                suggestBtn.innerHTML = originalHTML;
+                delete suggestBtn.dataset.loading;
+            } catch(err) {
+                console.error('Suggestion generation failed', err);
+                window.displayInfo && window.displayInfo('danger', 'Failed to get suggestion');
+                suggestBtn.innerHTML = '<span class="bi bi-lightbulb"></span>';
+                delete suggestBtn.dataset.loading;
+            }
+        };
+    }
+}
+
+
 
 
 async function getRandomPersona() {
@@ -818,6 +961,16 @@ function buildAnovaLongDataset() {
             rating: v === '' || v === undefined || v === null ? null : Number(v)
         });
       }
+            // Append extra column as an additional facet if defined (treated like another dimension)
+            if (extraColumnName) {
+                const extraVal = perItem[extraColumnName];
+                rows.push({
+                    item: String(it.id),
+                    rater: String(rId),
+                    facet: extraColumnName,
+                    rating: extraVal === '' || extraVal === undefined || extraVal === null ? null : Number(extraVal)
+                });
+            }
     }
   }
   return {
