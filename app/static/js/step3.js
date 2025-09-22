@@ -818,13 +818,13 @@ function wireExtraColumnUI() {
     wrap.className = 'mb-3';
         wrap.innerHTML = `
             <div class="input-group input-group-sm" style="max-width:520px">
-                <input type="text" class="form-control" id="extraColumnNameInput" placeholder="Optional extra column name (e.g., Notes)" value="${extraColumnName || ''}">
+                <input type="text" class="form-control" id="extraColumnNameInput" placeholder="Optional extra column name" value="${extraColumnName || ''}">
                 <button class="btn btn-outline-primary" type="button" id="applyExtraColumnBtn" title="Apply column name & description">Apply</button>
                 <button class="btn btn-outline-secondary" type="button" id="removeExtraColumnBtn"${extraColumnName ? '' : ' disabled'} title="Remove column">Remove</button>
                 <button class="btn btn-outline-info" type="button" id="suggestExtraColumnBtn" title="AI suggestion"><span class="bi bi-lightbulb"></span></button>
             </div>
             <div class="mt-2" style="max-width:420px">
-                <textarea class="form-control form-control-sm" id="extraColumnDescInput" rows="2" placeholder="Description">${extraColumnDescription || ''}</textarea>
+                <textarea class="form-control form-control-sm" id="extraColumnDescInput" rows="2" placeholder="Description of similiar but different aspect.">${extraColumnDescription || ''}</textarea>
             </div>
       <div class="form-text small text-secondary">
         Adds a free-text column editable per item. Leave blank and click Apply to remove.
