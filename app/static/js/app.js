@@ -281,22 +281,43 @@ async function extractResults(step) {
 // Add exportSelected function for modal-based export
 async function exportSelected() {
     const exportAll = document.getElementById('exportAll').checked;
+    const exportRaw = document.getElementById('exportRaw')?.checked;
     let output = {};
 
     if (exportAll) {
         // fetch all data keys
         for (let i = 1; i <= 6; i++) {
-            const data = await extractResults(i);
-            if (data) output= {...output, ...data}
+            if (exportRaw) {
+                const raw = await window.dataStorage.getData('data_step_'+i) || {};
+                output[`step${i}`] = raw;
+            } else {
+                const data = await extractResults(i);
+                if (data) output= {...output, ...data}
+            }
+        }
+        if (exportRaw) {
+            // include project flags (proj_x_data_flags) if present; we need active project id
+            try {
+                const activeId = await window.projects.getActiveProjectId();
+                const entries = await window.dataStorage.getAllEntries();
+                const flagEntry = entries.find(e => typeof e.key === 'string' && e.key === `proj_${activeId}_data_flags`);
+                if (flagEntry) {
+                    output['projectFlags'] = flagEntry.value;
+                }
+            } catch (e) { console.warn('Could not append project flags', e); }
         }
     } else {
         // fetch only checked steps
         const cbs = document.querySelectorAll('.export-step-checkbox:checked');
         for (const cb of cbs) {
             const stepNum = cb.value;
-            const key = `data_step_${stepNum}`;
-            const data = await extractResults(stepNum);
-            if (data) output= {...output, ...data}
+            if (exportRaw) {
+                const raw = await window.dataStorage.getData('data_step_'+stepNum) || {};
+                output[`step${stepNum}`] = raw;
+            } else {
+                const data = await extractResults(stepNum);
+                if (data) output= {...output, ...data}
+            }
         }
     }
 
@@ -323,7 +344,13 @@ async function exportSelected() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = exportAll ? 'data_all_steps.json' : 'data_selected_steps.json';
+    let baseName;
+    if (exportRaw) {
+        baseName = exportAll ? 'data_all_steps_raw.json' : 'data_selected_steps_raw.json';
+    } else {
+        baseName = exportAll ? 'data_all_steps.json' : 'data_selected_steps.json';
+    }
+    a.download = baseName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
