@@ -1,5 +1,5 @@
 // Step 6 Data Handling: load simulated or uploaded data, manage reverse scoring
-
+// todo bug: warning(Results may be outdated (data or model changed). Re-run analysis.) shows two times
 let rawData = []; // current working data (may be reversed)
 (function(){
   // Ensure loading helpers exist early (app.js may be delayed by top-level await)
