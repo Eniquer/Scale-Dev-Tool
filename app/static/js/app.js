@@ -524,6 +524,62 @@ async function populateProjectsModal() {
         ul.appendChild(li);
     });
     body.appendChild(ul);
+
+    // Inject raw import controls (idempotent)
+    if (!body.querySelector('#rawImportWrapper')) {
+        const wrap = document.createElement('div');
+        wrap.id = 'rawImportWrapper';
+        wrap.className = 'mt-3 pt-3 border-top border-secondary';
+        wrap.innerHTML = `
+          <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+            <h6 class="mb-0">Import Raw Bundle</h6>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnImportRawBundle">Select File</button>
+            <input type="file" id="rawBundleFileInput" accept="application/json" class="d-none" />
+            <small class="text-muted">Use a *_raw.json export (includes AI/internal fields).</small>
+          </div>`;
+        body.appendChild(wrap);
+        const btn = wrap.querySelector('#btnImportRawBundle');
+        const fileInput = wrap.querySelector('#rawBundleFileInput');
+        btn.addEventListener('click', ()=> fileInput.click());
+        fileInput.addEventListener('change', async (e)=>{
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const json = JSON.parse(text);
+                const hasStepBlocks = Object.keys(json).some(k=>/^step[1-6]$/.test(k));
+                if (!hasStepBlocks) {
+                    window.displayInfo && window.displayInfo('danger','File is not a raw bundle (missing step1..step6 keys).');
+                    fileInput.value='';
+                    return;
+                }
+                const proposedName = json?.step1?.panel1?.constructName || json?.step1?.constructName || 'Imported Raw Project';
+                const useName = await customConfirm({
+                    title: 'Use Construct Name?',
+                    message: `Use '<strong>${proposedName}</strong>' as project name?`,
+                    confirmText: 'Yes',
+                    cancelText: 'Choose Name'
+                });
+                let finalName = proposedName;
+                if (!useName) {
+                    const manual = await window.customPrompt('Enter project name:');
+                    finalName = manual || proposedName;
+                }
+                const newProj = await window.projects.importRawBundle(json, finalName);
+                if (newProj) {
+                    window.displayInfo && window.displayInfo('success', `Imported raw project '${finalName}'`);
+                    window.location.href = '/step/1';
+                } else {
+                    window.displayInfo && window.displayInfo('danger', 'Raw import failed (see console).');
+                }
+            } catch(err){
+                console.error('Raw import error', err);
+                window.displayInfo && window.displayInfo('danger', 'Invalid JSON file.');
+            } finally {
+                fileInput.value='';
+            }
+        });
+    }
 }
 window.populateProjectsModal = populateProjectsModal;
 
