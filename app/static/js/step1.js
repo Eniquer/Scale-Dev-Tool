@@ -1418,12 +1418,12 @@ Your goal is to identify and define the construct's subdimensions.
 
 1. **Understand the construct and the multidimensionality**
    - Review the construct's integrated definition and attributes.
-   - MacKenzie et al. (2011, p. 296) state: 
+   - MacKenzie et al. (2011, p. 300) state: 
      "Many constructs are defined as having multiple, distinct sub-dimensions. 
      If a construct is multidimensional, then it is important to define each of the sub-dimensions 
      with the same care that was used in the case of the focal construct itself."
 
-2. **Apply diagnostic questions** (MacKenzie et al., 2011, p. 295):
+2. **Apply diagnostic questions** (MacKenzie et al., 2011, p. 301):
    - (a) How distinctive are the essential attributes from each other (apart from their common theme)?
    - (b) Would eliminating any one of them restrict the domain of the construct in a significant way?
 
