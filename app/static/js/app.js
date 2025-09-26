@@ -195,7 +195,7 @@ async function genPersonaPool({generatedPersonas = [], groupDescription, amount 
         console.error(`Error from persona generation endpoint: ${resp.status} ${resp.statusText}`, errorDetail);
         // Handle invalid API key: prompt user to re-enter
         if ((resp.status === 401) && /invalid/i.test(errorDetail)) {
-            const newKey = window.customPromp('Your API key appears invalid or unauthorized. Please re-enter your key.');
+            const newKey = window.customPrompt('Your API key appears invalid or unauthorized. Please re-enter your key.');
             window.currentAPIKey_enc = await storeAPIKey(newKey, false);
             return await genPersonaPool({ generatedPersonas, groupDescription, amount, model }); // Retry with new key
         }
