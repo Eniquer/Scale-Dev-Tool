@@ -14,6 +14,8 @@ let persistedGroupDescription = 'a pool of students.';
 // MULTI extra columns support (migration from legacy single extraColumnName)
 // extraColumns: array of { id, name, description }
 let extraColumns = [];
+// Unidimensional flag (when no subdimensions provided in Step 1)
+let isUnidimensional = false;
 
 // Utility to create a short id for extra columns
 function newExtraColId() {
@@ -156,7 +158,6 @@ async function showAIRaterGenModal() {
 
 init()
 
-// todo handle unidimensional
 
 async function init(){
     step1Data = await window.dataStorage.getData('data_step_1');
@@ -181,6 +182,32 @@ async function init(){
         extraColumns = [{ id: newExtraColId(), name: step3Data.extraColumnName.trim(), description: (step3Data.extraColumnDescription || null) }];
         // ratings used the column name as key already, so no migration of per-item values required
     }
+
+    // ================= Unidimensional Support ==================
+    // If user defined no subdimensions in Step 1, synthesize one facet using construct name & definition
+    const constructName = step1Data?.panel1?.constructName || 'Construct';
+    const constructDefinition = step1Data?.panel2?.savedDefinition || '';
+    if (!Array.isArray(subdimensions) || subdimensions.length === 0) {
+        isUnidimensional = true;
+        const syntheticId = '__construct';
+        subdimensions = [{ id: syntheticId, name: constructName, definition: constructDefinition }];
+        // Ensure every item has this subdimensionId for intended mapping
+        let mutated = false;
+        items = (items || []).map(it => {
+            if (!it.subdimensionId) { mutated = true; return { ...it, subdimensionId: syntheticId }; }
+            return it;
+        });
+        if (mutated) {
+            try {
+                const storedStep2 = await window.dataStorage.getData('data_step_2') || {};
+                storedStep2.items = items;
+                await window.dataStorage.storeData('data_step_2', storedStep2, false);
+            } catch (e) {
+                console.warn('Failed to persist synthetic subdimension assignment to items', e);
+            }
+        }
+    }
+    // ============================================================
 
     wireRaterUI();
     renderRatingTable();
