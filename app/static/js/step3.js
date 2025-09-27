@@ -1328,7 +1328,9 @@ async function analyzeAnova(extraParams = {}) {
     options: {
       padjust: extraParams.padjust || 'holm',
       effectSize: extraParams.effectSize || 'np2',
-      dropIncomplete: extraParams.dropIncomplete ?? true
+            dropIncomplete: extraParams.dropIncomplete ?? true,
+            alpha: (typeof extraParams.alpha === 'number' && extraParams.alpha > 0 && extraParams.alpha < 1) ? extraParams.alpha : 0.05,
+            sphericity: (extraParams.sphericity || 'GG')
     }
   };
   
@@ -1402,9 +1404,24 @@ function wireAnalysisUI() {
     panel.id = 'anova-panel';
     panel.className = 'mt-4';
     panel.innerHTML = `
-        <div class="d-flex align-items-center justify-content-between mb-2">
-            <h5 class="mb-0">Content Adequacy Analysis</h5>
-            <div>
+        <div class="d-flex flex-wrap align-items-start justify-content-between mb-2 gap-2">
+            <div class="d-flex flex-column">
+                <h5 class="mb-1">Content Adequacy Analysis</h5>
+                <div class="d-flex flex-wrap align-items-center gap-2 small">
+                    <label class="d-flex align-items-center gap-1 mb-0">α
+                        <input type="number" step="0.001" min="0.001" max="0.5" id="anovaAlphaInput" class="form-control form-control-sm" style="width:80px" value="0.05" />
+                    </label>
+                    <label class="d-flex align-items-center gap-1 mb-0" id="sphericityLabel" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-html="true" data-bs-title="<strong>Sphericity correction</strong><br><strong>GG</strong>: Greenhouse–Geisser (conservative)<br><strong>HF</strong>: Huynh–Feldt (less conservative)<br><strong>None</strong>: Uncorrected p (assumes sphericity; use with caution)">Sphericity
+                        <select id="anovaSphericitySelect" class="form-select form-select-sm" style="width:110px" aria-describedby="sphericityHelp"
+                        >
+                            <option value="GG" selected>GG</option>
+                            <option value="HF">HF</option>
+                            <option value="none">None</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+            <div class="ms-auto">
                 <button type="button" id="runAnovaBtn" class="btn btn-sm btn-primary me-2">
                     <i class="bi bi-graph-up"></i> Analyze
                 </button>
@@ -1425,13 +1442,54 @@ function wireAnalysisUI() {
     `;
     container.appendChild(panel);
 
+    // Initialize Bootstrap tooltip for sphericity explanation (if Bootstrap JS is loaded)
+    try {
+        const tipTarget = panel.querySelector('#sphericityLabel');
+        if (tipTarget && window.bootstrap && typeof window.bootstrap.Tooltip === 'function') {
+            new window.bootstrap.Tooltip(tipTarget, {html: true, trigger: 'hover focus'});
+        }
+    } catch (e) { console.warn('Tooltip init failed', e); }
+
     // Ensure bulk delete modal exists in DOM
     setupBulkDeleteItemsModal();
+
+    // Load persisted alpha/sphericity if any
+    (async () => {
+        try {
+            const step3 = await window.dataStorage.getData('data_step_3');
+            if (step3 && step3.anovaOptions) {
+                const aEl = document.getElementById('anovaAlphaInput');
+                const sEl = document.getElementById('anovaSphericitySelect');
+                if (aEl && typeof step3.anovaOptions.alpha === 'number') aEl.value = step3.anovaOptions.alpha;
+                if (sEl && typeof step3.anovaOptions.sphericity === 'string') sEl.value = step3.anovaOptions.sphericity;
+            }
+        } catch {}
+    })();
 
     document.getElementById('runAnovaBtn').onclick = async () => {
         try {
             window.showLoading && window.showLoading();
-            const resp = await analyzeAnova({});
+            const alphaEl = document.getElementById('anovaAlphaInput');
+            const sEl = document.getElementById('anovaSphericitySelect');
+            // Sanitize alpha: limit to 3 decimal places
+            let alphaRaw = parseFloat(alphaEl?.value || '0.05');
+            if (!Number.isFinite(alphaRaw)) alphaRaw = 0.05;
+            if (alphaRaw <= 0) alphaRaw = 0.001;
+            if (alphaRaw >= 0.5) alphaRaw = 0.5; // hard upper guard
+            const alpha = Number(alphaRaw.toFixed(3));
+            if (alphaEl) {
+                // Update displayed value without unnecessary trailing zeros beyond 3 decimals
+                const disp = alpha.toFixed(3).replace(/0+$/,'').replace(/\.$/, '');
+                alphaEl.value = disp;
+            }
+            const sphericity = (sEl?.value || 'GG');
+            // Persist user choice separately
+            try {
+                const step3 = await window.dataStorage.getData('data_step_3') || {};
+                step3.anovaOptions = { alpha, sphericity };
+                await window.dataStorage.storeData('data_step_3', step3, false);
+            } catch {}
+            const resp = await analyzeAnova({ alpha, sphericity });
             const records = Array.isArray(resp?.result) ? resp.result : [];
             lastAnovaResults = records;
             renderAnovaResults(records);
@@ -1446,6 +1504,39 @@ function wireAnalysisUI() {
             window.hideLoading && window.hideLoading();
         }
     };
+
+    // Alpha input: enforce max 3 decimals live
+    const alphaInputEl = document.getElementById('anovaAlphaInput');
+    if (alphaInputEl && !alphaInputEl.dataset._alphaBounded) {
+        const enforce = () => {
+            let v = alphaInputEl.value.trim();
+            if (!v) return;
+            // Remove invalid chars except digits and single dot
+            v = v.replace(/[^0-9.]/g,'');
+            const firstDot = v.indexOf('.');
+            if (firstDot !== -1) {
+                // Strip additional dots
+                v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g,'');
+                const parts = v.split('.');
+                if (parts[1].length > 3) {
+                    parts[1] = parts[1].slice(0,3);
+                    v = parts[0] + '.' + parts[1];
+                }
+            }
+            // Clamp numeric value
+            let num = parseFloat(v);
+            if (!Number.isFinite(num)) return; // keep current until valid
+            if (num <= 0) num = 0.001;
+            if (num >= 0.5) num = 0.5;
+            // Preserve user typing style but enforce decimals limit
+            const decLen = (v.split('.')[1] || '').length;
+            const fixed = num.toFixed(Math.min(decLen,3));
+            alphaInputEl.value = fixed.replace(/0+$/,'').replace(/\.$/,'');
+        };
+        alphaInputEl.addEventListener('input', enforce);
+        alphaInputEl.addEventListener('blur', enforce);
+        alphaInputEl.dataset._alphaBounded = '1';
+    }
 
     document.getElementById('exportAnovaBtn').onclick = () => exportAnovaCSV(lastAnovaResults);
 
@@ -1681,7 +1772,21 @@ function renderAnovaResults(rows) {
         const keep = rows.filter(r => r.action === 'keep').length;
         const revise = rows.filter(r => r.action === 'revise').length;
         const del = rows.filter(r => r.action === 'delete' || r.action === 'revise/delete').length;
-        summaryEl.textContent = `Keep: ${keep} • Revise: ${revise} • Delete: ${del}`;
+        const alphaVal = (rows && rows.length) ? rows[0].alpha : null;
+        let alphaDisp = '';
+        if (typeof alphaVal === 'number' && isFinite(alphaVal)) {
+            if (alphaVal < 0.001) {
+                alphaDisp = `α<0.001`;
+            } else {
+                // Trim trailing zeros
+                const trimmed = alphaVal.toFixed(3).replace(/0+$/,'').replace(/\.$/,'');
+                alphaDisp = `α=${trimmed}`;
+            }
+        }
+        const sph = (rows && rows.length) ? rows[0].sphericity_mode : null;
+        const sphDisp = sph ? `Sphericity: ${String(sph).toUpperCase()}` : '';
+        const parts = [alphaDisp, sphDisp, `Keep: ${keep}`, `Revise: ${revise}`, `Delete: ${del}`].filter(Boolean);
+        summaryEl.textContent = parts.join(' • ');
     }
 
     // Build item id -> item name map and project display rows with item_name
@@ -1710,6 +1815,10 @@ function renderAnovaResults(rows) {
         };
     });
 
+    // Determine dynamic omnibus p label based on chosen sphericity in results
+    const dynamicPTitle = (rows && rows.length && rows[0].sphericity_mode)
+        ? `p(RM-ANOVA, ${String(rows[0].sphericity_mode).toUpperCase()})`
+        : 'p(RM-ANOVA)';
     const columns = [
     { title: 'Item', field: 'item', headerSort: true, headerTooltip: 'Item ID (cell shows item text; native tooltip shows ID).', tooltip: function(cell){
             const id = cell.getValue();
@@ -1740,7 +1849,10 @@ function renderAnovaResults(rows) {
             const bNum = Number.isFinite(bv) ? bv : -Infinity;
             return aNum - bNum;
     }, widthGrow: 1, headerTooltip: 'Second highest facet and its mean value.' },
-    { title: 'p(RM-ANOVA, GG)', field: 'p_omnibus', formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'Greenhouse-Geisser corrected omnibus repeated-measures ANOVA p-value.' },
+    { title: dynamicPTitle, field: 'p_omnibus', formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'Omnibus repeated-measures ANOVA p-value (corrected per chosen sphericity).' },
+    { title: 'p_unc', field: 'p_uncorrected', visible: false, formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'Uncorrected omnibus p-value.' },
+    { title: 'p_GG', field: 'p_GG', visible: false, formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'Greenhouse-Geisser corrected p-value.' },
+    { title: 'p_HF', field: 'p_HF', visible: false, formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'Huynh-Feldt corrected p-value.' },
     { title: 'p(>0)', field: 'p_contrast_one_sided', formatter: cell => fmtP(cell.getValue()), hozAlign: 'right', headerTooltip: 'One-sided contrast p-value testing intended facet > average of others.' },
     { title: 'Highest?', field: 'target_is_highest', formatter: 'tickCross', hozAlign: 'center', headerTooltip: 'Tick if intended facet has the highest mean among all facets.' },
     { title: 'ηp²', field: 'eta_p2', formatter: cell => fmtNum(cell.getValue(), 3), hozAlign: 'right', headerTooltip: 'Partial eta squared (effect size for facet differences).' },

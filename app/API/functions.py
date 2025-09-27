@@ -180,16 +180,17 @@ def analyze_content_adequacy(
 
             # Epsilon and corrected p-values
             eps = float(row.get("eps", np.nan))
+            p_unc = float(row["p-unc"]) if "p-unc" in row else np.nan
+            p_gg = float(row.get("p-GG-corr", p_unc))
+            p_hf = float(row.get("p-HF-corr", p_unc))
             if sphericity == "GG":
-                p_omnibus = float(row.get("p-GG-corr", row["p-unc"]))
+                p_omnibus = p_gg
                 df2_corr = eps * df2_unc if np.isfinite(eps) else np.nan
             elif sphericity == "HF":
-                p_omnibus = float(row.get("p-HF-corr", row["p-unc"]))
-                # HF-corrected df is approximately eps_HF * df2_unc; pingouin doesn’t return eps_HF,
-                # so report uncorrected df2 and note HF p used.
-                df2_corr = np.nan
-            else:
-                p_omnibus = float(row["p-unc"])
+                p_omnibus = p_hf
+                df2_corr = np.nan  # HF df adjustment not directly provided
+            else:  # none
+                p_omnibus = p_unc
                 df2_corr = np.nan
 
             F = float(row["F"])
@@ -262,6 +263,9 @@ def analyze_content_adequacy(
             "df2_corr": df2_corr,    # GG-corrected df2 if available; else NaN
             "epsilon": eps,          # GG epsilon (if estimated)
             "p_omnibus": p_omnibus,  # GG/HF/uncorrected p as requested
+            "p_uncorrected": p_unc,
+            "p_GG": p_gg,
+            "p_HF": p_hf,
             "eta_p2": eta_p2,
             "intended_mean": intended_mean,
             "others_mean": others_mean,
@@ -278,6 +282,7 @@ def analyze_content_adequacy(
             "target_is_highest": target_is_highest,
             "keep": keep,
             "action": action,
+            "sphericity_mode": sphericity,
             "notes": "; ".join(note_msgs + [f"sphericity={sphericity}"])
         })
 

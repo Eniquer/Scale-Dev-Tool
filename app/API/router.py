@@ -76,6 +76,18 @@ async def analyze_endpoint(data: dict):
         intended_map = data.get('intendedMap', {})
         options = data.get('options', {}) or {}
         drop_incomplete = bool(options.get('dropIncomplete', True))
+        # User-configurable alpha & sphericity (defaults: 0.05, GG)
+        try:
+            alpha = float(options.get('alpha', 0.05))
+        except Exception:
+            raise HTTPException(status_code=400, detail="alpha must be numeric")
+        if not (0 < alpha < 1):
+            raise HTTPException(status_code=400, detail="alpha must be between 0 and 1")
+        # Normalize sphericity (accept case-insensitive); analyzer expects 'GG','HF','none'
+        sphericity_in = str(options.get('sphericity', 'GG')).strip().lower()
+        if sphericity_in not in {"gg", "hf", "none"}:
+            raise HTTPException(status_code=400, detail="sphericity must be one of GG, HF, none")
+        sphericity = 'GG' if sphericity_in == 'gg' else ('HF' if sphericity_in == 'hf' else 'none')
 
         # Align payload field names to analyzer expectations
         table_data = pd.DataFrame(data.get('data', []))
@@ -94,9 +106,9 @@ async def analyze_endpoint(data: dict):
         res = analyze_content_adequacy(
             table_data,
             intended_map,
-            alpha=0.05,
+            alpha=alpha,
             decision_mode="ternary",     # or "binary"
-            sphericity="GG",             # GG per MacKenzie/Winer; use "HF" if you prefer
+            sphericity=sphericity,             # user-selected (GG/HF/none)
             require_target_highest=True,  # typical rule
             drop_incomplete=drop_incomplete
         )
