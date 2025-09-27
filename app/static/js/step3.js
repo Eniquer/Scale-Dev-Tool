@@ -10,12 +10,18 @@ let aiPersonas = [];
 let aiGenInProgress = false;
 let aiGenAbortRequested = false;
 // Persisted group description for AI rater persona generation
-let persistedGroupDescription = 'a pool of experts with occupations as professors, PHD candidates, experts in the field and researchers.';
-// NEW: optional extra column
-let extraColumnName = null;
-let extraColumnData = {}; // { itemId: string }
-// NEW: description for extra column header tooltip
-let extraColumnDescription = null;
+let persistedGroupDescription = 'a pool of students.';
+// MULTI extra columns support (migration from legacy single extraColumnName)
+// extraColumns: array of { id, name, description }
+let extraColumns = [];
+
+// Utility to create a short id for extra columns
+function newExtraColId() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return 'xcol_' + crypto.randomUUID().slice(0, 8);
+    }
+    return 'xcol_' + Math.random().toString(36).slice(2, 10);
+}
 
 function ensureAbortGenerationButton() {
     const overlay = document.getElementById('loadingOverlay');
@@ -57,7 +63,7 @@ async function ensureAIRaterGenModal() {
         constructDefinition = step1Data?.panel2?.savedDefinition || "";
         constructName = step1Data?.panel1?.constructName || "";
 
-            generalPersonaPrompt = `a pool of citizens experiencing and understanding the concept of ${constructName}:${constructDefinition}.`
+        generalPersonaPrompt = `a pool of citizens experiencing and understanding the concept of ${constructName}:${constructDefinition}.`
         const wrapper = document.createElement('div');
         wrapper.innerHTML = `
         <div class="modal fade" id="aiRaterGenModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -129,7 +135,7 @@ async function showAIRaterGenModal() {
                 confirmBtn.onclick = () => {
                     const cnt = parseInt(countInput.value, 10);
                     if (!(Number.isInteger(cnt) && cnt >= 1 && cnt <= 30)) return;
-                    const desc = (descInput.value || '').trim();
+                    const desc = (descInput.value || generalPrompt || "").trim();
                     // Update persisted value and save immediately
                     persistedGroupDescription = desc || persistedGroupDescription;
                     // Fire and forget persistence
@@ -166,14 +172,14 @@ async function init(){
         persistedGroupDescription = step3Data?.aiRaterGroupDescription;
     }
 
-    if (typeof step3Data.extraColumnName === 'string' && step3Data.extraColumnName.trim()) {
-        extraColumnName = step3Data.extraColumnName;
+    // Load new multi extra columns format
+    if (Array.isArray(step3Data.extraColumns)) {
+        extraColumns = step3Data.extraColumns.filter(c => c && typeof c.name === 'string' && c.name.trim());
     }
-    if (typeof step3Data.extraColumnDescription === 'string' && step3Data.extraColumnDescription.trim()) {
-        extraColumnDescription = step3Data.extraColumnDescription;
-    }
-    if (step3Data.extraColumnData && typeof step3Data.extraColumnData === 'object') {
-        extraColumnData = step3Data.extraColumnData;
+    // Migration: legacy single extra column
+    if ((!extraColumns || extraColumns.length === 0) && typeof step3Data.extraColumnName === 'string' && step3Data.extraColumnName.trim()) {
+        extraColumns = [{ id: newExtraColId(), name: step3Data.extraColumnName.trim(), description: (step3Data.extraColumnDescription || null) }];
+        // ratings used the column name as key already, so no migration of per-item values required
     }
 
     wireRaterUI();
@@ -182,9 +188,7 @@ async function init(){
 
     // Inject analysis panel UI and wire actions
     wireAnalysisUI();
-    loadSavedAnovaResults();
-
-    // Auto-load saved ANOVA results if present
+    // Load saved ANOVA results once
     loadSavedAnovaResults();
 
     // Prerequisite: items from Step 2
@@ -202,17 +206,20 @@ async function saveStep3Data() {
     if (idx !== -1) raters[idx].ratings = ratings;
     const stored = await window.dataStorage.getData('data_step_3') || {};
     const merged = { ...stored, raters, activeRaterId, aiRaterGroupDescription: persistedGroupDescription,
-        extraColumnName, extraColumnDescription, extraColumnData }; // NEW
+        extraColumns }; // store new multi columns (legacy fields intentionally dropped)
     return window.dataStorage.storeData('data_step_3', merged, false);
 }
 
 function buildRows() {
     return items.map(it => {
         const row = { id: it.id, Item: it.text };
-        // NEW: extra column now behaves like a numeric dimension (1-5) stored in ratings under its name
-        if (extraColumnName) {
-            const rawExtra = ratings[it.id] && ratings[it.id][extraColumnName] !== undefined ? ratings[it.id][extraColumnName] : null;
-            row[extraColumnName] = (rawExtra === '' || rawExtra === null || rawExtra === undefined) ? null : Number(rawExtra);
+        // Extra columns (store under their display name as before)
+        if (Array.isArray(extraColumns)) {
+            extraColumns.forEach(col => {
+                const key = col.name;
+                const raw = ratings[it.id] && ratings[it.id][key] !== undefined ? ratings[it.id][key] : null;
+                row[key] = (raw === '' || raw === null || raw === undefined) ? null : Number(raw);
+            });
         }
         subdimensions.forEach(sd => {
             const key = sd.id; // internal key is id
@@ -568,8 +575,7 @@ Persona (short description): ${personaDesc}
 Inputs (randomized order):
 
     Subdimensions (with concise descriptions):
-    ${shuffledSubdimensions.map(sd => `Dimensionname: ${sd.name}, Definition: ${sd.definition}`).join(';}\n ')}${extraColumnName ? `;
-    Dimensionname: ${extraColumnName}, Definition: ${extraColumnDescription ? extraColumnDescription.replace(/"/g,'\\"') : ''}` : ''}
+                    ${shuffledSubdimensions.map(sd => `Dimensionname: ${sd.name}, Definition: ${sd.definition}`).join(';\n    ')}${(extraColumns||[]).length ? ';\n    ' + extraColumns.map(c => `Dimensionname: ${c.name}, Definition: ${(c.description || '').replace(/"/g,'\\"')}`).join(';\n    ') : ''}
 
     Items (array of objects with id and text):
     ${shuffledItems.map(it => `{"id": "${it.id}", "text": "${esc(it.text)}"}`).join(',\n')}
@@ -632,7 +638,7 @@ Output schema (JSON only, no extra text, no markdown):
                         const id = newId();
                         const name = `AI rater ${seqNum}`;
                         const rawRatings = (parsed.ratings && typeof parsed.ratings === 'object') ? parsed.ratings : {};
-                        // Treat extraColumnName (if any) as just another subdimension already embedded in ratings
+                        // Extra columns are treated like additional subdimensions already embedded in ratings
                         // Transform name-keyed ratings => id-keyed ratings
                         const nameToId = Object.fromEntries(subdimensions.map(sd => [sd.name, sd.id]));
                         const transformed = {};
@@ -737,19 +743,58 @@ function renderRatingTable() {
     };
 
     const dynamicCols = [];
-    // NEW: optional extra column now numeric (1-5) like other dimensions
-    if (extraColumnName) {
-        dynamicCols.push({
-            title: extraColumnName,
-            field: extraColumnName,
-            headerSort: false,
-            hozAlign: 'center',
-            editor: (activeRaterId ? 'select' : false),
-            editorParams: { values: [1,2,3,4,5] },
-            validator: ["integer", "min:1", "max:5"],
-            widthGrow: 1,
-            tooltip: true,
-            headerTooltip: extraColumnDescription || extraColumnName
+    if (Array.isArray(extraColumns) && extraColumns.length) {
+        extraColumns.forEach(col => {
+            dynamicCols.push({
+                title: col.name,
+                field: col.name,
+                headerSort: false,
+                hozAlign: 'center',
+                editor: (activeRaterId ? 'select' : false),
+                editorParams: { values: [1,2,3,4,5] },
+                validator: ["integer", "min:1", "max:5"],
+                widthGrow: 1,
+                tooltip: true,
+                headerTooltip: col.description || col.name,
+                headerFormatter: function(cell){
+                    const el = document.createElement('div');
+                    el.className = 'd-flex align-items-center gap-1';
+                    const span = document.createElement('span');
+                    span.textContent = col.name;
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn-sm btn-outline-danger p-0 px-1 ms-1';
+                    btn.style.fontSize = '0.65rem';
+                    btn.innerHTML = '&times;';
+                    btn.title = 'Remove extra column';
+                    btn.onclick = async (e) => {
+                        e.stopPropagation();
+                        extraColumns = extraColumns.filter(c => c.id !== col.id);
+                        // Remove associated ratings keys
+                        const key = col.name;
+                        for (const r of raters) {
+                            const rr = r.ratings || {};
+                            for (const itemId of Object.keys(rr)) {
+                                if (rr[itemId] && Object.prototype.hasOwnProperty.call(rr[itemId], key)) {
+                                    delete rr[itemId][key];
+                                }
+                            }
+                        }
+                        if (ratings) {
+                            for (const itemId of Object.keys(ratings)) {
+                                if (ratings[itemId] && Object.prototype.hasOwnProperty.call(ratings[itemId], key)) {
+                                    delete ratings[itemId][key];
+                                }
+                            }
+                        }
+                        renderRatingTable();
+                        await saveStep3Data();
+                    };
+                    el.appendChild(span);
+                    el.appendChild(btn);
+                    return el;
+                }
+            });
         });
     }
 
@@ -816,97 +861,342 @@ function wireExtraColumnUI() {
     const wrap = document.createElement('div');
     wrap.id = 'extraColumnControls';
     wrap.className = 'mb-3';
-        wrap.innerHTML = `
-            <div class="input-group input-group-sm" style="max-width:520px">
-                <input type="text" class="form-control" id="extraColumnNameInput" placeholder="Optional extra column name" value="${extraColumnName || ''}">
-                <button class="btn btn-outline-primary" type="button" id="applyExtraColumnBtn" title="Apply column name & description">Apply</button>
-                <button class="btn btn-outline-secondary" type="button" id="removeExtraColumnBtn"${extraColumnName ? '' : ' disabled'} title="Remove column">Remove</button>
-                <button class="btn btn-outline-info" type="button" id="suggestExtraColumnBtn" title="AI suggestion"><span class="bi bi-lightbulb"></span></button>
+    wrap.innerHTML = `
+        <div class="border rounded p-2 bg-light-subtle">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong class="small">Extra Facets (optional)</strong>
+                <button class="btn btn-sm btn-outline-primary" type="button" id="addExtraColumnBtn">Add</button>
             </div>
-            <div class="mt-2" style="max-width:420px">
-                <textarea class="form-control form-control-sm" id="extraColumnDescInput" rows="2" placeholder="Description of similiar but different aspect.">${extraColumnDescription || ''}</textarea>
-            </div>
-      <div class="form-text small text-secondary">
-        Adds a free-text column editable per item. Leave blank and click Apply to remove.
-      </div>`;
+            <div id="extraColumnsList" class="d-flex flex-wrap gap-2"></div>
+        </div>
+        <div class="mt-2 small text-secondary">Add exploratory / decoy facets to probe discriminant judgments. Each behaves like a subdimension (1-5).</div>
+    `;
     host.insertBefore(wrap, host.firstChild);
 
-    const nameInput = wrap.querySelector('#extraColumnNameInput');
-        const descInput = wrap.querySelector('#extraColumnDescInput');
-    wrap.querySelector('#applyExtraColumnBtn').onclick = async () => {
-        const val = (nameInput.value || '').trim();
-                const descVal = (descInput.value || '').trim();
-        if (!val) {
-            // remove
-            extraColumnName = null;
-            extraColumnData = {};
-            wrap.querySelector('#removeExtraColumnBtn').disabled = true;
-        } else {
-            extraColumnName = val;
-            wrap.querySelector('#removeExtraColumnBtn').disabled = false;
-        }
-                extraColumnDescription = descVal || null;
-        renderRatingTable();
-        await saveStep3Data();
-    };
-    wrap.querySelector('#removeExtraColumnBtn').onclick = async () => {
-        extraColumnName = null;
-        extraColumnData = {};
-                extraColumnDescription = null;
+    const listEl = wrap.querySelector('#extraColumnsList');
+    const addBtn = wrap.querySelector('#addExtraColumnBtn');
+
+    function renderChips() {
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        (extraColumns || []).forEach(col => {
+            const chip = document.createElement('div');
+            chip.className = 'badge text-bg-secondary d-flex align-items-center gap-1 p-2';
+            chip.style.fontSize = '0.7rem';
+            chip.innerHTML = `<span>${col.name}</span>`;
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'btn btn-sm btn-outline-light p-0 px-1';
+            editBtn.style.fontSize = '0.6rem';
+            editBtn.textContent = '✎';
+            editBtn.title = 'Edit name/description';
+            editBtn.onclick = async () => {
+                const result = await showEditExtraFacetModal(col);
+                if (!result) return;
+                const { name, description } = result;
+                const trimmed = (name || '').trim();
+                if (!trimmed) return;
+                // Prevent name collision with other facets
+                if (extraColumns.some(c => c.id !== col.id && c.name.toLowerCase() === trimmed.toLowerCase())) {
+                    window.displayInfo && window.displayInfo('warning', 'Another facet already uses that name.');
+                    return;
+                }
+                if (trimmed !== col.name) {
+                    // migrate ratings keys
+                    for (const r of raters) {
+                        const rr = r.ratings || {};
+                        for (const perItem of Object.values(rr)) {
+                            if (perItem && Object.prototype.hasOwnProperty.call(perItem, col.name)) {
+                                perItem[trimmed] = perItem[col.name];
+                                delete perItem[col.name];
+                            }
+                        }
+                    }
+                    if (ratings) {
+                        for (const perItem of Object.values(ratings)) {
+                            if (perItem && Object.prototype.hasOwnProperty.call(perItem, col.name)) {
+                                perItem[trimmed] = perItem[col.name];
+                                delete perItem[col.name];
+                            }
+                        }
+                    }
+                    col.name = trimmed;
+                }
+                col.description = (description || '').trim() || null;
+                renderChips();
+                renderRatingTable();
+                await saveStep3Data();
+                window.displayInfo && window.displayInfo('success', 'Facet updated.');
+            };
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'btn btn-sm btn-outline-light p-0 px-1';
+            delBtn.style.fontSize = '0.6rem';
+            delBtn.textContent = '×';
+            delBtn.title = 'Remove facet';
+            delBtn.onclick = async () => {
+                extraColumns = extraColumns.filter(c => c.id !== col.id);
+                // Remove ratings keys
+                const key = col.name;
+                for (const r of raters) {
+                    const rr = r.ratings || {};
+                    for (const itemId of Object.keys(rr)) {
+                        if (rr[itemId] && Object.prototype.hasOwnProperty.call(rr[itemId], key)) {
+                            delete rr[itemId][key];
+                        }
+                    }
+                }
+                if (ratings) {
+                    for (const itemId of Object.keys(ratings)) {
+                        if (ratings[itemId] && Object.prototype.hasOwnProperty.call(ratings[itemId], key)) {
+                            delete ratings[itemId][key];
+                        }
+                    }
+                }
+                renderChips();
+                renderRatingTable();
+                await saveStep3Data();
+            };
+            chip.appendChild(editBtn);
+            chip.appendChild(delBtn);
+            listEl.appendChild(chip);
+        });
+    }
+    renderChips();
+
+        addBtn.onclick = async () => {
+                const result = await showExtraFacetModal();
+                if (!result) return;
+                const { name, description } = result;
+                if (!name) return;
+                const trimmed = name.trim();
+                if (!trimmed) return;
+                if (extraColumns.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+                        window.displayInfo && window.displayInfo('warning', 'Facet name already exists.');
+                        return;
+                }
+                extraColumns.push({ id: newExtraColId(), name: trimmed, description: (description || '').trim() || null });
+                renderChips();
+                renderRatingTable();
+                await saveStep3Data();
+                window.displayInfo && window.displayInfo('success', 'Extra facet added.');
+        };
+}
+
+// Modal creation for adding a new extra facet (name + description + AI suggestion retained from legacy UI)
+function ensureExtraFacetModal() {
+        if (document.getElementById('extraFacetModal')) return document.getElementById('extraFacetModal');
+        const div = document.createElement('div');
+        div.innerHTML = `
+        <div class="modal fade" id="extraFacetModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Add Extra Facet</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Facet name</label>
+                            <input type="text" class="form-control form-control-sm" id="extraFacetNameInput" placeholder="e.g., Clarity" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Description / tooltip</label>
+                            <textarea class="form-control form-control-sm" id="extraFacetDescInput" rows="2" placeholder="Concise definition (<= 20 words)"></textarea>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <button type="button" id="suggestFacetBtn" class="btn btn-sm btn-info"">
+                                <span class="bi bi-lightbulb"></span>
+                            </button>
+                            <span class="small text-secondary">AI suggestion</span>
+                        </div>
+                        <div class="form-text small text-secondary">Adds an exploratory / decoy facet scored 1–5 like core subdimensions.</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="saveExtraFacetBtn" disabled>Add</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+        document.body.appendChild(div);
+        return document.getElementById('extraFacetModal');
+}
+
+function showExtraFacetModal() {
+        ensureExtraFacetModal();
+        const modalEl = document.getElementById('extraFacetModal');
+        const nameInput = modalEl.querySelector('#extraFacetNameInput');
+        const descInput = modalEl.querySelector('#extraFacetDescInput');
+        const saveBtn = modalEl.querySelector('#saveExtraFacetBtn');
+        const suggestBtn = modalEl.querySelector('#suggestFacetBtn');
         nameInput.value = '';
-                if (descInput) descInput.value = '';
-        wrap.querySelector('#removeExtraColumnBtn').disabled = true;
-        renderRatingTable();
-        await saveStep3Data();
+        descInput.value = '';
+        saveBtn.disabled = true;
+
+        function nameExists(v) {
+            const lower = v.toLowerCase();
+            const subHit = (subdimensions||[]).some(sd => (sd.name||'').toLowerCase() === lower);
+            const extraHit = (extraColumns||[]).some(c => (c.name||'').toLowerCase() === lower);
+            return subHit || extraHit;
+        }
+        function validate() {
+            const v = (nameInput.value || '').trim();
+            const dup = v && nameExists(v);
+            saveBtn.disabled = !v || dup;
+            if (dup) {
+                saveBtn.title = 'Name already exists';
+            } else {
+                saveBtn.removeAttribute('title');
+            }
+        }
+        nameInput.oninput = validate;
+
+        let bsModal = bootstrap.Modal.getInstance(modalEl);
+        if (!bsModal) bsModal = new bootstrap.Modal(modalEl, { backdrop: 'static' });
+    // Hoist onHidden so cleanup can reference it safely
+    let onHidden = null;
+    const cleanup = () => {
+        nameInput.oninput = null;
+        saveBtn.onclick = null;
+        suggestBtn.onclick = null;
+        if (onHidden) modalEl.removeEventListener('hidden.bs.modal', onHidden);
     };
 
-    // Suggestion button: calls AI with placeholder prompt (user to customize later)
-    const suggestBtn = wrap.querySelector('#suggestExtraColumnBtn');
-    if (suggestBtn) {
-        suggestBtn.onclick = async () => {
-            if (suggestBtn.dataset.loading === '1') return;
-            try {
-                suggestBtn.dataset.loading = '1';
-                const originalHTML = suggestBtn.innerHTML;
-                suggestBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-                const constructName = step1Data?.panel1?.constructName || 'the construct';
-                const subs = (subdimensions || []).map(sd => `${sd.name}: ${sd.definition || ''}`).join('\n');
-                const itemList = (items || []).map(it => `- ${it.id}: ${it.text}`).join('\n');
-                const prompt = `You will propose one additional decoy subdimension name and a concise description that could plausibly belong among existing ones to test expert differentiation. Return ONLY valid JSON with keys name and description.\nExisting subdimensions:\n${subs}\nItems:\n${itemList}\nConstraints: 1) Name: 1-3 words, professional. 2) Description: <= 20 words, stylistically similar to others, not obviously fake.
-                return JSON: {"name": "Column Name", "description": "Tooltip / rationale"}
-                `;
-                const resp = await window.sendChat(prompt, [{role:'system', content:'JSON only, no markdown.'}]);
-                const raw = Array.isArray(resp) ? resp[0] : resp;
-                let parsed = null;
-                try { parsed = window.cleanAIRespond(String(raw)); } catch { parsed = null; }
-                if (parsed && typeof parsed === 'object') {
-                    const proposedName = (parsed.name || '').toString().trim();
-                    const proposedDesc = (parsed.description || '').toString().trim();
-                    if (proposedName && !extraColumnName) {
-                        nameInput.value = proposedName;
-                        extraColumnName = proposedName;
-                        wrap.querySelector('#removeExtraColumnBtn').disabled = false;
-                    }
-                    if (proposedDesc && !extraColumnDescription) {
-                        descInput.value = proposedDesc;
-                        extraColumnDescription = proposedDesc;
-                    }
-                    renderRatingTable();
-                    await saveStep3Data();
-                    window.displayInfo && window.displayInfo('success', 'Suggestion applied. Review before generating AI raters.');
-                } else {
-                    window.displayInfo && window.displayInfo('warning', 'No usable suggestion returned.');
-                }
-                suggestBtn.innerHTML = originalHTML;
-                delete suggestBtn.dataset.loading;
-            } catch(err) {
-                console.error('Suggestion generation failed', err);
-                window.displayInfo && window.displayInfo('danger', 'Failed to get suggestion');
-                suggestBtn.innerHTML = '<span class="bi bi-lightbulb"></span>';
-                delete suggestBtn.dataset.loading;
-            }
+    return new Promise(resolve => {
+        onHidden = () => {
+            cleanup();
+            resolve(null);
         };
-    }
+                modalEl.addEventListener('hidden.bs.modal', onHidden, { once: true });
+
+                saveBtn.onclick = () => {
+                        const name = (nameInput.value || '').trim();
+                        if (!name) return;
+                        const description = (descInput.value || '').trim();
+                        cleanup();
+                        bsModal.hide();
+                        resolve({ name, description });
+                };
+
+                suggestBtn.onclick = async () => {
+                        if (suggestBtn.dataset.loading === '1') return;
+                        try {
+                                suggestBtn.dataset.loading = '1';
+                                const orig = suggestBtn.innerHTML;
+                                suggestBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+                                const subs = [
+                                    ...(subdimensions || []).map(sd => `${sd.name}: ${sd.definition || ''}`),
+                                    ...(extraColumns || []).map(c => `${c.name}: ${c.description || ''}`)
+                                ].join('\n');
+                                const itemList = (items || []).map(it => `- ${it.id}: ${it.text}`).join('\n');
+                                const prompt = `You will propose one additional decoy subdimension (facet) name and a concise description that could plausibly belong among existing ones to test expert differentiation. Return ONLY valid JSON with keys name and description.\nExisting facet names (core + extra):\n${subs}\nItems (context):\n${itemList}\nConstraints: 1) Do NOT duplicate any existing name (case-insensitive). 2) Name: 1-3 words, professional. 3) Description: <= 20 words, stylistically similar to others, not obviously fake. 4) Avoid trivial variations (e.g., adding a period).\nReturn JSON: {"name": "Column Name", "description": "Tooltip / rationale"}`;
+                                const resp = await window.sendChat(prompt, [{ role:'system', content:'JSON only, no markdown.' }]);
+                                const raw = Array.isArray(resp) ? resp[0] : resp;
+                                let parsed = null;
+                                try { parsed = window.cleanAIRespond(String(raw)); } catch { parsed = null; }
+                                if (parsed && typeof parsed === 'object') {
+                                        const proposedName = (parsed.name || '').toString().trim();
+                                        const proposedDesc = (parsed.description || '').toString().trim();
+                                        if (proposedName) nameInput.value = proposedName;
+                                        if (proposedDesc) descInput.value = proposedDesc;
+                                        validate();
+                                        if (proposedName && nameExists(proposedName)) {
+                                            window.displayInfo && window.displayInfo('warning', 'Suggested name already exists—please edit.');
+                                        } else {
+                                            window.displayInfo && window.displayInfo('success', 'Suggestion inserted.');
+                                        }
+                                } else {
+                                        window.displayInfo && window.displayInfo('warning', 'No usable suggestion returned.');
+                                }
+                                suggestBtn.innerHTML = orig;
+                                delete suggestBtn.dataset.loading;
+                        } catch(err) {
+                                console.error('Facet suggestion failed', err);
+                                window.displayInfo && window.displayInfo('danger', 'Suggestion failed.');
+                                suggestBtn.innerHTML = '<span class="bi bi-lightbulb"></span>';
+                                delete suggestBtn.dataset.loading;
+                        }
+                };
+
+                bsModal.show();
+                setTimeout(() => nameInput.focus(), 120);
+        });
+}
+
+// Modal to edit existing extra facet (name + description)
+function ensureEditExtraFacetModal() {
+        if (document.getElementById('editExtraFacetModal')) return document.getElementById('editExtraFacetModal');
+        const div = document.createElement('div');
+        div.innerHTML = `
+        <div class="modal fade" id="editExtraFacetModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Extra Facet</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Facet name</label>
+                            <input type="text" class="form-control form-control-sm" id="editExtraFacetName" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Description / tooltip</label>
+                            <textarea class="form-control form-control-sm" id="editExtraFacetDesc" rows="2"></textarea>
+                        </div>
+                        <div class="form-text small text-secondary">Changing the name will migrate existing ratings to the new name.</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="saveEditExtraFacetBtn" disabled>Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+        document.body.appendChild(div);
+        return document.getElementById('editExtraFacetModal');
+}
+
+function showEditExtraFacetModal(col) {
+        ensureEditExtraFacetModal();
+        const modalEl = document.getElementById('editExtraFacetModal');
+        const nameInput = modalEl.querySelector('#editExtraFacetName');
+        const descInput = modalEl.querySelector('#editExtraFacetDesc');
+        const saveBtn = modalEl.querySelector('#saveEditExtraFacetBtn');
+        nameInput.value = col.name || '';
+        descInput.value = col.description || '';
+        saveBtn.disabled = !(nameInput.value.trim());
+
+        function validate() {
+                saveBtn.disabled = !(nameInput.value.trim());
+        }
+        nameInput.oninput = validate;
+
+        let bsModal = bootstrap.Modal.getInstance(modalEl);
+        if (!bsModal) bsModal = new bootstrap.Modal(modalEl, { backdrop:'static' });
+
+        let onHidden = null;
+        const cleanup = () => {
+                nameInput.oninput = null;
+                saveBtn.onclick = null;
+                if (onHidden) modalEl.removeEventListener('hidden.bs.modal', onHidden);
+        };
+
+        return new Promise(resolve => {
+                onHidden = () => { cleanup(); resolve(null); };
+                modalEl.addEventListener('hidden.bs.modal', onHidden, { once:true });
+                saveBtn.onclick = () => {
+                        const name = nameInput.value.trim();
+                        if (!name) return;
+                        const description = descInput.value.trim();
+                        cleanup();
+                        bsModal.hide();
+                        resolve({ name, description });
+                };
+                bsModal.show();
+                setTimeout(() => nameInput.focus(), 120);
+        });
 }
 
 
@@ -961,14 +1251,16 @@ function buildAnovaLongDataset() {
             rating: v === '' || v === undefined || v === null ? null : Number(v)
         });
       }
-            // Append extra column as an additional facet if defined (treated like another dimension)
-            if (extraColumnName) {
-                const extraVal = perItem[extraColumnName];
-                rows.push({
-                    item: String(it.id),
-                    rater: String(rId),
-                    facet: extraColumnName,
-                    rating: extraVal === '' || extraVal === undefined || extraVal === null ? null : Number(extraVal)
+            // Append extra columns as additional facets
+            if (Array.isArray(extraColumns)) {
+                extraColumns.forEach(col => {
+                    const extraVal = perItem[col.name];
+                    rows.push({
+                        item: String(it.id),
+                        rater: String(rId),
+                        facet: col.name,
+                        rating: extraVal === '' || extraVal === undefined || extraVal === null ? null : Number(extraVal)
+                    });
                 });
             }
     }
@@ -1071,6 +1363,7 @@ function buildMackenzieTableJSON() {
 // ============ Analysis UI and rendering ============
 let anovaTable = null;
 let lastAnovaResults = [];
+let anovaLoadInFlight = false; // guard to avoid overlapping loads
 
 function wireAnalysisUI() {
     // Create a panel below the item table if it doesn't exist
@@ -1145,19 +1438,38 @@ function wireAnalysisUI() {
 
 // Load saved ANOVA results (if any) and render on page load
 async function loadSavedAnovaResults() {
+    if (anovaLoadInFlight) return; // prevent overlapping
+    anovaLoadInFlight = true;
     try {
+        // Ensure analysis panel exists (if init order changes)
+        if (!document.getElementById('anova-results-table')) {
+            wireAnalysisUI();
+        }
         const step3 = await window.dataStorage.getData('data_step_3');
-        let rows = Array.isArray(step3?.anovaResults?.rows) ? step3.anovaResults.rows : [];
+        const rows = Array.isArray(step3?.anovaResults?.rows) ? step3.anovaResults.rows : [];
         const noItems = !Array.isArray(items) || items.length === 0;
-        if (rows.length > 0 && !noItems) {
+        if (rows.length > 0 && noItems) {
+            // Items not yet loaded: skip rendering now; will render later when items are available
+            return;
+        }
+        if (rows.length > 0) {
             lastAnovaResults = rows;
-            renderAnovaResults(rows);
+            try {
+                renderAnovaResults(rows);
+            } catch (err) {
+                // Fallback: rebuild table fresh if render failed due to early timing
+                try { if (anovaTable) { anovaTable.destroy(); anovaTable = null; } } catch {}
+                setTimeout(() => {
+                    try { renderAnovaResults(rows); } catch(e2){ console.warn('Second renderAnovaResults attempt failed', e2); }
+                }, 50);
+            }
             const btn = document.getElementById('exportAnovaBtn');
             if (btn) btn.disabled = false;
         } else {
-             lastAnovaResults = [];
+            lastAnovaResults = [];
             if (anovaTable) {
                 try { anovaTable.destroy(); } catch {}
+                anovaTable = null;
             }
             const btn = document.getElementById('exportAnovaBtn');
             if (btn) btn.disabled = true;
@@ -1166,6 +1478,8 @@ async function loadSavedAnovaResults() {
         }
     } catch (e) {
         console.warn('No saved ANOVA results to load or failed to load.', e);
+    } finally {
+        anovaLoadInFlight = false;
     }
 }
 
