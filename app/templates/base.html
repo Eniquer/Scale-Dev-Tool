@@ -4,6 +4,14 @@
     <title>Scale Dev Tool</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Favicon & App Icons -->
+  <!-- All assets located in app/static/favicon/ -->
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='favicon/favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='favicon/favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', path='favicon/favicon-16x16.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', path='favicon/apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', path='favicon/site.webmanifest') }}">
+  <meta name="theme-color" content="#111826">
     <link href="/static/custom-theme.min.css" rel="stylesheet">
     <link href="/static/style.css" rel="stylesheet">
     <!-- Removed HTMX; load scripts statically -->
