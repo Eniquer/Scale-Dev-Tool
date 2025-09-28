@@ -27,6 +27,11 @@
 		}
 	})();
 	let items = [];
+	let disabledFacets = [];
+	let dimensionality = 'Unidimensional';
+	let facetDisabledFromStep4 = {};
+	let panel5Subdimensions = [];
+	let knownSubdimensionIds = new Set();
 	let decidedLower = null;
 	let decidedUpper = null;
 	let questionnaireItemList = []; // holds the final items included in questionnaire (id, code, text, subdimension)
@@ -43,6 +48,11 @@
 				window.dataStorage.getData('data_step_4')
 			]);
 			items = step2?.items || [];
+			disabledFacets = Array.isArray(step4?.disabledFacets) ? step4.disabledFacets : [];
+			dimensionality = step1?.panel4?.dimensionality || 'Unidimensional';
+			facetDisabledFromStep4 = step4?.facetDisabledItems || {};
+			panel5Subdimensions = step1?.panel5?.subdimensions || [];
+			knownSubdimensionIds = new Set((panel5Subdimensions||[]).map(sd=>sd.id));
 			decidedLower = (typeof step5?.decidedLower === 'number') ? step5.decidedLower : null;
 			decidedUpper = (typeof step5?.decidedUpper === 'number') ? step5.decidedUpper : null;
 			extraItems = Array.isArray(step5?.extraItems)? step5.extraItems : [];
@@ -64,7 +74,22 @@
 	function renderSampleSize(){
 		const host = document.getElementById('sampleSizeGuidance');
 		if (!host) return;
-		const n = items.length;
+		// Only count items from enabled facets and respect per-item exclusions from Step 4
+		let n = 0;
+		if (dimensionality === 'Multidimensional') {
+			// Exclude items without subdimension assignment and items from disabled facets or individually excluded
+			n = items.filter(it => {
+				if (!it.subdimensionId) return false; // skip unassigned items in multidimensional mode
+				// skip items that reference a non-existent subdimension
+				if (!knownSubdimensionIds.has(it.subdimensionId)) return false;
+				if (disabledFacets.includes(it.subdimensionId)) return false; // facet disabled at higher-order
+				const dis = new Set((facetDisabledFromStep4[it.subdimensionId]||[]).map(String));
+				return !dis.has(String(it.id));
+			}).length;
+		} else {
+			const dis = new Set((facetDisabledFromStep4['unidim']||[]).map(String));
+			n = items.filter(it => !dis.has(String(it.id))).length;
+		}
 		const ratioMin = 3 * n;
 		const ratioMax = 10 * n;
 		const absMin = 100;
@@ -121,14 +146,15 @@
 		const secondOrderGlobals = (secondOrderData.type === 'formative' ? (secondOrderData.globalReflective||[]) : []).filter(g => (g?.text||'').trim()); // [ {id,text}, ... ]
 		// Facet modes maybe used later if formative etc; here just grouping
 		const subdimensions = panel5?.subdimensions || [];
-		// Build active items list (exclude those flagged in step4)
+		// Build active items list (exclude those flagged in step4 and those from disabled facets)
 		const activeItems = items.filter(it => {
 			if (!subdimensions.length || dimensionality === 'Unidimensional') {
 				const dis = new Set((facetDisabled['unidim']||[]).map(String));
 				return !dis.has(String(it.id));
 			}
-			// multidimensional: exclusion per facet id
+			// multidimensional: exclusion per facet id and also if facet is disabled at higher-order
 			const fid = it.subdimensionId;
+			if (disabledFacets.includes(fid)) return false;
 			const dis = new Set((facetDisabled[fid]||[]).map(String));
 			return !dis.has(String(it.id));
 		});
