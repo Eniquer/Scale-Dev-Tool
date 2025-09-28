@@ -78,9 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
 		.badge.mm-facet-toggle.bg-secondary { opacity:0.7; }
 		.badge.mm-facet-toggle:hover { filter:brightness(0.9); }
 		#secondOrderRefFacet option[data-excluded="1"] { color:#b1b1b1ff; font-style:italic; }
-		/* Higher-order facet visually disabled */
-		.facet-card.ho-facet-excluded { opacity:0.55; position:relative; }
-		.facet-card.ho-facet-excluded::after { content:"Excluded"; position:absolute; top:4px; right:6px; font-size:0.8rem; background:#ffc107; color:#212529; padding:2px 4px; border-radius:3px; letter-spacing:.5px; }
 		`;
 		document.head.appendChild(style);
 	}
@@ -240,7 +237,6 @@ function renderFirstOrderFacets() {
 		list.appendChild(col);
 	});
 		updateValidationMessages();
-		applyHigherOrderFacetExclusionStyles();
 }
 
 async function loadStep4Model(){
@@ -403,7 +399,6 @@ function attachAutoSaveHandlers(){
 			// Refresh reference select options so excluded facet is annotated
 			populateSecondOrderRefSelect();
 			refreshLavaanPanel();
-			applyHigherOrderFacetExclusionStyles();
 			scheduleAutoSave();
 			return;
 		}
@@ -568,8 +563,6 @@ function generateLavaanSpec(){
 		// Build item id -> variable mapping
 		(items||[]).forEach(it => {
 			const facetId = (!subdimensions.length || dimensionality==='Unidimensional') ? 'unidim' : (it.subdimensionId || '');
-			// If higher-order latent active and facet disabled at higher-order, omit entirely (user intent: facet absent from model)
-			if (secondOrder.type && facetId !== 'unidim' && disabledFacets.includes(facetId)) return;
 			const disabled = (facetDisabledItems[facetId]||[]).map(String).includes(String(it.id));
 			const cid = itemCustomIds[it.id];
 			mapping.push(`# ${disabled? '(excluded) ':''}${itemVar(it.id)} = item ${it.id}: ${shorten(it.text||'',70)}`);
@@ -583,7 +576,7 @@ function generateLavaanSpec(){
 		if (secondOrder.type === 'formative') {
 			(secondOrder.globalReflective||[]).filter(g => (g.text||'').trim()).forEach((g,i) => mapping.push(`# ${secondGlobalItemVar(i)} = higher-order global: ${shorten(g.text||'',70)}`));
 		}
-		subdimensions.forEach(sd => { if (secondOrder.type && disabledFacets.includes(sd.id)) return; if (sd.code) mapping.push(`# Code ${sd.code}: Facet ${sd.name} `); });
+		subdimensions.forEach(sd => { if (sd.code) mapping.push(`# Code ${sd.code}: Facet ${sd.name} `); });
 		if (overallCode) mapping.push(`# Overall code: ${overallCode}`);
 
 		// Unidimensional shortcut
@@ -625,8 +618,6 @@ function generateLavaanSpec(){
 
 		// First-order facets
 		subdimensions.forEach(sd => {
-			// If higher-order model active and facet disabled there, omit its measurement block entirely
-			if (secondOrder.type && disabledFacets.includes(sd.id)) return;
 			const mode = facetModes[sd.id];
 			if (!mode) return;
 			const fVar = facetVar(sd);
@@ -818,53 +809,46 @@ function updateSecondOrderUI(){
 	const scalingWrapper = document.getElementById('secondOrderScalingWrapper');
 	if (!scalingWrapper) return;
 
-	// Build higher-order facet item-like grid INSIDE panel body & make available even if higher-order latent not currently modeled
+	// Build higher-order facet item-like grid (below scaling section) if higher-order latent active
 	const panel = document.getElementById('secondOrderPanel');
 	if (panel) {
 		let hoHost = document.getElementById('higherOrderFacetItems');
 		if (!hoHost) {
 			hoHost = document.createElement('div');
 			hoHost.id = 'higherOrderFacetItems';
-			// Insert AFTER scaling wrapper for requested layout
-			if (scalingWrapper && scalingWrapper.parentNode) {
-				const parent = scalingWrapper.parentNode;
-				const ref = scalingWrapper.nextSibling; // may be null
-				try {
-					if (ref) parent.insertBefore(hoHost, ref); else parent.appendChild(hoHost);
-				} catch(err){
-					parent.appendChild(hoHost);
-				}
-			} else {
-				panel.appendChild(hoHost);
-			}
+			panel.appendChild(hoHost);
 		}
-		const total = subdimensions.length;
-		const active = subdimensions.filter(sd => !disabledFacets.includes(sd.id));
-		const disabledCount = total - active.length;
-		const refFacetId = (secondOrder.type === 'reflective' && secondOrder.scaling.method === 'fix_loading') ? secondOrder.scaling.refFacetId : null;
-		const helpMsg = `Click a facet to ${disabledCount? 'toggle include/exclude':'exclude it from the construct'}.`;
-		const gridHtml = subdimensions.length ? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">${helpMsg}</div>${subdimensions.map(sd => {
-			const isDisabled = disabledFacets.includes(sd.id);
-			const refMark = (refFacetId != null && String(refFacetId) === String(sd.id)) ? ' ref-item' : '';
-			const code = (sd.code||'').trim();
-			const label = code ? `<span class=\"badge bg-secondary me-1\">${escapeHtml(code)}</span>${escapeHtml(shorten(sd.name||'',40))}` : escapeHtml(sd.name || ('Facet '+sd.id));
-			return `<span class=\"mm-item-tag ho-facet-tag${isDisabled? ' inactive':''}${refMark}\" data-ho-facet-id=\"${sd.id}\" title=\"${isDisabled? 'Click to include':'Click to exclude'} ${escapeHtml(sd.name||'facet')}\">${label}${refMark? ' <i class=\"bi bi-asterisk text-warning\"></i>':''}</span>`;
-		}).join('')}</div>` : '<div class="text-muted small">No facets defined.</div>';
-		let collapse = document.getElementById('collapse-ho-facets');
-		if (!collapse) {
-			hoHost.innerHTML = `
-				<hr>
-				<button class="btn mb-1 collapse-btn collapsed" type="button" style="width:fit-content" data-bs-toggle="collapse" data-bs-target="#collapse-ho-facets" aria-expanded="true" aria-controls="collapse-ho-facets">
-					<div class="small fw-bold"><i class="bi bi-chevron-up"></i> Facets (${active.length}${active.length!==total? '/'+total:''})</div>
-				</button>
-				<div class="collapse" id="collapse-ho-facets">
-					<div class="flex-grow-1 d-flex flex-column mb-1" style="max-height:160px; overflow:auto;">${gridHtml}</div>
-				</div>`;
+		hoHost.innerHTML = '';
+		if (secondOrder.type) {
+			const total = subdimensions.length;
+			const active = subdimensions.filter(sd => !disabledFacets.includes(sd.id));
+			const disabledCount = total - active.length;
+			const refFacetId = (secondOrder.type === 'reflective' && secondOrder.scaling.method === 'fix_loading') ? secondOrder.scaling.refFacetId : null;
+			const gridHtml = subdimensions.length ? `<div class="mm-item-grid"><div class="small text-muted w-100 mb-1">Click a facet to ${disabledCount? 'toggle include/exclude':'exclude it from the higher-order construct'}.</div>${subdimensions.map(sd => {
+				const isDisabled = disabledFacets.includes(sd.id);
+				const refMark = (refFacetId != null && String(refFacetId) === String(sd.id)) ? ' ref-item' : '';
+				const code = (sd.code||'').trim();
+				const label = code ? `<span class=\"badge bg-secondary me-1\">${escapeHtml(code)}</span>${escapeHtml(shorten(sd.name||'',40))}` : escapeHtml(sd.name || ('Facet '+sd.id));
+				return `<span class=\"mm-item-tag ho-facet-tag${isDisabled? ' inactive':''}${refMark}\" data-ho-facet-id=\"${sd.id}\" title=\"${isDisabled? 'Click to include':'Click to exclude'} ${escapeHtml(sd.name||'facet')}\">${label}${refMark? ' <i class=\"bi bi-asterisk text-warning\"></i>':''}</span>`;
+			}).join('')}</div>` : '<div class="text-muted small">No facets defined.</div>';
+			let collapse = document.getElementById('collapse-ho-facets');
+			if (!collapse) {
+				hoHost.innerHTML = `
+					<hr>
+					<button class="btn mb-1 collapse-btn collapsed" type="button" style="width:fit-content" data-bs-toggle="collapse" data-bs-target="#collapse-ho-facets" aria-expanded="true" aria-controls="collapse-ho-facets">
+						<div class="small fw-bold"><i class="bi bi-chevron-up"></i> Facets (${active.length}${active.length!==total? '/'+total:''})</div>
+					</button>
+					<div class="collapse" id="collapse-ho-facets">
+						<div class="flex-grow-1 d-flex flex-column mb-1" style="max-height:160px; overflow:auto;">${gridHtml}</div>
+					</div>`;
+			} else {
+				const label = document.querySelector('button[data-bs-target="#collapse-ho-facets"] .small.fw-bold');
+				if (label) label.innerHTML = `<i class=\"bi bi-chevron-up\"></i> Facets (${active.length}${active.length!==total? '/'+total:''})`;
+				const gridContainer = document.querySelector('#collapse-ho-facets .flex-grow-1');
+				if (gridContainer) gridContainer.innerHTML = gridHtml;
+			}
 		} else {
-			const label = document.querySelector('button[data-bs-target="#collapse-ho-facets"] .small.fw-bold');
-			if (label) label.innerHTML = `<i class=\"bi bi-chevron-up\"></i> Facets (${active.length}${active.length!==total? '/'+total:''})`;
-			const gridContainer = document.querySelector('#collapse-ho-facets .flex-grow-1');
-			if (gridContainer) gridContainer.innerHTML = gridHtml;
+			hoHost.innerHTML = '';
 		}
 	}
 	// Ensure placeholder elements exist INSIDE scaling box (idempotent)
@@ -935,7 +919,6 @@ function updateSecondOrderUI(){
 	}
 	// Ensure higher-order reflective reference facet asterisk is updated
 	updateHigherOrderRefFacetVisual();
-	applyHigherOrderFacetExclusionStyles();
 }
 
 function populateSecondOrderRefSelect(){
@@ -990,16 +973,6 @@ function updateHigherOrderRefFacetVisual(){
 			refTag.insertAdjacentHTML('beforeend',' <i class="bi bi-asterisk text-warning"></i>');
 		}
 	}
-}
-
-// Apply or remove ho-facet-excluded class to first-order facet cards (visual cue in Step 4)
-function applyHigherOrderFacetExclusionStyles(){
-	if (!subdimensions.length || dimensionality === 'Unidimensional') return; // no facet cards
-	subdimensions.forEach(sd => {
-		const card = document.querySelector(`.facet-card[data-facet="${sd.id}"]`);
-		if (!card) return;
-		if (disabledFacets.includes(sd.id)) card.classList.add('ho-facet-excluded'); else card.classList.remove('ho-facet-excluded');
-	});
 }
 
 function populateSecondOrderRefItemSelect(){

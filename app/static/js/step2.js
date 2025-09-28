@@ -16,6 +16,7 @@ let nextItemId = 1; // monotonically increasing id to avoid reuse
 let step4FacetDisabledItems = {}; // { facetId: [itemId,...] }
 let step4ItemCustomIds = {}; // { itemId: customCode }
 let step4FacetModes = {}; // { facetId: 'reflective' | 'formative' }
+let step4DisabledFacets = []; // higher-order disabled facets (from step 4)
 
 let generalExpertPrompt = `a Pool of Experts with Occupations as professors, PHD candidates, experts in the field and researchers.`
 const expertPromptAddon = document.getElementById('expertPromptAddon')
@@ -341,6 +342,7 @@ if (!expertPromptAddon.value) {
     step4FacetDisabledItems = step4Data?.facetDisabledItems || {};
     step4ItemCustomIds = step4Data?.itemCustomIds || {};
     step4FacetModes = step4Data?.facetModes || {};
+    step4DisabledFacets = step4Data?.disabledFacets || [];
     // initialize nextItemId from storage or compute from existing items
     if (typeof step2Data.nextItemId === 'number' && step2Data.nextItemId > 0) {
         nextItemId = step2Data.nextItemId;
@@ -392,13 +394,14 @@ function renderSubdimensionPanels() {
     container.innerHTML = ''; // Clear existing content
     subdimensions.forEach((sd, index) => {
         const panel = document.createElement('div');
-        panel.className = 'card mb-3';
+        const hoExcluded = step4DisabledFacets.includes(sd.id);
+        panel.className = 'card mb-3 subdimension-card' + (hoExcluded ? ' ho-facet-excluded' : '');
         panel.id = `subdim-${index}`;
         const attributes = sd.attributes.length?`<p class="small text-muted">Attributes: ${sd.attributes.join(', ')}</p>`:'';
         panel.innerHTML = `
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-1">
-                    <h5 class="card-title mb-0">${sd.name}</h5>
+                    <h5 class="card-title mb-0">${sd.name}${hoExcluded? ' <span class="badge bg-warning text-dark ms-1" title="Excluded from higher-order (Step 4)">Excluded</span>':''}</h5>
                     <button type="button" class="btn btn-sm btn-outline-danger delete-subdimension-items" data-subdim="${sd.id}" title="Delete all items in this subdimension">Delete all</button>
                 </div>
                 <p class="small text-muted">${sd.definition}</p>
@@ -1024,6 +1027,8 @@ if (!document.getElementById('step2-disabled-style')) {
     .item-row .code-consistency-badge { font-size: 0.55rem; background: #ffc107; color: #212529; border:1px solid #665c00; }
     .item-row .code-consistency-badge.missing-code { background:#6c757d; border-color:#495057; color:#f8f9fa; }
     .item-row .code-consistency-tooltip { cursor: help; }
+    /* Higher-order facet exclusion visuals (imported from Step 4) */
+    .subdimension-card.ho-facet-excluded { opacity:0.6; position:relative; }
     `;
     document.head.appendChild(style);
 }
