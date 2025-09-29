@@ -58,6 +58,12 @@ html[data-bs-theme="dark"] body {
 #definitionsContainer .card.selected{
     background-color: #36393b;
 }
+#definitionsContainer .card.selected.custom-card-bg-light{
+    background-color: #FFF !important;
+}
+#definitionsContainer .card.custom-card-bg-light{
+    background-color: #d8d8d8 !important;
+}
 
 .bi-union, .floppy-custom-color {
     color: var(--color-card-body);

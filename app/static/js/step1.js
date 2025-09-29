@@ -557,13 +557,23 @@ async function renderDefinitions() {
     definitions.forEach(item => {
         const col = document.createElement('div');
         col.className = 'col';
-        col.innerHTML = `
+        if (item.reference === 'Your Definition') {
+            col.innerHTML = `
             <div class="card border-2 h-100">
                 <div class="card-body">
                     <h5 class="card-title text-light">${item.reference}</h5>
                     <p class="card-text text-light">${item.definition}</p>
                 </div>
             </div>`;
+        } else {
+            col.innerHTML = `
+            <div class="card border-2 h-100 custom-card-bg-light">
+                <div class="card-body">
+                    <h5 class="card-title text-dark">${item.reference}</h5>
+                    <p class="card-text text-dark">${item.definition}</p>
+                </div>
+            </div>`;
+        }
         // Make the card selectable
         const cardEl = col.querySelector('.card');
         cardEl.style.cursor = 'pointer';
