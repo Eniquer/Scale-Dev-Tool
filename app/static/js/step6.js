@@ -232,7 +232,7 @@ let rawData = []; // current working data (may be reversed)
     const body = id('aiReverseSuggestionBody');
     if (!columns.length){ window.displayInfo?.('info','Load data first.'); return; }
     // Gather context from prior steps
-    let constructName='', items=[], definitions=[];
+    let constructName='', specItems=[], definitions=[];
     try {
       const step1 = await window.dataStorage.getData('data_step_1');
       const step2 = await window.dataStorage.getData('data_step_2');
@@ -244,7 +244,7 @@ let rawData = []; // current working data (may be reversed)
       definition = step1?.panel2.savedDefinition || '';
       // Items might exist in step4 structure or items array
       const step5Items = step5?.questionnaireItems || [];
-      items = Array.isArray(step5Items)? step5Items.map(it=>({ code: it.code || '' , text: it.text ||'' })) : [];
+      specItems = Array.isArray(step5Items)? step5Items.map(it=>({ code: it.code || '' , text: it.text ||'' })) : [];
     } catch(e){}
     // Fallback: derive items from columns if missing texts
     const prompt = `You are an expert in survey methodology. Goal: identify which items are likely reverse-keyed (semantic polarity opposite) for a psychological/management construct.
@@ -253,20 +253,23 @@ Context:
 Construct Name: ${constructName||'N/A'}
 Construct Definition: ${definition||'N/A'}
 Item Codes and Texts:
-${items.map(it=>`- ${it.code}: ${it.text}`).join('\n')}
+${specItems.map(it=>`- ${it.code}: ${it.text}`).join('\n')}
 
 Instructions:
 1. Provide an array reverseCandidates with item codes you strongly believe should be reverse-keyed.
-2. Provide reasoning (≤15 words per item) in a map reasons.
-3. Provide a short overall rationale (≤35 words).
-4. If unsure, return empty arrays.
+2. Provide reasoning for the reversed candidates (≤15 words per item) in a map reasons.
+3. Include not reversed items in nonCandidates
+4. Provide a short overall rationale (≤35 words).
+5. If unsure, return empty arrays.
 
 Output format (strict JSON):
 {
   "reverseCandidates": ["ITEM_CODE", ...],
+  "nonCandidates": ["ITEM_CODE", ...],
   "reasons": { "ITEM_CODE": "short reason", ... },
   "overallRationale": "text"
 }`;
+
     btn && (btn.disabled = true);
     try {
       window.showLoading()
@@ -280,11 +283,13 @@ Output format (strict JSON):
       }
       if (!parsed || typeof parsed !== 'object'){ throw new Error('Empty AI response'); }
       const full = Array.isArray(parsed.reverseCandidates)? parsed.reverseCandidates : [];
+      const nonCands = Array.isArray(parsed.nonCandidates)? parsed.nonCandidates : [];
       const candidates = full.filter(c=> columns.includes(c));
       const missing = full.filter(c=> !columns.includes(c));
       aiReverseSuggestion = {
         reverseCandidates: candidates, // present in current table
         missingCandidates: missing,    // suggested but not found in table
+        nonCandidates: nonCands,
         reasons: parsed.reasons||{},
         overallRationale: parsed.overallRationale||''
       };
@@ -311,9 +316,14 @@ Output format (strict JSON):
     const body = id('aiReverseSuggestionBody');
     if (!card || !body) return;
     if (!aiReverseSuggestion){ card.classList.add('d-none'); return; }
-  const { reverseCandidates=[], missingCandidates=[], reasons={}, overallRationale='' } = aiReverseSuggestion;
+  const { reverseCandidates=[], missingCandidates=[], nonCandidates=[], reasons={}, overallRationale='' } = aiReverseSuggestion;
   const candidates = reverseCandidates.filter(c=> columns.includes(c));
     const htmlParts = [];
+    if(nonCandidates.length){
+      htmlParts.push(`<div class="small mb-1"><strong>Suggested Non-Reverse Items (${nonCandidates.length})</strong></div>`);
+      htmlParts.push(`<div class="mb-2 small">${nonCandidates.map(c=>`<span class='badge bg-info me-1  text-dark'>${c}</span>`).join('')}</div>`);
+      htmlParts.push(`<div class="mb-2 small badge bg-warning text-dark">If items are missing, revisit step5 to update the questionnaire.</div>`);
+    }
     htmlParts.push(`<div class="small mb-1"><strong>Suggested Reverse Items (${candidates.length})</strong></div>`);
     if (candidates.length){
       htmlParts.push(`<div class="mb-2 small">${candidates.map(c=>`<span class='badge bg-warning text-dark me-1'>${c}</span>`).join('')}</div>`);
