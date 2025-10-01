@@ -311,6 +311,8 @@ Output format (strict JSON):
     }
   }
 
+  //todo bug warnings are staing after reloading simulated data
+
   function renderAiReverseSuggestion(){
     const card = id('aiReverseSuggestionCard');
     const body = id('aiReverseSuggestionBody');
@@ -499,6 +501,15 @@ Output format (strict JSON):
     renderColumns();
     renderTable();
     updateViewButtons();
+    // Mark CFA/EFA results potentially outdated because underlying data view changed
+    if (lastCFAResult && lastCFAResult._meta){
+      // Force mismatch without losing original model reference by blanking stored dataSig
+      lastCFAResult._meta.dataSig = '__stale_after_reverse__';
+    }
+    if (lastEFAResult && lastEFAResult._meta){
+      lastEFAResult._meta.dataSig = '__stale_after_reverse__';
+    }
+    updateOutdatedNotices();
   }
 
   function renderTable(){
@@ -797,15 +808,15 @@ Output format (strict JSON):
   }
 
   function updateOutdatedNotices(){
-    // EFA
+    // --- EFA Outdated Notice ---
     const efaOut = id('efaResults');
     if (efaOut){
-      let note = efaOut.previousElementSibling && efaOut.previousElementSibling.id==='efaOutdatedNotice' ? efaOut.previousElementSibling : null;
+      let note = document.getElementById('efaOutdatedNotice');
       const currentNF = (id('efaNFactors')?.value||'').trim()||'auto';
       const currentRot = (id('efaRotation')?.value||'oblimin');
       const currentSig = computeDataSignature(rawData, columns);
       let outdated=false;
-  if (lastEFAResult && lastEFAResult._meta){
+      if (lastEFAResult && lastEFAResult._meta){
         const m = lastEFAResult._meta;
         outdated = (m.nFactorsValUsed !== currentNF) || (m.rotationUsed !== currentRot) || (m.dataSig !== currentSig);
       }
@@ -815,19 +826,31 @@ Output format (strict JSON):
           note.id='efaOutdatedNotice';
           note.className='alert alert-warning py-1 px-2 small mb-1';
           note.innerHTML='EFA results may be outdated (data or parameters changed). Re-run EFA.';
+        }
+        // Always ensure it's immediately before the results container
+        if (note.parentNode !== efaOut.parentNode || note.nextElementSibling !== efaOut){
           efaOut.parentNode.insertBefore(note, efaOut);
         }
-      } else if (note){ note.remove(); }
+      } else if (note){
+        note.remove();
+      }
     }
-    // CFA
+
+    // --- CFA Outdated Notice ---
     if (cfaResultsEl){
-      let banner = cfaResultsEl.previousElementSibling && cfaResultsEl.previousElementSibling.id==='cfaOutdatedNotice' ? cfaResultsEl.previousElementSibling : null;
+      let banner = document.getElementById('cfaOutdatedNotice');
       let outdated=false;
-  if (lastCFAResult && lastCFAResult._meta){
+      if (lastCFAResult && lastCFAResult._meta){
         const meta = lastCFAResult._meta;
-        const currentModel = (lavaanActiveView==='edited'? lavaanEdited : lavaanOriginalSnapshot) || '';
+        const normalize = (txt)=> (txt||'').replace(/\r/g,'').trim().replace(/\n+/g,'\n');
+        const currentModelRaw = (lavaanActiveView==='edited'? lavaanEdited : lavaanOriginalSnapshot) || '';
+        const currentModel = normalize(currentModelRaw);
         const currentSig = computeDataSignature(rawData, columns);
-        outdated = (meta.modelTextUsed !== currentModel) || (meta.dataSig !== currentSig);
+        // If meta stored normalized model, compare normalized; else fall back to raw comparison
+        const storedModel = meta.modelTextNormalized || meta.modelTextUsed || '';
+        // Avoid flagging outdated immediately after restore: if storedAt exists and < 2s ago treat as fresh even if signatures temporarily undefined
+        const justRestored = meta.storedAt && (Date.now() - meta.storedAt < 2000);
+        outdated = !justRestored && ((storedModel !== currentModel) || (meta.dataSig !== currentSig));
       }
       if (outdated){
         if (!banner){
@@ -835,11 +858,29 @@ Output format (strict JSON):
           banner.id='cfaOutdatedNotice';
           banner.className='alert alert-warning py-1 px-2 small mb-1';
           banner.innerHTML='Results may be outdated (data or model changed). Re-run analysis.';
+        }
+        // Insert after download wrapper if present, else before results
+        const dlWrap = document.getElementById('cfaDownloadWrapper');
+        if (dlWrap && dlWrap.parentNode === cfaResultsEl.parentNode){
+          if (banner.previousElementSibling !== dlWrap){
+            dlWrap.insertAdjacentElement('afterend', banner);
+          }
+        } else if (banner.parentNode !== cfaResultsEl.parentNode || banner.nextElementSibling !== cfaResultsEl){
           cfaResultsEl.parentNode.insertBefore(banner, cfaResultsEl);
         }
-      } else if (banner){ banner.remove(); }
+      } else if (banner){
+        banner.remove();
+      }
+      // Defensive: remove any accidental duplicate banners (same id duplicates can appear from legacy DOM)
+      const dupes = document.querySelectorAll('#cfaOutdatedNotice');
+      if (dupes.length > 1){
+        dupes.forEach((el,i)=>{ if (i>0) el.remove(); });
+      }
     }
   }
+
+  // Enhance metadata when setting CFA result so future comparisons are stable
+  const _origRunCFAAnalysis = runCFAAnalysis; // preserve reference if needed elsewhere
 
   function setLavaanStatus(){
     const status = id('lavaanStep6Status');
@@ -902,7 +943,8 @@ Output format (strict JSON):
       renderCFAResults(json);
       try {
         const dataSig = computeDataSignature(rawData, columns);
-        json._meta = { dataSig, modelTextUsed: modelText, storedAt: Date.now() };
+        const normalize = (txt)=> (txt||'').replace(/\r/g,'').trim().replace(/\n+/g,'\n');
+        json._meta = { dataSig, modelTextUsed: modelText, modelTextNormalized: normalize(modelText), storedAt: Date.now() };
       } catch(e) { /* ignore */ }
       lastCFAResult = json;
       persistState();
