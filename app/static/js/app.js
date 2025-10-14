@@ -1135,10 +1135,7 @@ window.shuffle = shuffle;
     }
 })();
 
-// todo Name / Logo / Favicon
-// todo MAYBE use cohort on persona generation prompt
-// todo MAYBE implement full project export/import
-// todo check Grammar
+// todo MAYBE use "cohort" on persona generation prompt
 
 window.ensurePersistentWarning = function(msg){
     let c = document.getElementById('stepPersistentWarning');

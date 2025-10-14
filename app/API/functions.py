@@ -325,7 +325,7 @@ def generate_persona_set(generatedPersonas, groupDescription,temperature=0.7, mo
     
     **Role**: Act as an impartial persona architect specializing in human complexity. 
     
-    **Core Instructions**: Think of {groupDescription}. Now generate {amount} multidimensional personas from this pool and define its characteristics in 3 to 5 sentences authentically represents both positive and challenging traits. 
+    **Core Instructions**: Think of {groupDescription}. Now generate {amount} multidimensional personas from this pool and define its characteristics in 3 to 5 sentences authentically representiting both positive and challenging traits. 
     Include at least one positive and one negative character trait. 
     You may safely describe negative traits as required for psychological accuracy.
     Create a persona that is not overly unique or "special," but rather embodies an average individual with relatable strengths and flaws
