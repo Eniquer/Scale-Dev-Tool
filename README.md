@@ -1,4 +1,4 @@
-# Thesis Tool
+# Scale-Dev-Tool
 
 A web-based tool for advanced psychometric analysis, persona generation, and interactive data workflows. Supports R, Python, and OpenAI API integrations.
 
@@ -25,8 +25,8 @@ A web-based tool for advanced psychometric analysis, persona generation, and int
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/Eniquer/thesis-tool.git
-cd thesis-tool
+git clone https://github.com/Eniquer/Scale-Dev-Tool.git
+cd into it
 ```
 
 ### 2. Python environment setup
