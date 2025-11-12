@@ -13,11 +13,11 @@ from openai._exceptions import (
 )
 
 from dotenv import load_dotenv
+
+DEFAULT_MODEL = "gpt-4.1"
+DEFAULT_SEARCH_MODEL = "gpt-4o-search-preview"
+
 load_dotenv()   # reads .env into os.environ
-
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-4.1")
-DEFAULT_SEARCH_MODEL = os.getenv("DEFAULT_SEARCH_MODEL", "gpt-4o-search-preview")
-
 # Load encryption secret from environment (set ENCRYPTION_SECRET)
 ENCRYPTION_SECRET = os.getenv("ENCRYPTION_SECRET", "")
 if not ENCRYPTION_SECRET:
@@ -50,7 +50,7 @@ class ChatRequest(BaseModel):
     history: list = []
     temperature: float = 0.7
     keyCipher: str
-    search_model: str | None = None  # optional override for search mode
+    search_model: str = DEFAULT_SEARCH_MODEL 
 
 class PersonaGenRequest(BaseModel):
     generatedPersonas: list = []
@@ -118,7 +118,7 @@ async def chat_endpoint(chat_req: ChatRequest):
     # call ChatGPT via functions
     try:
         if chat_req.model == "search":
-            # Use user override if supplied, else default env model
+            # Use user override if supplied, else default model
             effective_search_model = chat_req.search_model or DEFAULT_SEARCH_MODEL
             reply = get_chatgpt_search(
                 chat_req.prompt,
@@ -190,11 +190,7 @@ async def run_efa(payload: dict):
         n_factors = payload.get("n_factors", "auto")
         rotation = payload.get("rotation", "oblimin")
         script_rel = payload.get("script", "analysis/scripts/efa_analysis.R")
-        # We pass factors/rotation via environment variables or append args? Modify r_runner to accept extra? For simplicity, embed into model_syntax arg combined JSON.
-        # Here we overload model_syntax to carry a control JSON the R script can ignore; we instead extend run_r_subprocess to accept extra_args if available.
         try:
-            # run_r_subprocess signature (data, script_rel, model_syntax=None). We'll pass None and rely on script arguments after writing temp files.
-            # Quick adaptation: if r_runner supports extra args environment; if not, we add simple wrapper by constructing command via a small control script.
             result = run_r_subprocess(data, script_rel, model_syntax=None, extra_args=[str(n_factors), str(rotation)])
             return result
         except FileNotFoundError as e:
