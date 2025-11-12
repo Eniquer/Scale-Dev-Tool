@@ -83,7 +83,7 @@ install.packages(c("lavaan", "jsonlite"))
 - On Linux/macOS, `Rscript` should be available after install.
 
 ## Create .env pseudo secure encryption of api key on your frontend
-- ENCRYPTION_SECRET = YOURSECRETKEY 
+- ENCRYPTION_SECRET = YOUR-SECRET-KEY 
 
 ## Running the App
 
