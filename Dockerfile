@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
 
 # 3. Setup Node.js Dependencies (Frontend/Assets)
 # We do this first to leverage Docker caching
-WORKDIR /Scale-Dev-Tool
+WORKDIR /SCALEX-AI
 COPY package.json .
 # Run npm install so 'node_modules' exists (in case your app serves bootstrap from there)
 RUN npm install

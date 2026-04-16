@@ -1,4 +1,4 @@
-# Scale-Dev-Tool
+# SCALEX-AI
 
 A web-based tool for advanced psychometric analysis, persona generation, and interactive data workflows. Supports R, Python, and OpenAI API integrations.
 
