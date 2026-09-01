@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()   # reads .env into os.environ
 
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-4.1")
-DEFAULT_SEARCH_MODEL = os.getenv("DEFAULT_SEARCH_MODEL", "gpt-4o-search-preview")
+DEFAULT_SEARCH_MODEL = os.getenv("DEFAULT_SEARCH_MODEL", "gpt-4.1")
 
 # ---------------------- functions ----------------------
 
@@ -62,16 +62,18 @@ def get_chatgpt_response(user_input, messages, temperature=0.7, model=DEFAULT_MO
 
 def get_chatgpt_search(user_input, messages, model=DEFAULT_SEARCH_MODEL, api_key=None):
     """
-    Sends a prompt to ChatGPT and retrieves the response, handling errors and retries.
+    Sends a prompt to ChatGPT with the web_search tool (Responses API) and retrieves
+    the response, handling errors and retries.
     """
     client = openai.OpenAI(api_key=api_key)
 
     # Append user's input to the conversation history
     messages.append({"role": "user", "content": user_input})
     try:
-        response = client.chat.completions.create(
+        response = client.responses.create(
             model=model,
-            messages=messages,
+            tools=[{"type": "web_search", "search_context_size": "low"}],
+            input=messages,
         )
     except Exception as e:
         err_msg = str(e).lower()
@@ -84,7 +86,7 @@ def get_chatgpt_search(user_input, messages, model=DEFAULT_SEARCH_MODEL, api_key
         print("OpenAI API error:", e)
         raise
     # Extract assistant's reply
-    assistant_reply = response.choices[0].message.content
+    assistant_reply = response.output_text
     # Append assistant's reply to history
     messages.append({"role": "assistant", "content": assistant_reply})
     return assistant_reply, messages

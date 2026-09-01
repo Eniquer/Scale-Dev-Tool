@@ -15,7 +15,7 @@ from openai._exceptions import (
 from dotenv import load_dotenv
 
 DEFAULT_MODEL = "gpt-4.1"
-DEFAULT_SEARCH_MODEL = "gpt-4o-search-preview"
+DEFAULT_SEARCH_MODEL = "gpt-4.1"
 
 load_dotenv()   # reads .env into os.environ
 # Load encryption secret from environment (set ENCRYPTION_SECRET)
